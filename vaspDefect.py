@@ -10,7 +10,7 @@ def usage():
     print("""
 Usage: vaspDefect.py <input> <output>
 
-This script design to apply defects to the systems
+This script is designed to apply defects to the systems
 which has 3 defect types available:
   1) vacancy
   2) substitution
@@ -405,6 +405,28 @@ Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
     return selected_atoms
 
 
+def unwrap(positions_direct):
+    """Reconstruct a contiguous cluster by unwrapping periodic boundary conditions.
+
+    Shifts all atoms into the minimum-image frame relative to atom[0], so that
+    atoms split across a cell boundary are treated as geometrically contiguous.
+    Interatomic distances are preserved exactly.
+
+    Parameters
+    ----------
+    positions_direct : np.ndarray (N, 3) — fractional coordinates in [0, 1)
+
+    Returns
+    -------
+    reference : np.ndarray (3,)   — fractional coordinate of atom[0]
+    unwrapped : np.ndarray (N, 3) — unwrapped fractional coordinates
+    """
+    reference = np.copy(positions_direct[0])
+    delta = positions_direct - reference
+    delta -= np.round(delta)
+    return reference, reference + delta
+
+
 def apply_vacancy(positions_cartesian, positions_direct, species, selective_dynamics, flags, selected_atoms):
     """Remove selected atoms to create vacancy defects.
 
@@ -525,15 +547,10 @@ Interstitial site definition:
                 break
             print("ERROR! Select at least 2 atoms to define the interstitial site.")
 
-        # Apply minimum image convention before averaging to handle atoms on
-        # opposite sides of the cell (wrap relative to the first selected atom)
-        ref = positions_direct[selected_atoms[0]]
-        wrapped = []
-        for idx in selected_atoms:
-            delta = positions_direct[idx] - ref
-            delta -= np.round(delta)        # minimum image in fractional coords
-            wrapped.append(ref + delta)
-        new_pos_direct = np.mean(wrapped, axis=0) % 1.0
+        # Unwrap PBC before averaging so atoms split across cell boundaries
+        # are treated as geometrically contiguous
+        _, unwrapped = unwrap(positions_direct[selected_atoms])
+        new_pos_direct = np.mean(unwrapped, axis=0) % 1.0
 
     else:
         # Manual fractional coordinate input
@@ -662,12 +679,13 @@ def main():
         mapping["species"], undoped["selective_dynamics"], mapping["flags"])
 
     # Re-map to canonical element blocks after the defect (handles new/removed species)
+    final_elements = list(dict.fromkeys(result["species"]))
+    final_atom_counts = [result["species"].count(e) for e in final_elements]
     final = mapping_elements(
-        list(dict.fromkeys(result["species"])),
-        [],                                    # atom_counts rebuilt inside mapping_elements
+        final_elements, final_atom_counts,
         result["positions_cartesian"], result["positions_direct"],
         result["species"], undoped["selective_dynamics"], result["flags"],
-        sort_elements=list(dict.fromkeys(result["species"])))
+        sort_elements=final_elements)
 
     labels = define_labels(final["elements"], final["atom_counts"])
 
