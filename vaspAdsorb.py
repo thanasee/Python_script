@@ -11,7 +11,7 @@ def usage():
 Usage: vaspAdsorb.py <substrate input> <adsorbent input> <output>
 
 This script design to prepare position file for adsorption calculation
-which has 2 main functions:ฆ
+which has 2 main functions:
   1) adsorb on specific site
   2) adsorb around target atom
 This script support VASP5 position file format (i.e. POSCAR).
