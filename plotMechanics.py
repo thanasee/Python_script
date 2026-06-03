@@ -400,7 +400,7 @@ def main():
         label = ask_material_label(i + 1)
  
         idx_largest = np.argmax(np.abs(values))
-        print(f"Your largest {data_type} is {values[idx_largest]:>6.{decimal}f} {unit} "
+        print(f"Your largest {data_type} is {values[idx_largest]:>6.{decimal + 2}f} {unit} "
               f"at {degrees[idx_largest]:>5.1f}\u00B0")
  
         color = COLORS[i % len(COLORS)]
