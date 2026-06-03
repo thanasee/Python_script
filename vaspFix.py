@@ -573,7 +573,7 @@ def select_radius(lattice_matrix, total_atoms, positions_cartesian, species):
     """
     
     targets = parse_group(f"\nChoose reference point\nInput element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})\n"
-                          "(Free-format input, e.g., 1 3 1-4 C H all)", total_atoms, species, allow_all=True)
+                          f"(Free-format input, e.g., 1 3 1-4 C H all)", total_atoms, species, allow_all=True)
  
     reference_point = np.mean(positions_cartesian[targets], axis=0)
  
