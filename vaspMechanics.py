@@ -732,15 +732,12 @@ def main():
 
     while True:
         input_type = input("Enter choice: ")
-        if input_type.isdigit():
-            if input_type == '1':
-                run_2d(structure, elastic_coef)
-                break
-            elif input_type == '2':
-                run_3d(structure, elastic_coef)
-                break
-            else:
-                print("Warning! Wrong input")
+        if input_type == '1':
+            run_2d(structure, elastic_coef)
+            break
+        elif input_type == '2':
+            run_3d(structure, elastic_coef)
+            break
         else:
             print("Warning! Wrong input")
 
