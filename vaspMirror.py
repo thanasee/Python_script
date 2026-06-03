@@ -395,13 +395,14 @@ Choice of reflection plane
 3) YZ plane""")
 
     while True:
-        option = input("Enter choice: ")
-        if option.isdecimal() and option in ['1', '2', '3']:
-            axis = {'1': 2, '2': 1, '3': 0}[option]
-            reflect_plane = np.array([-1. if i == axis else 1. for i in range(3)])
+        try:
+            option = int(input("Enter choice: "))
             break
-        else:
+        except ValueError:
             print("Error!! Choose again")
+    if option in [1, 2, 3]:
+        axis = {1: 2, 2: 1, 3: 0}[option]
+        reflect_plane = np.array([-1. if i == axis else 1. for i in range(3)])
     
     new_positions_cartesian = positions_cartesian * reflect_plane
     
