@@ -627,9 +627,14 @@ def z_distance(total_atoms, positions, species):
         else:
             print(f"  The highest atoms in substrate : {[i + 1 for i in top_candidates]}")
             while True:
-                sel = input(f"  Select atom in substrate (  1 to {total_atoms:>3}): ")
-                if sel.isdigit() and int(sel) - 1 in top_candidates:
-                    highest_substrate = positions[int(sel) - 1]; break
+                try:
+                    sel = int(input(f"  Select atom in substrate (  1 to {total_atoms:>3}): "))
+                except ValueError:
+                    print("  Invalid input! Please enter a number.")
+                    continue
+                if sel - 1 in top_candidates:
+                    highest_substrate = positions[sel - 1]
+                    break
                 print('WRONG No. of atom in substrate!')
  
     # Adsorbent: find the atom with the minimum z-coordinate
@@ -646,9 +651,13 @@ def z_distance(total_atoms, positions, species):
         else:
             print(f"  The lowest atoms in adsorbent : {[i + 1 for i in bot_candidates]}")
             while True:
-                sel = input(f"  Select atom in adsorbent (  1 to {total_atoms:>3}): ")
-                if sel.isdigit() and int(sel) - 1 in bot_candidates:
-                    lowest_adsorbent = positions[int(sel) - 1]; break
+                try:
+                    sel = int(input(f"  Select atom in adsorbent (  1 to {total_atoms:>3}): "))
+                except ValueError:
+                    print("  Invalid input! Please enter a number.")
+                    continue
+                if sel - 1 in bot_candidates:
+                    lowest_adsorbent = positions[sel - 1]; break
                 print('WRONG No. of atom in adsorbent!')
  
     distance = np.abs(lowest_adsorbent[2] - highest_substrate[2])
