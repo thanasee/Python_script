@@ -446,17 +446,16 @@ def input_direct(lattice_matrix):
     np.ndarray (3,) — Cartesian coordinates in Å with z = 0
     """
     
-    coords = []
-    for direction in ('a', 'b'):
+    coords = np.zeros(3)
+    for i, direction in enumerate(('a', 'b')):
         while True:
-            val = input(f"Enter position in {direction} direction (direct): ")
-            if val.replace('.', '', 1).isdigit():
-                coords.append(float(val))
+            try:
+                coords[i] = float(input(f"Enter position in {direction} direction (direct): "))
                 break
-            print("Wrong input! Try again")
-    coords.append(0.0)
+            except ValueError:
+                print("Wrong input! Try again")
 
-    return direct_to_cartesian(lattice_matrix, np.array(coords))
+    return direct_to_cartesian(lattice_matrix, coords)
 
 
 def place_ontop(lattice_matrix_substrate, total_atoms_substrate, total_atoms_adsorbent, positions_substrate,
