@@ -695,11 +695,11 @@ Choices of define final adsorption site
             site_direct = np.zeros(3)
             for i, direction in enumerate(('a', 'b')):
                 while True:
-                    val = input(f"Enter position in {direction} direction (direct): ")
-                    if val.replace('.', '', 1).isdigit():
-                        site_direct[i] = float(val)
+                    try:
+                        site_direct[i] = float(input(f"Enter position in {direction} direction (direct): "))
                         break
-                    print("Wrong input! Try again")
+                    except ValueError:
+                        print("Wrong input! Try again")
             site_cartesian = direct_to_cartesian(lattice_matrix, site_direct)
             target_xy = site_cartesian[:2]
             break
@@ -828,4 +828,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
