@@ -531,41 +531,41 @@ def apply_interstitial(lattice_matrix, positions_cartesian, positions_direct,
     print("""
 Interstitial site definition:
 1) Average position of selected atoms (select >= 2 atoms)
-2) Manual fractional coordinate input""")
+2) Custom position in Direct coordinate""")
 
     while True:
         site_mode = input("Enter the site definition mode (1 or 2): ").strip()
-        if site_mode in ('1', '2'):
-            break
-        print("Invalid input! Please enter 1 or 2.")
-
-    if site_mode == '1':
-        # Require at least 2 atoms to define a meaningful average
-        while True:
-            selected_atoms = select_index(total_atoms, species)
-            if len(selected_atoms) >= 2:
-                break
-            print("ERROR! Select at least 2 atoms to define the interstitial site.")
-
-        # Unwrap PBC before averaging so atoms split across cell boundaries
-        # are treated as geometrically contiguous
-        _, unwrapped = unwrap(positions_direct[selected_atoms])
-        new_pos_direct = np.mean(unwrapped, axis=0) % 1.0
-
-    else:
-        # Manual fractional coordinate input
-        print("Enter the fractional coordinates of the interstitial site:")
-        while True:
-            try:
-                coords = list(map(float, input("  a b c: ").split()))
-                if len(coords) == 3:
-                    new_pos_direct = np.array(coords) % 1.0
+        if site_mode == '1':
+            # Require at least 2 atoms to define a meaningful average
+            while True:
+                selected_atoms = select_index(total_atoms, species)
+                if len(selected_atoms) >= 2:
                     break
-                print("ERROR! Enter exactly 3 values.")
-            except ValueError:
-                print("ERROR! Non-numeric input. Try again.")
+                print("ERROR! Select at least 2 atoms to define the interstitial site.")
 
-    new_pos_cartesian = new_pos_direct @ lattice_matrix
+            # Unwrap PBC before averaging so atoms split across cell boundaries
+            # are treated as geometrically contiguous
+            _, unwrapped = unwrap(positions_direct[selected_atoms])
+            new_positions_direct = np.mean(unwrapped, axis=0) % 1.0
+            break
+
+        elif site_mode == '2':
+            # Manual fractional coordinate input
+            print("Enter the fractional coordinates of the interstitial site:")
+            while True:
+                try:
+                    coords = list(map(float, input("  a b c: ").split()))
+                    if len(coords) == 3:
+                        new_positions_direct = np.array(coords) % 1.0
+                        break
+                    print("ERROR! Enter exactly 3 values.")
+                except ValueError:
+                    print("ERROR! Non-numeric input. Try again.")
+            break
+        else:
+            print("ERROR! Choose again.")
+
+    new_positions_cartesian = direct_to_cartesian(lattice_matrix, new_positions_direct)
 
     # Prompt for the interstitial element symbol
     while True:
@@ -575,8 +575,8 @@ Interstitial site definition:
         print("ERROR! Element symbol must contain alphabetic characters only.")
 
     new_species = species.copy()
-    new_pos_cart_list = list(positions_cartesian)
-    new_pos_dir_list = list(positions_direct)
+    new_positions_cartesian_list = list(positions_cartesian)
+    new_positions_direct_list = list(positions_direct)
     new_flags_list = list(flags) if selective_dynamics and flags is not None else None
 
     # Default flag for new atom: all free (T T T)
@@ -590,13 +590,13 @@ Interstitial site definition:
         insert_idx = total_atoms
 
     new_species.insert(insert_idx, new_element)
-    new_pos_cart_list.insert(insert_idx, new_pos_cartesian)
-    new_pos_dir_list.insert(insert_idx, new_pos_direct)
+    new_positions_cartesian_list.insert(insert_idx, new_positions_cartesian)
+    new_positions_direct_list.insert(insert_idx, new_positions_direct)
     if selective_dynamics and new_flags_list is not None:
         new_flags_list.insert(insert_idx, default_flag)
 
-    new_positions_cartesian = np.array(new_pos_cart_list, dtype=float)
-    new_positions_direct = np.array(new_pos_dir_list, dtype=float)
+    new_positions_cartesian = np.array(new_positions_cartesian_list, dtype=float)
+    new_positions_direct = np.array(new_positions_direct_list, dtype=float)
     new_flags = np.array(new_flags_list) if selective_dynamics and new_flags_list is not None else None
 
     return {"positions_cartesian": new_positions_cartesian,
@@ -605,10 +605,20 @@ Interstitial site definition:
             "flags":               new_flags}
 
 
-def apply_defect(lattice_matrix, positions_cartesian, positions_direct,
-                 species, selective_dynamics, flags):
-    """Dispatch to the appropriate defect routine based on user selection.
-
+def apply_displacement(lattice_matrix, positions_cartesian, positions_direct,
+                       species, selective_dynamics, flags):
+    """Displace selected atoms in XY while preserving their fractional Z coordinate.
+ 
+    Atoms eligible for displacement are detected by Cartesian Z > threshold,
+    where threshold is the midpoint of the largest gap in sorted Cartesian Z values.
+    The user selects which detected atoms to displace. The target XY position
+    is defined by one of two modes:
+      1) Centroid of selected reference atoms (unwrapped for PBC);
+         1 atom = ontop, 2+ atoms = center point
+      2) Manual fractional coordinate input (only a, b components are used)
+ 
+    Each displaced atom retains its original fractional c component.
+ 
     Parameters
     ----------
     lattice_matrix      : np.ndarray (3, 3)  — lattice vectors in Å
@@ -617,7 +627,121 @@ def apply_defect(lattice_matrix, positions_cartesian, positions_direct,
     species             : list[str]          — per-atom element labels
     selective_dynamics  : bool
     flags               : np.ndarray or None — per-atom T/F flags
-
+ 
+    Returns
+    -------
+    dict with keys:
+        positions_cartesian : np.ndarray (N, 3)
+        positions_direct    : np.ndarray (N, 3)
+        species             : list[str]
+        flags               : np.ndarray or None
+    """
+    total_atoms = len(species)
+    z_cartesian = positions_cartesian[:, 2]
+ 
+    # Auto-detect threshold via largest gap in sorted Cartesian Z values
+    z_sorted = np.sort(z_cartesian)
+    gaps = np.diff(z_sorted)
+    gap_idx = np.argmax(gaps)
+    threshold = (z_sorted[gap_idx] + z_sorted[gap_idx + 1]) / 2.0
+    print(f"\nAuto threshold: Z = {threshold:.5f} Å  "
+          f"(largest gap {gaps[gap_idx]:.5f} Å between "
+          f"{z_sorted[gap_idx]:.5f} and {z_sorted[gap_idx+1]:.5f} Å)")
+ 
+    detected = [i for i in range(total_atoms) if z_cartesian[i] > threshold]
+ 
+    if len(detected) == 0:
+        print(f"No atoms detected above Z = {threshold:.5f} Å.")
+        print("Returning unchanged structure.")
+        return {"positions_cartesian": positions_cartesian.copy(),
+                "positions_direct":    positions_direct.copy(),
+                "species":             species.copy(),
+                "flags":               flags.copy() if selective_dynamics and flags is not None else None}
+ 
+    print(f"\nDetected {len(detected)} atom(s) above Z = {threshold:.5f} Å:")
+    print(f"  {'Index':>6}  {'Species':>8}")
+    for i in detected:
+        print(f"  {i+1:>6}  {species[i]:>8}")
+ 
+    # Let user select which detected atoms to displace
+    print("\nSelect atom(s) to displace from the detected list")
+    while True:
+        selected_atoms = select_index(total_atoms, species)
+        if len(selected_atoms) >= 1 and all(i in detected for i in selected_atoms):
+            break
+        print("ERROR! All selected atoms must be from the detected list above.")
+ 
+    print("""
+Choices of define final adsorption site
+1) Choose atoms surround the positioning point
+   If 1 atom means ontop that atom
+   If 2 or more atoms mean on top of center point of these atoms
+2) Custom position in Direct coordinate""")
+ 
+    while True:
+        option_position = input("Enter choice (1 or 2): ").strip()
+        if option_position == '1':
+            print(f"\nInput element-symbol and/or atom-indexes to choose "
+                  f"({1:>3} to {total_atoms:>3})\n"
+                  f"(Free-format input, e.g., 1 3 1-4 C H all)")
+            ref_atoms = select_index(total_atoms, species)
+            site_positions_direct = positions_direct[ref_atoms]
+            _, site_positions_unwrapped = unwrap(site_positions_direct)
+            site_direct = np.mean(site_positions_unwrapped, axis=0)
+            site_cartesian = direct_to_cartesian(lattice_matrix, site_direct)
+            target_xy = site_cartesian[:2]
+            break
+        elif option_position == '2':
+            site_direct = np.zeros(3)
+            for i, direction in enumerate(('a', 'b')):
+                while True:
+                    val = input(f"Enter position in {direction} direction (direct): ")
+                    if val.replace('.', '', 1).isdigit():
+                        site_direct[i] = float(val)
+                        break
+                    print("Wrong input! Try again")
+            site_cartesian = direct_to_cartesian(lattice_matrix, site_direct)
+            target_xy = site_cartesian[:2]
+            break
+        else:
+            print("ERROR! Choose again.")
+ 
+    new_positions_cartesian = positions_cartesian.copy()
+    if len(selected_atoms) == 1:
+        # Single atom: move directly to target XY
+        atom_idx = selected_atoms[0]
+        new_positions_cartesian[atom_idx, 0] = target_xy[0]
+        new_positions_cartesian[atom_idx, 1] = target_xy[1]
+    else:
+        # Multiple atoms: compute centroid XY (unwrapped), apply rigid XY shift
+        _, unwrapped = unwrap(positions_direct[selected_atoms])
+        unwrapped_cartesian = direct_to_cartesian(lattice_matrix, unwrapped)
+        centroid_xy = np.mean(unwrapped_cartesian, axis=0)[:2]
+        delta_xy = target_xy - centroid_xy
+        for atom_idx in selected_atoms:
+            new_positions_cartesian[atom_idx, 0] = positions_cartesian[atom_idx, 0] + delta_xy[0]
+            new_positions_cartesian[atom_idx, 1] = positions_cartesian[atom_idx, 1] + delta_xy[1]
+    new_positions_direct = cartesian_to_direct(lattice_matrix, new_positions_cartesian)
+ 
+    return {"positions_cartesian": new_positions_cartesian,
+            "positions_direct":    new_positions_direct,
+            "species":             species.copy(),
+            "flags":               flags.copy() if selective_dynamics and flags is not None else None}
+ 
+ 
+def apply_defect(lattice_matrix, positions_cartesian, positions_direct,
+                 species, selective_dynamics, flags):
+    """Dispatch to the appropriate defect routine based on user selection.
+ 
+    Parameters
+    ----------
+    lattice_matrix      : np.ndarray (3, 3)  — lattice vectors in Å
+    positions_cartesian : np.ndarray (N, 3)  — Cartesian coordinates in Å
+    positions_direct    : np.ndarray (N, 3)  — fractional coordinates
+    species             : list[str]          — per-atom element labels
+    selective_dynamics  : bool
+    flags               : np.ndarray or None — per-atom T/F flags
+ 
     Returns
     -------
     dict with keys:
@@ -627,36 +751,43 @@ def apply_defect(lattice_matrix, positions_cartesian, positions_direct,
         flags               : np.ndarray or None
     """
     total_atoms = len(species)
-
+ 
     print("""
 Choices of defect types:
 1) Vacancy
 2) Substitution
-3) Interstitial""")
-
+3) Interstitial
+4) Displacement""")
     while True:
-        defect_type = input("Enter the defect type (1, 2, or 3): ").strip()
-        if defect_type in ('1', '2', '3'):
+        defect_type = input("Enter Choice: ")
+        if defect_type == '1':
+            print("\nVacancy: select atom(s) to remove")
+            selected_atoms = select_index(total_atoms, species)
+            result = apply_vacancy(positions_cartesian, positions_direct,
+                                species, selective_dynamics, flags, selected_atoms)
             break
-        print("Invalid defect type! Please enter 1, 2, or 3.")
-
-    if defect_type == '1':
-        print("\n--- Vacancy: select atom(s) to remove ---")
-        selected_atoms = select_index(total_atoms, species)
-        result = apply_vacancy(positions_cartesian, positions_direct,
-                               species, selective_dynamics, flags, selected_atoms)
-
-    elif defect_type == '2':
-        print("\n--- Substitution: select atom(s) to replace ---")
-        selected_atoms = select_index(total_atoms, species)
-        result = apply_substitution(positions_cartesian, positions_direct,
-                                    species, selective_dynamics, flags, selected_atoms)
-
-    else:
-        print("\n--- Interstitial: define insertion site ---")
-        result = apply_interstitial(lattice_matrix, positions_cartesian, positions_direct,
-                                    species, selective_dynamics, flags)
-
+    
+        elif defect_type == '2':
+            print("\nSubstitution: select atom(s) to replace")
+            selected_atoms = select_index(total_atoms, species)
+            result = apply_substitution(positions_cartesian, positions_direct,
+                                        species, selective_dynamics, flags, selected_atoms)
+            break
+    
+        elif defect_type == '3':
+            print("\nInterstitial: define insertion site")
+            result = apply_interstitial(lattice_matrix, positions_cartesian, positions_direct,
+                                        species, selective_dynamics, flags)
+            break
+    
+        elif defect_type == '4':
+            print("\nDisplacement: select atom(s) to move")
+            result = apply_displacement(lattice_matrix, positions_cartesian, positions_direct,
+                                        species, selective_dynamics, flags)
+            break
+        else:
+            print("ERROR! Choose again.")
+ 
     return result
 
 
@@ -697,3 +828,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
