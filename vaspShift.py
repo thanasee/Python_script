@@ -479,7 +479,7 @@ def shift_molecule(positions_direct):
     np.ndarray (N, 3) — shifted fractional coordinates in [0, 1)
     """
     
-    reference, unwrapped = unwrap(positions_direct)
+    _, unwrapped = unwrap(positions_direct)
     center = np.mean(unwrapped, axis=0)
     
     return (unwrapped - center + 0.5) % 1.0
