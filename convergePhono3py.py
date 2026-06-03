@@ -159,9 +159,13 @@ def choose_temperature(temperature, filepath, last_temperature, current_temp):
         else:
             print(f"\n[{filepath}] List of temperatures:")
             print("   ".join(map(str, temperature)))
-            return float(input("Choose temperature: "))
-
-    return current_temp
+            while True:
+                try:
+                    target_temp = float(input("Select target temperature (K): "))
+                    break
+                except ValueError:
+                    print("Invalid input! Please enter a number. Using the first temperature in the list.")
+            return target_temp
 
 
 def get_temp_index(temperature, target_temp, filepath):
@@ -507,17 +511,17 @@ def ask_dimensionality():
             return 1.0, None
  
     poscar                              = read_POSCAR(poscar_path)
-    factor_2d, t_eff, c_proj, z_range, projected = compute_2d_thickness(poscar)
+    factor_2d, t_eff, c_proj, z_range, _ = compute_2d_thickness(poscar)
  
     print("\n  2D renormalization summary:")
-    print(f"    c projection onto ab-normal : {c_proj:.4f} Å")
-    print(f"    z range (atom-atom)         : {z_range:.4f} Å")
-    print(f"    Effective thickness         : {t_eff:.4f} Å  (z_range + r_vdW_top + r_vdW_bottom)")
+    print(f"    c projection onto ab-normal : {c_proj:.5f} Å")
+    print(f"    z range (atom-atom)         : {z_range:.5f} Å")
+    print(f"    Effective thickness         : {t_eff:.5f} Å  (z_range + r_vdW_top + r_vdW_bottom)")
     print(f"    Renormalization factor      : {factor_2d:.6f}")
     print(f"    kappa_2D = kappa_phono3py × {factor_2d:.6f}")
  
-    renorm_info = (f"2D renormalization: c_proj = {c_proj:.4f} A, "
-                   f"t_eff = {t_eff:.4f} A (z_range = {z_range:.4f} A), "
+    renorm_info = (f"2D renormalization: c_proj = {c_proj:.5f} A, "
+                   f"t_eff = {t_eff:.5f} A (z_range = {z_range:.5f} A), "
                    f"factor = {factor_2d:.6f}")
  
     return factor_2d, renorm_info
