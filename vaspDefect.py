@@ -534,7 +534,7 @@ Interstitial site definition:
 2) Custom position in Direct coordinate""")
 
     while True:
-        site_mode = input("Enter the site definition mode (1 or 2): ").strip()
+        site_mode = input("Enter the site definition mode: ").strip()
         if site_mode == '1':
             # Require at least 2 atoms to define a meaningful average
             while True:
@@ -552,16 +552,14 @@ Interstitial site definition:
         elif site_mode == '2':
             # Manual fractional coordinate input
             print("Enter the fractional coordinates of the interstitial site:")
-            while True:
-                try:
-                    coords = list(map(float, input("  a b c: ").split()))
-                    if len(coords) == 3:
-                        new_positions_direct = np.array(coords) % 1.0
+            new_positions_direct = np.zeros(3)
+            for i, direction in enumerate(('a', 'b', 'c')):
+                while True:
+                    try:
+                        new_positions_direct[i] = float(input(f"Enter position in {direction} direction (direct): "))
                         break
-                    print("ERROR! Enter exactly 3 values.")
-                except ValueError:
-                    print("ERROR! Non-numeric input. Try again.")
-            break
+                    except ValueError:
+                        print("Wrong input! Try again")
         else:
             print("ERROR! Choose again.")
 
@@ -679,11 +677,8 @@ Choices of define final adsorption site
 2) Custom position in Direct coordinate""")
  
     while True:
-        option_position = input("Enter choice (1 or 2): ").strip()
+        option_position = input("Enter choice: ")
         if option_position == '1':
-            print(f"\nInput element-symbol and/or atom-indexes to choose "
-                  f"({1:>3} to {total_atoms:>3})\n"
-                  f"(Free-format input, e.g., 1 3 1-4 C H all)")
             ref_atoms = select_index(total_atoms, species)
             site_positions_direct = positions_direct[ref_atoms]
             _, site_positions_unwrapped = unwrap(site_positions_direct)
