@@ -11,10 +11,11 @@ def usage():
 Usage: vaspDefect.py <input> <output>
 
 This script is designed to apply defects to the systems
-which has 3 defect types available:
+which has 4 defect types available:
   1) vacancy
   2) substitution
   3) interstitial
+  4) displacement
 This script support VASP5 position file format (i.e. POSCAR).
 
 This script was developed by Thanasee Thanasarnsurapong.
