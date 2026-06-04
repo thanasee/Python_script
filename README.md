@@ -14,7 +14,7 @@ This repository is organized into six functional categories:
 2. **Structural analysis** — calculate structural properties (e.g., bond distances) and extract vibrational normal modes from VASP POSCAR/CONTCAR and output files
 3. **Mechanical properties** — extract and plot elastic tensors, piezoelectric tensors, and related quantities from VASP output files
 4. **Structure preparation** — generate and manipulate POSCAR files for various VASP calculations
-5. **MLFF utilities** — monitor training errors, evaluate MLFF accuracy against DFT references, and convert or merge VASP's ML_AB` training data files
+5. **MLFF utilities** — monitor training errors, evaluate MLFF accuracy against DFT references, and convert or merge VASP `ML_AB` training data files
 6. **Dielectric & polar properties** — extract dielectric tensors and Born effective charge tensors from VASP DFPT output files
 
 All scripts are standalone CLI tools written in Python using NumPy as the primary dependency. Each follows a consistent modular design with a `main()` entry point and NumPy-style docstrings.
@@ -310,7 +310,7 @@ Usage: ElasticTensor2D.py pre  <structure file>   # Generate strained POSCARs
 
 #### `vaspPiezoelectric.py`
 
-Extracts the piezoelectric stress tensor (e, C/m^2) and elastic stiffness tensor (C, GPa or N/m) from a VASP `OUTCAR` and computes the piezoelectric strain tensor (**d** = **e**·**S**, pm/V) via the compliance tensor **S** = **C**<sup>-1</sup>.
+Extracts the piezoelectric stress tensor (e, C/m<sup>2</sup>) and elastic stiffness tensor (C, GPa or N/m) from a VASP `OUTCAR` and computes the piezoelectric strain tensor (**d** = **e**·**S**, pm/V) via the compliance tensor **S** = **C**<sup>-1</sup>.
 
 ```
 Usage: vaspPiezoelectric.py <OUTCAR>
@@ -349,6 +349,24 @@ Usage: vaspReformat.py <POSCAR> <output POSCAR>
 ```
 
 Supports optional Selective Dynamics and writes per-atom label comments (e.g., `Mo001`, `S002`) for identification in VESTA or XCrySDen.
+
+---
+
+#### `vaspDefect.py`
+
+Applies point defects to a VASP POSCAR and writes the modified structure. Atoms are reordered into contiguous element blocks before and after defect application. Four defect types are available interactively. Free-format atom selection (index, range e.g. `1-4`, element symbol, `all`) is used throughout.
+
+```
+Usage: vaspDefect.py <input POSCAR> <output POSCAR>
+```
+
+**Defect type 1 — Vacancy:** Removes selected atoms. Multiple atoms can be removed in a single operation.
+
+**Defect type 2 — Substitution:** Replaces selected atoms with a new element symbol. Element blocks are regrouped automatically after substitution.
+
+**Defect type 3 — Interstitial:** Inserts one new atom at a user-defined site. Two site modes: (1) mean fractional coordinate of ≥2 selected atoms with PBC unwrapping; (2) manual fractional (a, b, c) input. The new atom is inserted after the last atom of matching species, or appended if the element is new. Default Selective Dynamics flag: T T T.
+
+**Defect type 4 — Displacement:** Moves selected atoms to a new XY position while preserving their fractional c coordinate. Atoms eligible for displacement are auto-detected as those above a threshold Z, where the threshold is the midpoint of the largest gap in sorted Cartesian Z values. The target XY is defined by: (1) centroid of selected reference atoms with PBC unwrapping (1 atom = on-top, 2+ atoms = center); or (2) manual fractional (a, b) input. A single displaced atom is moved directly to the target XY; multiple atoms receive a rigid XY shift so their centroid lands at the target.
 
 ---
 
@@ -400,7 +418,7 @@ Applies Selective Dynamics constraints to a VASP POSCAR, fixing atoms in specifi
 Usage: vaspFix.py <POSCAR> <output POSCAR>
 ```
 
-Three atom-selection modes: by index/label, by cutoff radius (PBC-aware), or from an existing `SELECTED_FIX_ATOMS_LIST` file, and then writes a `SELECTED_FIX_ATOMS_LIST` log for reference and reuse.
+Three atom-selection modes: by index/label, by cutoff radius (PBC-aware), or from an existing `SELECTED_FIX_ATOMS_LIST` file. Writes a `SELECTED_FIX_ATOMS_LIST` log for reference and reuse.
 
 ---
 
@@ -462,15 +480,15 @@ Providing a single POSCAR uses it for both layers (homobilayer). Providing two d
 **Inspired by:** [Aroon Ananchuensook](https://scholar.google.com/citations?user=6mmg4mUAAAAJ&hl=en)
 
 Combines a substrate and an adsorbent POSCAR into a single POSCAR for adsorption DFT calculations. Supports placing multiple adsorbent copies simultaneously. The user specifies the number of copies and the vertical separation distance (Å) before selecting a placement mode.
- 
+
 ```
 Usage: vaspAdsorb.py <substrate POSCAR> <adsorbent POSCAR> <output POSCAR>
 ```
- 
+
 **Mode 1 — on top of a specific site:** Places each adsorbent copy above a user-defined target point on the substrate. For each copy, the user selects: (a) the substrate reference height (highest atom, a selected atom, or average height); (b) the adsorbent anchor point (centroid or a specific/lowest atom); (c) the target xy position (by atom selection with free-format input, or custom fractional coordinates). The adsorbent is translated so its anchor lands at the target at the specified vertical distance.
- 
+
 **Mode 2 — ring around a target atom:** Places N copies evenly distributed at angular intervals of 2π/N around a chosen substrate atom using Rodrigues z-axis rotation. The user selects the target atom and the initial adsorption direction (by atom selection or custom fractional coordinates). The radial distance from the target atom is set by the distance input.
- 
+
 If either POSCAR has Selective Dynamics, flags are merged, and the other structure defaults to all-T. If neither has Selective Dynamics, the user is prompted after placement to optionally add constraints, with free-format atom and direction selection. A summary table of atom counts per element (substrate/adsorbent/total) is printed at the end.
 
 ---
