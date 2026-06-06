@@ -122,15 +122,15 @@ Reads the high-symmetry q-point path positions from a `band.dat` file produced b
 Usage: getQPATH.py <input band.dat>
 ```
 
-Q-point path distances (1/Å) are read from the second line of the input file. The frequency range is determined automatically as floor(f_min) to ceil(f_max) from all frequency values in the file. For each interior high-symmetry q-point, three coordinate pairs are written to trace a vertical tick from `fmin` to `fmax` and back. The outer box boundaries and the zero-frequency axis are appended at the end.
+Q-point path distances (Å<sup>-1</sup>) are read from the second line of the input file. The frequency range is determined automatically as floor(f_min) to ceil(f_max) from all frequency values in the file. For each interior high-symmetry q-point, three coordinate pairs are written to trace a vertical tick from `fmin` to `fmax` and back. The outer box boundaries and the zero-frequency axis are appended at the end.
 
-**Output:** `QLINES.dat` — columns: q-path distance (1/Å), frequency boundary (THz).
+**Output:** `QLINES.dat` — columns: q-path distance (Å<sup>-1</sup>), frequency boundary (THz).
 
 ---
 
 #### `convergePhono3py.py`
 
-Checks the convergence of lattice thermal conductivity (κ) as a function of q-mesh density by reading multiple `kappa-mXXX.hdf5` files from the current directory.
+Checks the convergence of lattice thermal conductivity (κ<sub>L(/sub>) as a function of q-mesh density by reading multiple `kappa-mXXX.hdf5` files from the current directory.
 
 ```
 Usage: convergePhono3py.py
@@ -138,7 +138,7 @@ Usage: convergePhono3py.py
 
 Automatically scans for all `kappa-m*.hdf5` files, sorts them by mesh number, and writes convergence data. Supports all Phono3py calculation modes: `--br`, `--lbte`, `--wigner`, and their combinations (`kappa`, `kappa_RTA`, `kappa_C`, `kappa_P_RTA`, `kappa_TOT_RTA`, `kappa_P_exact`, `kappa_TOT_exact`).
 
-**2D renormalization:** After loading the HDF5 files, the script interactively prompts for dimensionality (1 = 3D, 2 = 2D). For 2D materials, the vacuum direction is assumed to be c. A dimensionless renormalization factor derived from the c-axis length is applied to all κ values, correcting Phono3py's bulk-convention κ to the 2D-referenced value. Units remain W/(m·K) throughout.
+**2D renormalization:** After loading the HDF5 files, the script interactively prompts for dimensionality (1 = 3D, 2 = 2D). For 2D materials, the vacuum direction is assumed to be c. A dimensionless renormalization factor derived from the c-axis length is applied to all κ<sub>L(/sub> values, correcting Phono3py's bulk-convention κ<sub>L(/sub> to the 2D-referenced value. Units remain W/(m·K) throughout.
 
 ---
 
@@ -150,19 +150,19 @@ Extracts mode-resolved thermal transport properties from a single Phono3py `kapp
 Usage: analyzePhono3py.py <kappa HDF5 file> <gruneisen HDF5 file (optional)>
 ```
 
-Output filenames follow the pattern `<tag>-mXXXXXX.dat`, where the mesh token is preserved from the input filename (e.g., `kappa-m111111.hdf5` → `KappaVsT-m111111.dat`). All κ tensor components are written in Voigt notation (xx, yy, zz, yz, xz, xy) in W/(m·K).
+Output filenames follow the pattern `<tag>-mXXXXXX.dat`, where the mesh token is preserved from the input filename (e.g., `kappa-m111111.hdf5` → `KappaVsT-m111111.dat`). All κ<sub>L(/sub> tensor components are written in Voigt notation (xx, yy, zz, yz, xz, xy) in W/(m·K).
 
-**2D renormalization:** After loading the HDF5 file, the script interactively prompts for dimensionality (1 = 3D, 2 = 2D). For 2D materials, the vacuum direction is assumed to be c. A dimensionless renormalization factor derived from the c-axis length is applied to all κ arrays before any output is written, correcting Phono3py's bulk-convention κ to the 2D-referenced value. Units remain W/(m·K) throughout. The renormalization applies to all output file groups below.
+**2D renormalization:** After loading the HDF5 file, the script interactively prompts for dimensionality (1 = 3D, 2 = 2D). For 2D materials, the vacuum direction is assumed to be c. A dimensionless renormalization factor derived from the c-axis length is applied to all κ<sub>L(/sub> arrays before any output is written, correcting Phono3py's bulk-convention κ<sub>L(/sub> to the 2D-referenced value. Units remain W/(m·K) throughout. The renormalization applies to all output file groups below.
 
 **Temperature-dependent files** (one value per temperature row, written to the working directory):
-- `KappaVsT.dat` / `Kappa_bandVsT.dat` — total κ tensor and band decomposition (3 acoustic + 1 summed optical) vs. temperature
-- `ContributeKappaVsT.dat` — per-mode percentage contribution to total κ vs. temperature
+- `KappaVsT.dat` / `Kappa_bandVsT.dat` — total κ<sub>L(/sub> tensor and band decomposition (3 acoustic + 1 summed optical) vs. temperature
+- `ContributeKappaVsT.dat` — per-mode percentage contribution to total κ<sub>L(/sub> vs. temperature
 - `CvVsT.dat` — total heat capacity Cv (eV/K) vs. temperature
 - `Tau_CRTAVsT.dat` / `Tau_AvgVsT.dat` — CRTA and average phonon lifetime τ (ps) vs. temperature
-- `Kappa_RTAVsT.dat` / `Kappa_RTA_bandVsT.dat` — RTA κ tensor and band decomposition vs. temperature *(--lbte only)*
-- `Kappa_C*VsT.dat` — wave-like (coherence) Wigner κ tensor and band decomposition vs. temperature *(--wigner only)*
-- `Kappa_P_RTA*VsT.dat` / `Kappa_TOT_RTA*VsT.dat` — particle-like and total Wigner κ (RTA) vs. temperature *(--wigner --br only)*
-- `Kappa_P_exact*VsT.dat` / `Kappa_TOT_exact*VsT.dat` — particle-like and total Wigner κ (exact) vs. temperature *(--wigner --lbte only)*
+- `Kappa_RTAVsT.dat` / `Kappa_RTA_bandVsT.dat` — RTA κ<sub>L(/sub> tensor and band decomposition vs. temperature *(--lbte only)*
+- `Kappa_C*VsT.dat` — wave-like (coherence) Wigner κ<sub>L(/sub> tensor and band decomposition vs. temperature *(--wigner only)*
+- `Kappa_P_RTA*VsT.dat` / `Kappa_TOT_RTA*VsT.dat` — particle-like and total Wigner κ<sub>L(/sub> (RTA) vs. temperature *(--wigner --br only)*
+- `Kappa_P_exact*VsT.dat` / `Kappa_TOT_exact*VsT.dat` — particle-like and total Wigner κ<sub>L(/sub> (exact) vs. temperature *(--wigner --lbte only)*
 
 **Temperature-independent files** (written to the working directory):
 - `GvVsFrequency.dat` / `Gv_amplitudeVsFrequency.dat` — group velocity vector (vx, vy, vz) and amplitude |v| vs. frequency (THz)
@@ -170,9 +170,9 @@ Output filenames follow the pattern `<tag>-mXXXXXX.dat`, where the mesh token is
 - `Gamma_isotopeVsFrequency.dat` — isotope scattering rate vs. frequency *(if available)*
 
 **Per-temperature spectral files** (one file per temperature, written to subdirectories `T<value>K/`):
-- `KappaVsFrequency.dat` / `KappaVsMfp.dat` — mode κ vs. phonon frequency (THz) and vs. mean free path (Å)
-- `cumulative_KappaVsFrequency.dat` / `cumulative_KappaVsMfp.dat` — cumulative κ sorted by ascending frequency and MFP
-- `derivative_KappaVsFrequency.dat` / `derivative_KappaVsMfp.dat` — spectral κ density d(κ)/d(frequency) and d(κ)/d(MFP)
+- `KappaVsFrequency.dat` / `KappaVsMfp.dat` — mode κ<sub>L(/sub> vs. phonon frequency (THz) and vs. mean free path (Å)
+- `cumulative_KappaVsFrequency.dat` / `cumulative_KappaVsMfp.dat` — cumulative κ<sub>L(/sub> sorted by ascending frequency and MFP
+- `derivative_KappaVsFrequency.dat` / `derivative_KappaVsMfp.dat` — spectral κ<sub>L(/sub> density d(κ<sub>L(/sub>)/d(frequency) and d(κ<sub>L(/sub>)/d(MFP)
 
 ---
 
@@ -196,11 +196,11 @@ Extracts thermal transport properties from [ShengBTE](https://www.shengbte.org/)
 Usage: analyzeShengBTE.py <3ph/4ph>
 ```
 
-Temperature subdirectories (`T<value>K/`) are detected automatically from the working directory. All κ tensor components are written as the full 3×3 tensor (xx, xy, xz, yx, yy, yz, zx, zy, zz) in W/(m·K). All scattering rate and lifetime files are written per phonon branch. Phonon lifetimes are computed as τ = 1/(2 × 2π × Γ) (ps); modes with Γ ≤ 0 are assigned τ = 0.
+Temperature subdirectories (`T<value>K/`) are detected automatically from the working directory. All κ<sub>L(/sub> tensor components are written as the full 3×3 tensor (xx, xy, xz, yx, yy, yz, zx, zy, zz) in W/(m·K). All scattering rate and lifetime files are written per phonon branch. Phonon lifetimes are computed as τ = 1/(2 × 2π × Γ) (ps); modes with Γ ≤ 0 are assigned τ = 0.
 
 **Temperature-dependent files** (one value per temperature row, written to the working directory):
-- `Kappa_*VsT.dat` — total κ tensor vs. temperature, RTA and iterative (CONV) solutions
-- `Kappa_bandVsT.dat` — κ tensor decomposed into 3 acoustic branches + 1 summed optical branch vs. temperature
+- `Kappa_*VsT.dat` — total κ<sub>L(/sub> tensor vs. temperature, RTA and iterative (CONV) solutions
+- `Kappa_bandVsT.dat` — κ<sub>L(/sub> tensor decomposed into 3 acoustic branches + 1 summed optical branch vs. temperature
 - `HeatCapacityVsT.dat` — total heat capacity Cv (J/(m<sup>3</sup>·K)) vs. temperature
 
 **Temperature-independent files** (written to the working directory):
@@ -211,7 +211,7 @@ Temperature subdirectories (`T<value>K/`) are detected automatically from the wo
 - `P4*VsFrequency.dat` — same set for 4-phonon phase space (total, recombination ++, redistribution +-, splitting −−) *[FourPhonon only]*
 
 **Per-temperature files** (written into each `T<value>K/` subdirectory):
-- `CumulativeKappaVsMFP.dat` / `CumulativeKappaVsFrequency.dat` — cumulative κ tensor vs. mean free path (Å) and vs. frequency (THz)
+- `CumulativeKappaVsMFP.dat` / `CumulativeKappaVsFrequency.dat` — cumulative κ<sub>L(/sub> tensor vs. mean free path (Å) and vs. frequency (THz)
 - `ScatteringRate_3ph*.dat` / `Lifetime_3ph*.dat` — 3ph scattering rate Γ and lifetime τ vs. frequency; process variants: total, `_Adsorption`(+), `_Emission`(-)
 - `WeightedPhaseSpace_3ph*.dat` — weighted 3-phonon phase space vs. frequency; process variants: total, `_Adsorption`(+), `_Emission`(-)
 - `ScatteringRateVsFrequency.dat` / `LifetimeVsFrequency.dat` — total combined (3ph + isotope) Γ and τ vs. frequency
