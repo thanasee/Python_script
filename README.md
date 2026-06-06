@@ -130,7 +130,7 @@ Q-point path distances (Å<sup>-1</sup>) are read from the second line of the in
 
 #### `convergePhono3py.py`
 
-Checks the convergence of lattice thermal conductivity (κ<sub>L(/sub>) as a function of q-mesh density by reading multiple `kappa-mXXX.hdf5` files from the current directory.
+Checks the convergence of lattice thermal conductivity (κ<sub>L</sub>) as a function of q-mesh density by reading multiple `kappa-mXXX.hdf5` files from the current directory.
 
 ```
 Usage: convergePhono3py.py
