@@ -69,7 +69,7 @@ File format is auto-detected from the extension: `.hdf5` → HDF5; any other ext
 #### `calRMS.py`
 **Inspired by:** [ACS Appl. Energy Mater. 2022, 5, 11, 14522–14530](https://doi.org/10.1021/acsaem.2c03141)
 
-Computes the RMS of each 3×3 IFC block from a Phonopy `FORCE_CONSTANTS` file and pairs it with the corresponding minimum-image interatomic distance from a POSCAR. Useful for visualizing how IFC strength decays with distance for each element pair.
+Computes the RMS of each 3×3 2<sup>nd</sup> IFC block from a Phonopy `FORCE_CONSTANTS` file and pairs it with the corresponding minimum-image interatomic distance from a POSCAR. Useful for visualizing how 2<sup>nd</sup> IFC strength decays with distance for each element pair.
 
 ```
 Usage: calRMS.py <POSCAR> <FORCE_CONSTANTS>
@@ -77,21 +77,21 @@ Usage: calRMS.py <POSCAR> <FORCE_CONSTANTS>
 
 All distances are computed under periodic boundary conditions using the minimum-image convention. Results are written as one file per unique element pair, sorted by ascending distance.
 
-**Output:** `RMS_A-B.dat` per element pair — columns: distance (Å), IFC RMS (eV/Å<sup>2</sup>).
+**Output:** `RMS_A-B.dat` per element pair — columns: distance (Å), 2<sup>nd</sup> IFC RMS (eV/Å<sup>2</sup>).
 
 ---
 
 #### `compareIFCs.py`
 
-Compares interatomic force constants (IFCs) between DFT and MLFF calculations by reading Phono3py HDF5 files and writing the residual (MLFF − DFT) to `.dat` files. Auto-detects whether the file contains 2nd-order (`force_constants`) or 3rd-order (`fc3`) IFCs.
+Compares interatomic force constants (IFCs) between DFT and MLFF calculations by reading Phono3py HDF5 files and writing the residual (MLFF − DFT) to `.dat` files. Auto-detects whether the file contains 2<sup>nd</sup> (`force_constants`) or 3<sup>rd</sup> (`fc3`) IFCs.
 
 ```
 Usage: compareIFCs.py <DFT's force constants HDF5 input> <MLFF's force constants HDF5 input>
 ```
 
 **Output files:**
-- `2ndIFCs.dat` — 2nd-order IFC comparison in eV/Å<sup>2</sup>
-- `3rdIFCs.dat` — 3rd-order IFC comparison in eV/Å<sup>3</sup>
+- `2ndIFCs.dat` — 2<sup>nd</sup> IFC comparison in eV/Å<sup>2</sup>
+- `3rdIFCs.dat` — 3<sup>rd</sup> IFC comparison in eV/Å<sup>3</sup>
 
 ---
 
