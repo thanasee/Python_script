@@ -8,7 +8,7 @@ A collection of Python scripts for VASP output analysis and related tasks, devel
 
 ## Overview
 
-This repository is organized into six functional categories:
+This repository is organized into seven functional categories:
 
 1. **Thermal transport analysis** — post-process force constants, reconnect phonon branches, generate phonon band plot boundaries, extract and analyze lattice thermal conductivity variables from Phono3py HDF5 output files and ShengBTE output files
 2. **Structural analysis** — calculate structural properties (e.g., bond distances) and extract vibrational normal modes from VASP POSCAR/CONTCAR and output files
@@ -16,6 +16,7 @@ This repository is organized into six functional categories:
 4. **Structure preparation** — generate and manipulate POSCAR files for various VASP calculations
 5. **MLFF utilities** — monitor training errors, evaluate MLFF accuracy against DFT references, and convert or merge VASP `ML_AB` training data files
 6. **Dielectric & polar properties** — extract dielectric tensors and Born effective charge tensors from VASP DFPT output files
+7. **NEB calculations** — generate interpolated image directories and analyze completed NEB runs
 
 All scripts are standalone CLI tools written in Python using NumPy as the primary dependency. Each follows a consistent modular design with a `main()` entry point and NumPy-style docstrings.
 
@@ -29,6 +30,7 @@ All scripts are standalone CLI tools written in Python using NumPy as the primar
 - PyYAML
 - matplotlib
 - ASE — Atomic Simulation Environment
+- SciPy
 - hiPhive
 - Phonopy/Phono3py
 
@@ -65,6 +67,7 @@ File format is auto-detected from the extension: `.hdf5` → HDF5; any other ext
 ---
 
 #### `calRMS.py`
+**Inspired by:** [ACS Appl. Energy Mater. 2022, 5, 11, 14522–14530](https://doi.org/10.1021/acsaem.2c03141)
 
 Computes the RMS of each 3×3 IFC block from a Phonopy `FORCE_CONSTANTS` file and pairs it with the corresponding minimum-image interatomic distance from a POSCAR. Useful for visualizing how IFC strength decays with distance for each element pair.
 
@@ -93,6 +96,7 @@ Usage: compareIFCs.py <DFT's force constants HDF5 input> <MLFF's force constants
 ---
 
 #### `reorderPhonopy.py`
+**Inspired by:** [raymond-yiqunwang/phonon_bandplot](https://github.com/raymond-yiqunwang/phonon_bandplot)
 
 Reconnects phonon branches across path segment boundaries in a Phonopy `band.yaml` file. Phonopy's built-in band connection operates only within each segment; this script extends it across segment boundaries to ensure globally consistent branch labeling throughout the full band path.
 
@@ -112,7 +116,7 @@ The reordered data is written to a new `band.yaml` in the same format as the Pho
 
 #### `getQPATH.py`
 
-Reads the high-symmetry q-point path positions from a `band.dat` file produced by `phonopy-bandplot --gnuplot` and writes `QLINES.dat` — a boundary-line file in the same format as `KLINES.dat` from VASPKIT, suitable for overlaying q-path tick marks and the frequency window on a phonon band structure plot in xmgrace or gnuplot.
+Reads the high-symmetry q-point path positions from a `band.dat` file produced by `phonopy-bandplot --gnuplot` and writes `QLINES.dat` — a boundary-line file in the same format as `KLINES.dat` from [VASPKIT](https://doi.org/10.1016/j.cpc.2021.108033), suitable for overlaying q-path tick marks and the frequency window on a phonon band structure plot in xmgrace or gnuplot.
 
 ```
 Usage: getQPATH.py <input band.dat>
@@ -248,6 +252,7 @@ All modes support free-format atom selection by index, range (e.g., `1-4`), elem
 ---
 
 #### `vaspVibration.py`
+**Inspired by:** [QijingZheng/VaspVib2XSF](https://github.com/QijingZheng/VaspVib2XSF)
 
 Extracts vibrational normal modes from a VASP `OUTCAR` or Phonopy `YAML` file and writes each mode as an XSF file for visualization in VESTA or XCrySDen.
 
@@ -567,9 +572,58 @@ Usage: vaspBorn.py <OUTCAR or vasprun.xml>
 
 ---
 
+### 7. NEB Calculations
+
+Scripts for setting up and analyzing Nudged Elastic Band (NEB) calculations in VASP.
+
+---
+
+#### `vaspNEB.py`
+**Inspired by:** [VTST scripts](https://theory.cm.utexas.edu/vtsttools/scripts.html)
+
+Generates NEB image directories with interpolated POSCAR files between two endpoint structures. By default uses the [IDPP method](https://doi.org/10.1063/1.4878664) (Image Dependent Pair Potential), which produces smoother initial paths and reduces the number of NEB iterations. Linear interpolation is available via `-linear`.
+
+```
+Usage: vaspNEB.py <initial POSCAR> <final POSCAR> <N_images> [-linear]
+```
+
+`N_images` is the number of intermediate images excluding endpoints. The script validates that both POSCARs share the same element symbols and atom counts, and warns if lattice matrices differ (dynamic cell / SSNEB mode), in which case the lattice is also linearly interpolated. All interpolation uses the minimum-image convention so atoms always take the shortest path across periodic boundaries. Output directories are named `00`, `01`, ..., with zero-padding; each contains one `POSCAR`. Selective Dynamics flags are carried from the initial image.
+
+IDPP requires SciPy; if SciPy is not available the script falls back to linear interpolation automatically.
+
+---
+
+#### `analyzeNEB.py`
+**Inspired by:** [VTST scripts](https://theory.cm.utexas.edu/vtsttools/scripts.html)
+
+Analyzes a completed VASP NEB run from the current directory. Automatically detects image directories matching the two-digit pattern (`00`, `01`, ...) and auto-detects SSNEB mode (LNEBCELL = .TRUE. in `01/OUTCAR`).
+
+```
+Usage: analyzeNEB.py [nj]
+```
+
+`nj` sets the number of cubic spline sub-steps per image interval (default: 20). All output is written to the working directory except per-image convergence files.
+
+**Output files (working directory):**
+- `neb.dat` — cumulative path distance (Å), relative energy (eV), and tangent force (eV/Å) per image
+- `nebss.dat` — same quantities normalized per atom and per √N_ions *(SSNEB mode only)*
+- `spline.dat` — dense cubic Hermite spline along the MEP interpolated from `neb.dat`
+- `spliness.dat` — same spline from `nebss.dat` *(SSNEB mode only)*
+- `exts.dat` — transition states and minima located analytically along the spline
+- `extsss.dat` — extrema from `spliness.dat` *(SSNEB mode only)*
+- `nebef.dat` — image-by-image table: max force (eV/Å), absolute energy (eV), relative energy (eV)
+- `nebefs.dat` — extended table adding stress (kBar), volume (Å³), magnetic moment (μ_B) *(SSNEB mode only)*
+- `movie` — concatenated POSCAR-format trajectory from all image CONTCARs (or POSCARs)
+- `movie.xyz` — same trajectory in XYZ format, with force and energy annotations per frame
+
+**Per-image output:**
+- `<img>/fe.dat` — force and energy convergence history over ionic steps for each interior image
+
+---
+
 ## Design Conventions
 
-All scripts follow the same conventions modeled on `vaspSupercell.py`:
+All scripts follow the same conventions:
 
 - Single-responsibility functions with NumPy-style docstrings (`Parameters`, `Returns`, inline notes for unit conversions and formulas)
 - `main()` entry point with `if __name__ == '__main__'` guard
