@@ -52,7 +52,7 @@ Enforces rotational sum rules (Huang and Born-Huang) on second-order interatomic
 Usage: enforceIFC.py <input FORCE_CONSTANTS> <output FORCE_CONSTANTS>
 ```
 
-File format is auto-detected from the extension: `.hdf5` → HDF5; any other extension → Phonopy text format. Both input and output independently follow this rule. The cutoff radius for the hiPhive cluster space is set to the maximum cutoff supported by the supercell geometry minus a small margin (0.00001 Å).
+File format is auto-detected from the extension: `.hdf5` → HDF5; any other extension → Phonopy text format. Both input and output independently follow this rule. The cutoff radius for the hiPhive cluster space is set to the maximum cutoff supported by the supercell geometry minus a small margin (10<sup>-5</sup> Å).
 
 **Defaults (when arguments are omitted):**
 - `input FORCE_CONSTANTS` — `FORCE_CONSTANTS` (Phonopy text format)
