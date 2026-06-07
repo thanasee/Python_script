@@ -15,12 +15,31 @@ for shifting a structure file:
   molecule (0D)  ->  shift to center
   nanowire (1D)  ->  shift to origin in extend direction and center in other direction
   sheet (2D)     ->  shift to center in vacuum direction and center in other direction
-  bulk (3D)      ->  shift to origin or user-defined position
+  bulk (3D)      ->  shift to origin
   adsorbate      ->  shift to origin in XY
 
 This script was developed by Thanasee Thanasarnsurapong.
 """)
     exit(0)
+
+
+_ELEMENT_SYMBOLS = [
+    "H",  "He", "Li", "Be", "B",  "C",  "N",  "O",
+    "F",  "Ne", "Na", "Mg", "Al", "Si", "P",  "S",
+    "Cl", "Ar", "K",  "Ca", "Sc", "Ti", "V",  "Cr",
+    "Mn", "Fe", "Co", "Ni", "Cu", "Zn", "Ga", "Ge",
+    "As", "Se", "Br", "Kr", "Rb", "Sr", "Y",  "Zr",
+    "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", "Cd",
+    "In", "Sn", "Sb", "Te", "I",  "Xe", "Cs", "Ba",
+    "La", "Ce", "Pr", "Nd", "Pm", "Sm", "Eu", "Gd",
+    "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu", "Hf",
+    "Ta", "W",  "Re", "Os", "Ir", "Pt", "Au", "Hg",
+    "Tl", "Pb", "Bi", "Po", "At", "Rn", "Fr", "Ra",
+    "Ac", "Th", "Pa", "U",  "Np", "Pu", "Am", "Cm",
+    "Bk", "Cf", "Es", "Fm", "Md", "No", "Lr", "Rf",
+    "Db", "Sg", "Bh", "Hs", "Mt", "Ds", "Rg", "Cn",
+    "Nh", "Fl", "Mc", "Lv", "Ts", "Og"
+]
 
 
 def read_POSCAR(filepath):
@@ -48,7 +67,6 @@ def read_POSCAR(filepath):
         selective_dynamics  : bool                      — whether Selective Dynamics is present
         flags               : np.ndarray or None        — T/F flags per atom, or None
     """
-
     if not os.path.exists(filepath):
         print(f"ERROR!\nFile: {filepath} does not exist.")
         exit(1)
@@ -89,10 +107,10 @@ def read_POSCAR(filepath):
         for i in range(len(lines[5].split())):
             while True:
                 name = input(f"Enter the name of species No. {i + 1:>3}: ").strip()
-                if name.isalpha():
+                if name in _ELEMENT_SYMBOLS:
                     break
                 else:
-                    print("The name of species must be alphabetic characters only.")
+                    print("The name of species must be a valid element symbol.")
             elements.append(name)
         atom_counts = [int(x) for x in lines[5].split()]
         selective_dynamics = lines[6].lower().startswith('s')
@@ -110,7 +128,6 @@ def read_POSCAR(filepath):
     # Read atomic positions
     total_atoms = sum(atom_counts)
     position_stop = position_start + total_atoms
-
     positions = np.array([[float(x) for x in lines[i].split()[:3]]
                           for i in range(position_start, position_stop)])
 
@@ -133,15 +150,15 @@ def read_POSCAR(filepath):
         positions_cartesian = positions * scale
         positions_direct = cartesian_to_direct(lattice_matrix, positions_cartesian)
 
-    return {"lattice_matrix":     lattice_matrix,
-            "elements":           elements,
-            "atom_counts":        atom_counts,
-            "total_atoms":        total_atoms,
+    return {"lattice_matrix":      lattice_matrix,
+            "elements":            elements,
+            "atom_counts":         atom_counts,
+            "total_atoms":         total_atoms,
             "positions_cartesian": positions_cartesian,
-            "positions_direct":   positions_direct,
-            "species":            species,
-            "selective_dynamics": selective_dynamics,
-            "flags":              flags if selective_dynamics else None}
+            "positions_direct":    positions_direct,
+            "species":             species,
+            "selective_dynamics":  selective_dynamics,
+            "flags":               flags if selective_dynamics else None}
 
 
 def direct_to_cartesian(lattice_matrix, positions_direct):
@@ -542,17 +559,10 @@ def shift_sheet(positions_direct):
 
 
 def shift_bulk(positions_direct):
-    """Shift all atoms so the first atom lands at the cell origin (0, 0, 0)
-    or at a user-defined fractional position.
+    """Shift all atoms so the selected atom lands at the cell origin (0, 0, 0)
 
     Intended for 3D periodic bulk systems where no vacuum is present.
-    All atoms are shifted rigidly by the position of the first atom
-    after unwrapping across periodic boundaries.
-
-    Modes
-    -----
-    1 — Origin   : shift the first atom to cell origin (0, 0, 0)
-    2 — Position : shift the first atom to a user-defined fractional position (a, b, c)
+    All atoms are shifted rigidly by the position of the selected reference atom.
 
     Parameters
     ----------
@@ -563,34 +573,21 @@ def shift_bulk(positions_direct):
     np.ndarray (N, 3) — shifted fractional coordinates in [0, 1)
     """
 
-    print("""
-Input the bulk shift mode:
-1) Origin   — shift first atom to cell origin (0, 0, 0)
-2) Position — shift first atom to a user-defined position""")
-    while True:
-        try:
-            mode = int(input())
-            if mode in (1, 2):
-                break
-            print("ERROR! Must choose 1 or 2. Try again.")
-        except ValueError:
-            print("ERROR! Must enter a number. Try again.")
+    try:
+        ref_index = int(input("Enter the atom index to shift to origin (1 to {len(positions_direct)}): ")) - 1
+        if 0 <= ref_index < len(positions_direct):
+            pass
+        else:
+            print("ERROR! Index out of range. Try again.")
+        return shift_bulk(positions_direct)
+    except ValueError:
+        print("ERROR! Must enter a number. Try again.")
 
-    reference, unwrapped = unwrap(positions_direct)
-
-    if mode == 1:
-        return (unwrapped - reference) % 1.0
-    elif mode == 2:
-        print("Enter target fractional position for first atom (a b c):")
-        while True:
-            try:
-                target = np.array([float(x) for x in input().split()])
-                if target.shape == (3,):
-                    break
-                print("ERROR! Must enter exactly 3 values. Try again.")
-            except ValueError:
-                print("ERROR! Must enter numeric values. Try again.")
-        return (unwrapped - reference + target) % 1.0
+    ref = np.copy(positions_direct[ref_index])
+    delta = positions_direct - ref
+    delta -= np.round(delta)
+    unwrapped = ref + delta
+    return (unwrapped - ref) % 1.0
 
 
 def shift_special(total_atoms, positions_direct, species):
@@ -640,7 +637,7 @@ def shift(total_atoms, positions_direct, species):
     0 — 0D molecule  : all atoms centered at (0.5, 0.5, 0.5)
     1 — 1D wire      : extend direction → origin, transverse → center
     2 — 2D sheet     : vacuum direction → center, periodic → origin
-    3 — 3D bulk      : first atom shifted to origin or user-defined position
+    3 — 3D bulk      : selected atom shifted to origin
     4 — Special      : adsorbate XY centered at 0.5, Z unchanged
 
     Parameters
