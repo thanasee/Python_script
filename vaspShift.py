@@ -15,8 +15,8 @@ for shifting a structure file:
   molecule (0D)  ->  shift to center
   nanowire (1D)  ->  shift to origin in extend direction and center in other direction
   sheet (2D)     ->  shift to center in vacuum direction and center in other direction
-  bulk (3D)      ->  shift to origin
-  adsorbate      ->  shift to center in XY plane and unchange in Z direction
+  bulk (3D)      ->  shift to origin or user-defined position
+  adsorbate      ->  shift to origin in XY
 
 This script was developed by Thanasee Thanasarnsurapong.
 """)
@@ -542,11 +542,17 @@ def shift_sheet(positions_direct):
 
 
 def shift_bulk(positions_direct):
-    """Shift all atoms so atom[0] lands at the cell origin (0, 0, 0).
+    """Shift all atoms so the first atom lands at the cell origin (0, 0, 0)
+    or at a user-defined fractional position.
 
     Intended for 3D periodic bulk systems where no vacuum is present.
     All atoms are shifted rigidly by the position of the first atom
     after unwrapping across periodic boundaries.
+
+    Modes
+    -----
+    1 — Origin   : shift the first atom to cell origin (0, 0, 0)
+    2 — Position : shift the first atom to a user-defined fractional position (a, b, c)
 
     Parameters
     ----------
@@ -556,9 +562,35 @@ def shift_bulk(positions_direct):
     -------
     np.ndarray (N, 3) — shifted fractional coordinates in [0, 1)
     """
-    
+
+    print("""
+Input the bulk shift mode:
+1) Origin   — shift first atom to cell origin (0, 0, 0)
+2) Position — shift first atom to a user-defined position""")
+    while True:
+        try:
+            mode = int(input())
+            if mode in (1, 2):
+                break
+            print("ERROR! Must choose 1 or 2. Try again.")
+        except ValueError:
+            print("ERROR! Must enter a number. Try again.")
+
     reference, unwrapped = unwrap(positions_direct)
-    return (unwrapped - reference) % 1.0
+
+    if mode == 1:
+        return (unwrapped - reference) % 1.0
+    elif mode == 2:
+        print("Enter target fractional position for first atom (a b c):")
+        while True:
+            try:
+                target = np.array([float(x) for x in input().split()])
+                if target.shape == (3,):
+                    break
+                print("ERROR! Must enter exactly 3 values. Try again.")
+            except ValueError:
+                print("ERROR! Must enter numeric values. Try again.")
+        return (unwrapped - reference + target) % 1.0
 
 
 def shift_special(total_atoms, positions_direct, species):
@@ -582,7 +614,7 @@ def shift_special(total_atoms, positions_direct, species):
     """
     
     adsorbent_atoms = get_adsorbent_atoms(total_atoms, species)
-    reference, unwrapped = unwrap(positions_direct)
+    _, unwrapped = unwrap(positions_direct)
     # re-unwrap around adsorbate reference
     ref_ads = np.copy(positions_direct[adsorbent_atoms[0]])
     delta = positions_direct - ref_ads
@@ -608,7 +640,7 @@ def shift(total_atoms, positions_direct, species):
     0 — 0D molecule  : all atoms centered at (0.5, 0.5, 0.5)
     1 — 1D wire      : extend direction → origin, transverse → center
     2 — 2D sheet     : vacuum direction → center, periodic → origin
-    3 — 3D bulk      : all atoms shifted to origin via atom[0]
+    3 — 3D bulk      : first atom shifted to origin or user-defined position
     4 — Special      : adsorbate XY centered at 0.5, Z unchanged
 
     Parameters
