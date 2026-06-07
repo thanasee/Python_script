@@ -33,7 +33,7 @@ def read_files(input_file):
     """
     if not os.path.exists(input_file):
         print(f"ERROR!\nFile: {input_file} does not exist.")
-        exit(0)
+        exit(1)
     with open(input_file, 'r') as f:
         return f.readlines()
 
@@ -70,13 +70,13 @@ def find_section_index(lines):
             break
     if energy_index is None:
         print("The 'Total energies (eV)' section was not found in the ML_REG file.")
-        exit(0)
+        exit(1)
     if force_index is None:
         print("The 'Forces (eV ang.^-1)' section was not found in the ML_REG file.")
-        exit(0)
+        exit(1)
     if stress_index is None:
         print("The 'Stress (kbar)' section was not found in the ML_REG file.")
-        exit(0)
+        exit(1)
     return energy_index, force_index, stress_index
 
 
@@ -137,10 +137,10 @@ def validate_dimensions(energy_count, force_count, stress_count):
     """
     if force_count % (3 * energy_count) != 0:
         print("ERROR! Force count is not divisible by 3 * energy_count. Check ML_REG structure.")
-        exit(0)
+        exit(1)
     if stress_count % (6 * energy_count) != 0:
         print("ERROR! Stress count does not match 6 * energy_count. Check ML_REG structure.")
-        exit(0)
+        exit(1)
 
 
 def compute_rmse(dft, mlff):
