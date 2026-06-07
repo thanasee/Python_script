@@ -22,6 +22,25 @@ This script was developed by Thanasee Thanasarnsurapong.
     exit(0)
 
 
+_ELEMENT_SYMBOLS = [
+    "H",  "He", "Li", "Be", "B",  "C",  "N",  "O",
+    "F",  "Ne", "Na", "Mg", "Al", "Si", "P",  "S",
+    "Cl", "Ar", "K",  "Ca", "Sc", "Ti", "V",  "Cr",
+    "Mn", "Fe", "Co", "Ni", "Cu", "Zn", "Ga", "Ge",
+    "As", "Se", "Br", "Kr", "Rb", "Sr", "Y",  "Zr",
+    "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", "Cd",
+    "In", "Sn", "Sb", "Te", "I",  "Xe", "Cs", "Ba",
+    "La", "Ce", "Pr", "Nd", "Pm", "Sm", "Eu", "Gd",
+    "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu", "Hf",
+    "Ta", "W",  "Re", "Os", "Ir", "Pt", "Au", "Hg",
+    "Tl", "Pb", "Bi", "Po", "At", "Rn", "Fr", "Ra",
+    "Ac", "Th", "Pa", "U",  "Np", "Pu", "Am", "Cm",
+    "Bk", "Cf", "Es", "Fm", "Md", "No", "Lr", "Rf",
+    "Db", "Sg", "Bh", "Hs", "Mt", "Ds", "Rg", "Cn",
+    "Nh", "Fl", "Mc", "Lv", "Ts", "Og"
+]
+
+
 def read_POSCAR(filepath):
     """Read a VASP POSCAR file and return its contents as a dictionary.
 
@@ -47,7 +66,6 @@ def read_POSCAR(filepath):
         selective_dynamics  : bool                      — whether Selective Dynamics is present
         flags               : np.ndarray or None        — T/F flags per atom, or None
     """
-
     if not os.path.exists(filepath):
         print(f"ERROR!\nFile: {filepath} does not exist.")
         exit(1)
@@ -88,10 +106,10 @@ def read_POSCAR(filepath):
         for i in range(len(lines[5].split())):
             while True:
                 name = input(f"Enter the name of species No. {i + 1:>3}: ").strip()
-                if name.isalpha():
+                if name in _ELEMENT_SYMBOLS:
                     break
                 else:
-                    print("The name of species must be alphabetic characters only.")
+                    print("The name of species must be a valid element symbol.")
             elements.append(name)
         atom_counts = [int(x) for x in lines[5].split()]
         selective_dynamics = lines[6].lower().startswith('s')
@@ -109,7 +127,6 @@ def read_POSCAR(filepath):
     # Read atomic positions
     total_atoms = sum(atom_counts)
     position_stop = position_start + total_atoms
-
     positions = np.array([[float(x) for x in lines[i].split()[:3]]
                           for i in range(position_start, position_stop)])
 
@@ -132,15 +149,15 @@ def read_POSCAR(filepath):
         positions_cartesian = positions * scale
         positions_direct = cartesian_to_direct(lattice_matrix, positions_cartesian)
 
-    return {"lattice_matrix":     lattice_matrix,
-            "elements":           elements,
-            "atom_counts":        atom_counts,
-            "total_atoms":        total_atoms,
+    return {"lattice_matrix":      lattice_matrix,
+            "elements":            elements,
+            "atom_counts":         atom_counts,
+            "total_atoms":         total_atoms,
             "positions_cartesian": positions_cartesian,
-            "positions_direct":   positions_direct,
-            "species":            species,
-            "selective_dynamics": selective_dynamics,
-            "flags":              flags if selective_dynamics else None}
+            "positions_direct":    positions_direct,
+            "species":             species,
+            "selective_dynamics":  selective_dynamics,
+            "flags":               flags if selective_dynamics else None}
 
 
 def direct_to_cartesian(lattice_matrix, positions_direct):
