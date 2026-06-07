@@ -16,7 +16,7 @@ for shifting a structure file:
   nanowire (1D)  ->  shift to origin in extend direction and center in other direction
   sheet (2D)     ->  shift to center in vacuum direction and center in other direction
   bulk (3D)      ->  shift to origin
-  adsorbate      ->  shift to origin in XY
+  adsorbate      ->  shift to center in XY plane and unchange in Z direction
 
 This script was developed by Thanasee Thanasarnsurapong.
 """)
