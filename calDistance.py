@@ -18,48 +18,65 @@ and developed by Thanasee Thanasarnsurapong.
     exit(0)
 
 
-def read_POSCAR(filepath):
-    """Read and parse a VASP POSCAR/CONTCAR file.
+_ELEMENT_SYMBOLS = [
+    "H",  "He", "Li", "Be", "B",  "C",  "N",  "O",
+    "F",  "Ne", "Na", "Mg", "Al", "Si", "P",  "S",
+    "Cl", "Ar", "K",  "Ca", "Sc", "Ti", "V",  "Cr",
+    "Mn", "Fe", "Co", "Ni", "Cu", "Zn", "Ga", "Ge",
+    "As", "Se", "Br", "Kr", "Rb", "Sr", "Y",  "Zr",
+    "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", "Cd",
+    "In", "Sn", "Sb", "Te", "I",  "Xe", "Cs", "Ba",
+    "La", "Ce", "Pr", "Nd", "Pm", "Sm", "Eu", "Gd",
+    "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu", "Hf",
+    "Ta", "W",  "Re", "Os", "Ir", "Pt", "Au", "Hg",
+    "Tl", "Pb", "Bi", "Po", "At", "Rn", "Fr", "Ra",
+    "Ac", "Th", "Pa", "U",  "Np", "Pu", "Am", "Cm",
+    "Bk", "Cf", "Es", "Fm", "Md", "No", "Lr", "Rf",
+    "Db", "Sg", "Bh", "Hs", "Mt", "Ds", "Rg", "Cn",
+    "Nh", "Fl", "Mc", "Lv", "Ts", "Og"
+]
 
-    Supports:
-    - VASP4 (no element symbols line) and VASP5 formats
-    - Scalar scale factor, negative scale factor (target volume), 
-      and 3-component scale factor
-    - Selective Dynamics
-    - Direct and Cartesian coordinate types
+
+def read_POSCAR(filepath):
+    """Read a VASP POSCAR file and return its contents as a dictionary.
+
+    Supports both VASP4 (no element line) and VASP5 (with element line) formats,
+    scalar and negative (volume-based) scaling factors, a 3-component scaling
+    vector, Selective Dynamics, and both Direct and Cartesian coordinate modes.
 
     Parameters
     ----------
     filepath : str
-        Path to the POSCAR/CONTCAR file.
+        Path to the POSCAR file to read.
 
     Returns
     -------
     dict with keys:
-        lattice_matrix       : (3, 3) ndarray, Cartesian lattice vectors (Angstrom)
-        elements             : list of str, element symbols in POSCAR order
-        atom_counts          : list of int, number of atoms per element
-        total_atoms          : int, total number of atoms
-        positions_cartesian  : (N, 3) ndarray, Cartesian atomic positions (Angstrom)
-        positions_direct     : (N, 3) ndarray, fractional atomic positions
-        species              : list of str, element symbol for each atom
-        selective_dynamics   : bool, whether Selective Dynamics is present
-        flags                : (N, 3) ndarray of str or None, T/F flags if Selective Dynamics
+        lattice_matrix      : np.ndarray, shape (3, 3)  — lattice vectors in Å
+        elements            : list[str]                 — element symbols
+        atom_counts         : list[int]                 — number of atoms per element
+        total_atoms         : int                       — total number of atoms
+        positions_cartesian : np.ndarray, shape (N, 3)  — Cartesian coordinates in Å
+        positions_direct    : np.ndarray, shape (N, 3)  — fractional coordinates
+        species             : list[str]                 — element symbol per atom
+        selective_dynamics  : bool                      — whether Selective Dynamics is present
+        flags               : np.ndarray or None        — T/F flags per atom, or None
     """
-
     if not os.path.exists(filepath):
         print(f"ERROR!\nFile: {filepath} does not exist.")
         exit(1)
-    
+
     with open(filepath, 'r') as poscar:
         lines = poscar.readlines()
-    
+
+    # Parse the scaling factor (line 2):
+    # - 1 value  : uniform scalar; negative means target volume in Å**3
+    # - 3 values : per-axis scale applied row-wise to the lattice matrix
     if len(lines[1].split()) == 1:
         raw_scale = float(lines[1])
         raw_lattice_matrix = np.array([[float(x) for x in line.split()]
                                        for line in lines[2:5]])
         if raw_scale < 0:
-            # Negative scale: interpreted as target volume (Angstrom^3)
             volume = np.abs(np.linalg.det(raw_lattice_matrix))
             scale = np.cbrt(np.abs(raw_scale) / volume)
         elif raw_scale == 0:
@@ -69,14 +86,15 @@ def read_POSCAR(filepath):
             scale = raw_scale
         lattice_matrix = raw_lattice_matrix * scale
     elif len(lines[1].split()) == 3:
-        # 3-component scale: each component scales the corresponding lattice vector
         scale = np.array(list(map(float, lines[1].split())))
         lattice_matrix = np.array([[float(x) * scale[i] for i, x in enumerate(line.split())]
                                    for line in lines[2:5]])
     else:
         print("ERROR! The scaling factor must be 1 or 3 components.")
         exit(1)
-    
+
+    # Detect VASP4 vs VASP5 format by checking whether line 6 starts with a number.
+    # VASP4 has no element-symbol line, so the user is prompted for species names.
     elements = []
     is_number = lines[5].split()[0].isdecimal()
     if is_number:
@@ -84,16 +102,17 @@ def read_POSCAR(filepath):
         for i in range(len(lines[5].split())):
             while True:
                 name = input(f"Enter the name of species No. {i + 1:>3}: ").strip()
-                if name.isalpha():
+                if name in _ELEMENT_SYMBOLS:
                     break
                 else:
-                    print("The name of species must be alphabetic characters only.")
+                    print("The name of species must be a valid element symbol.")
             elements.append(name)
         atom_counts = [int(x) for x in lines[5].split()]
         selective_dynamics = lines[6].lower().startswith('s')
         position_start = 8 if selective_dynamics else 7
     else:
-        # VASP5 format: element symbols present
+        # VASP5 format: element symbols present.
+        # Strip potential PAW/GGA suffixes such as '_pv' or '/GGA'.
         raw_elements = lines[5].split()
         for name in raw_elements:
             elements.append(name.split('/')[0].split('_')[0])
@@ -101,39 +120,40 @@ def read_POSCAR(filepath):
         selective_dynamics = lines[7].lower().startswith('s')
         position_start = 9 if selective_dynamics else 8
 
+    # Read atomic positions
     total_atoms = sum(atom_counts)
     position_stop = position_start + total_atoms
-
     positions = np.array([[float(x) for x in lines[i].split()[:3]]
                           for i in range(position_start, position_stop)])
 
+    # Build a per-atom species list (e.g. ['Mo', 'Mo', 'S', 'S', 'S'])
     species = [x for i, x in enumerate(elements)
                for _ in range(atom_counts[i])]
 
+    # Read Selective Dynamics T/F flags if present
     flags = None
     if selective_dynamics:
         flags = np.array([[x for x in lines[i].split()[3:6]]
                           for i in range(position_start, position_stop)])
 
+    # Convert coordinates to both Direct and Cartesian representations
     is_direct = lines[position_start - 1].strip().lower().startswith('d')
     if is_direct:
-        # If direct coordinate then compute Cartesian coordinate
         positions_direct = positions % 1.0
         positions_cartesian = direct_to_cartesian(lattice_matrix, positions_direct)
     else:
-        # If Cartesian coordinate then compute direct coordinate
         positions_cartesian = positions * scale
         positions_direct = cartesian_to_direct(lattice_matrix, positions_cartesian)
-    
-    return {"lattice_matrix": lattice_matrix,
-            "elements": elements,
-            "atom_counts": atom_counts,
-            "total_atoms": total_atoms,
+
+    return {"lattice_matrix":      lattice_matrix,
+            "elements":            elements,
+            "atom_counts":         atom_counts,
+            "total_atoms":         total_atoms,
             "positions_cartesian": positions_cartesian,
-            "positions_direct": positions_direct,
-            "species": species,
-            "selective_dynamics": selective_dynamics,
-            "flags": flags if selective_dynamics else None}
+            "positions_direct":    positions_direct,
+            "species":             species,
+            "selective_dynamics":  selective_dynamics,
+            "flags":               flags if selective_dynamics else None}
 
 
 def direct_to_cartesian(lattice_matrix, positions_direct):
