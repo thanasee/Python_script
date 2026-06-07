@@ -33,6 +33,7 @@ All scripts are standalone CLI tools written in Python using NumPy as the primar
 - SciPy
 - hiPhive
 - Phonopy/Phono3py
+- Numba
 
 ---
 
@@ -318,7 +319,7 @@ Usage: ElasticTensor2D.py pre  <structure file>   # Generate strained POSCARs
 Extracts the piezoelectric stress tensor (e, C/m<sup>2</sup>) and elastic stiffness tensor (C, GPa or N/m) from a VASP `OUTCAR` and computes the piezoelectric strain tensor (**d** = **e**·**S**, pm/V) via the compliance tensor **S** = **C**<sup>-1</sup>.
 
 ```
-Usage: vaspPiezoelectric.py <OUTCAR>
+Usage: vaspPiezoelectric.py <POSCAR> <OUTCAR>
 ```
 
 Supports both 2D materials (with vacuum-layer thickness correction) and 3D bulk materials. Uses a three-level fallback chain for the elastic tensor (ionic + electronic → total → user input).
