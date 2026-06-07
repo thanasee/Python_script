@@ -23,6 +23,25 @@ This script was developed by Thanasee Thanasarnsurapong.
     exit(0)
 
 
+_ELEMENT_SYMBOLS = [
+    "H",  "He", "Li", "Be", "B",  "C",  "N",  "O",
+    "F",  "Ne", "Na", "Mg", "Al", "Si", "P",  "S",
+    "Cl", "Ar", "K",  "Ca", "Sc", "Ti", "V",  "Cr",
+    "Mn", "Fe", "Co", "Ni", "Cu", "Zn", "Ga", "Ge",
+    "As", "Se", "Br", "Kr", "Rb", "Sr", "Y",  "Zr",
+    "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", "Cd",
+    "In", "Sn", "Sb", "Te", "I",  "Xe", "Cs", "Ba",
+    "La", "Ce", "Pr", "Nd", "Pm", "Sm", "Eu", "Gd",
+    "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu", "Hf",
+    "Ta", "W",  "Re", "Os", "Ir", "Pt", "Au", "Hg",
+    "Tl", "Pb", "Bi", "Po", "At", "Rn", "Fr", "Ra",
+    "Ac", "Th", "Pa", "U",  "Np", "Pu", "Am", "Cm",
+    "Bk", "Cf", "Es", "Fm", "Md", "No", "Lr", "Rf",
+    "Db", "Sg", "Bh", "Hs", "Mt", "Ds", "Rg", "Cn",
+    "Nh", "Fl", "Mc", "Lv", "Ts", "Og"
+]
+
+
 def read_POSCAR(filepath):
     """Read a VASP POSCAR file and return its contents as a dictionary.
 
@@ -88,10 +107,10 @@ def read_POSCAR(filepath):
         for i in range(len(lines[5].split())):
             while True:
                 name = input(f"Enter the name of species No. {i + 1:>3}: ").strip()
-                if name.isalpha():
+                if name in _ELEMENT_SYMBOLS:
                     break
                 else:
-                    print("The name of species must be alphabetic characters only.")
+                    print("The name of species must be a valid element symbol.")
             elements.append(name)
         atom_counts = [int(x) for x in lines[5].split()]
         selective_dynamics = lines[6].lower().startswith('s')
@@ -485,9 +504,9 @@ def apply_substitution(positions_cartesian, positions_direct, species, selective
     """
     while True:
         new_element = input("Enter the new element symbol for substitution: ").strip()
-        if new_element.isalpha():
+        if new_element in _ELEMENT_SYMBOLS:
             break
-        print("ERROR! Element symbol must contain alphabetic characters only.")
+        print("ERROR! Element symbol is not valid.")
 
     new_species = species.copy()
     for idx in selected_atoms:
@@ -553,14 +572,17 @@ Interstitial site definition:
         elif site_mode == '2':
             # Manual fractional coordinate input
             print("Enter the fractional coordinates of the interstitial site:")
-            new_positions_direct = np.zeros(3)
-            for i, direction in enumerate(('a', 'b', 'c')):
-                while True:
-                    try:
-                        new_positions_direct[i] = float(input(f"Enter position in {direction} direction (direct): "))
+            while True:
+                try:
+                    coords = list(map(float, input("  a b c: ").split()))
+                    if len(coords) == 3:
+                        new_positions_direct = np.array(coords) % 1.0
                         break
-                    except ValueError:
-                        print("Wrong input! Try again")
+                    print("ERROR! Enter exactly 3 values.")
+                except ValueError:
+                    print("ERROR! Non-numeric input. Try again.")
+            break
+        
         else:
             print("ERROR! Choose again.")
 
@@ -569,9 +591,9 @@ Interstitial site definition:
     # Prompt for the interstitial element symbol
     while True:
         new_element = input("Enter the element symbol for the interstitial atom: ").strip()
-        if new_element.isalpha():
+        if new_element in _ELEMENT_SYMBOLS:
             break
-        print("ERROR! Element symbol must contain alphabetic characters only.")
+        print("ERROR! Element symbol is not valid.")
 
     new_species = species.copy()
     new_positions_cartesian_list = list(positions_cartesian)
@@ -606,7 +628,7 @@ Interstitial site definition:
 
 def apply_displacement(lattice_matrix, positions_cartesian, positions_direct,
                        species, selective_dynamics, flags):
-    """Displace selected atoms in XY while preserving their fractional Z coordinate.
+    """Displace selected atoms in XY while preserving their fractional c coordinate.
  
     Atoms eligible for displacement are detected by Cartesian Z > threshold,
     where threshold is the midpoint of the largest gap in sorted Cartesian Z values.
