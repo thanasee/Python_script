@@ -388,7 +388,7 @@ All modes first unwrap atoms across periodic boundaries to compute a geometrical
 - **Mode 0 — 0D molecule:** centroid shifted to cell center (0.5, 0.5, 0.5)
 - **Mode 1 — 1D nanowire:** extend direction shifted to origin; transverse directions centered at 0.5. User selects the extend direction (x/y/z)
 - **Mode 2 — 2D sheet:** vacuum direction centered at 0.5; periodic directions shifted to origin. User selects the vacuum direction (x/y/z)
-- **Mode 3 — 3D bulk:** first atom shifted to origin or user-defined position
+- **Mode 3 — 3D bulk:** selected atom shifted to origin
 - **Mode 4 — Adsorbate:** selected adsorbate group centered in XY at (0.5, 0.5); z-coordinates of all atoms left unchanged. Adsorbate selection supports free-format input (index, range, element symbol, `all`)
 
 ---
