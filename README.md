@@ -18,7 +18,7 @@ This repository is organized into seven functional categories:
 6. **Dielectric & polar properties** — extract dielectric tensors and Born effective charge tensors from VASP DFPT output files
 7. **NEB calculations** — generate interpolated image directories and analyze completed NEB runs
 
-All scripts are standalone CLI tools written in Python using NumPy as the primary dependency. Each follows a consistent modular design with a `main()` entry point and NumPy-style docstrings.
+All scripts are standalone Python tools operated via command-line arguments and interactive prompts. Each follows a consistent modular design with a `main()` entry point and NumPy-style docstrings.
 
 ---
 
