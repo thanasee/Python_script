@@ -236,8 +236,8 @@ def define_labels(elements, atom_counts):
     return labels
 
 
-def write_POSCAR(filepath, lattice_matrix, elements, atom_counts,
-                 positions_direct, selective_dynamics, flags, labels):
+def write_POSCAR(filepath, lattice_matrix, elements, atom_counts, positions_cartesian,
+                 positions_direct, selective_dynamics, flags, labels, direct=True):
     """Write a VASP5-format POSCAR file with Direct coordinates.
 
     The scale factor is always written as 1.0 because lattice vectors are
@@ -250,10 +250,12 @@ def write_POSCAR(filepath, lattice_matrix, elements, atom_counts,
     lattice_matrix     : np.ndarray (3, 3)  — lattice vectors in Å
     elements           : list[str]          — element symbols in canonical order
     atom_counts        : list[int]          — atoms per element
+    positions_cartesian: np.ndarray (N, 3)  — Cartesian coordinates in Å
     positions_direct   : np.ndarray (N, 3)  — fractional coordinates
     selective_dynamics : bool
     flags              : np.ndarray or None  — per-atom T/F flags
     labels             : list[str]          — per-atom comment labels
+    direct             : bool               — True for Direct coordinates, False for Cartesian
     """
 
     with open(filepath, 'w') as o:
@@ -265,16 +267,13 @@ def write_POSCAR(filepath, lattice_matrix, elements, atom_counts,
         o.write("     " + "    ".join(map(str, atom_counts)) + "\n")
         if selective_dynamics:
             o.write("Selective dynamics\n")
-        o.write("Direct\n")
-        if selective_dynamics:
-            for position, flag, label in zip(positions_direct, flags, labels):
-                o.write(f"{position[0]:20.16f}{position[1]:20.16f}{position[2]:20.16f}"
-                        f"   {flag[0]:s}   {flag[1]:s}   {flag[2]:s}"
-                        f"   {label:>6s}\n")
-        else:
-            for position, label in zip(positions_direct, labels):
-                o.write(f"{position[0]:20.16f}{position[1]:20.16f}{position[2]:20.16f}"
-                        f"   {label:>6s}\n")
+        o.write("Direct\n" if direct else "Cartesian\n")
+        positions = positions_direct.copy() if direct else positions_cartesian.copy()
+        for i, position in enumerate(positions):
+            o.write(f"{position[0]:20.16f}{position[1]:20.16f}{position[2]:20.16f}")
+            if selective_dynamics:
+                o.write(f"   {flags[i, 0]:s}   {flags[i, 1]:s}   {flags[i, 2]:s}")
+            o.write(f"   {labels[i]:>6s}\n")
 
 
 def _last_match(filepath, pattern):
@@ -858,14 +857,9 @@ def make_movie(directories):
         # POSCAR block — write to temp file then read back as string
         tmp = f"_neb_tmp_{d}.vasp"
         labels = define_labels(poscar['elements'], poscar['atom_counts'])
-        write_POSCAR(tmp,
-                     poscar['lattice_matrix'],
-                     poscar['elements'],
-                     poscar['atom_counts'],
-                     poscar['positions_direct'],
-                     poscar['selective_dynamics'],
-                     poscar['flags'],
-                     labels)
+        write_POSCAR(tmp, poscar['lattice_matrix'], poscar['elements'], poscar['atom_counts'],
+                     poscar['positions_cartesian'], poscar['positions_direct'], poscar['selective_dynamics'],
+                     poscar['flags'], labels)
         with open(tmp) as tf:
             block = tf.read()
         os.remove(tmp)
