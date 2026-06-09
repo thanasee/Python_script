@@ -574,7 +574,7 @@ def shift_bulk(positions_direct):
     """
 
     try:
-        ref_index = int(input("Enter the atom index to shift to origin (1 to {len(positions_direct)}): ")) - 1
+        ref_index = int(input(f"Enter the atom index to shift to origin (1 to {len(positions_direct)}): ")) - 1
         if 0 <= ref_index < len(positions_direct):
             pass
         else:
@@ -688,8 +688,9 @@ def main():
     mapping = mapping_elements(unshift["elements"], unshift["atom_counts"], shift_positions_cartesian, shift_positions_direct,
                                unshift["species"], unshift["selective_dynamics"], unshift["flags"])
     labels = define_labels(mapping["elements"], mapping["atom_counts"])
-    write_POSCAR(argv[2], unshift["lattice_matrix"], mapping["elements"], mapping["atom_counts"], mapping["positions_direct"],
-                 unshift["selective_dynamics"], mapping["flags"], labels)
+    write_POSCAR(argv[2], unshift["lattice_matrix"], mapping["elements"], mapping["atom_counts"],
+                 mapping["positions_cartesian"], mapping["positions_direct"], unshift["selective_dynamics"],
+                 mapping["flags"], labels)
     
     print("")
 
