@@ -579,7 +579,6 @@ def shift_bulk(positions_direct):
             pass
         else:
             print("ERROR! Index out of range. Try again.")
-        return shift_bulk(positions_direct)
     except ValueError:
         print("ERROR! Must enter a number. Try again.")
 
