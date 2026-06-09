@@ -395,8 +395,9 @@ def main():
                                unformat["positions_direct"], unformat["species"], unformat["selective_dynamics"],
                                unformat["flags"])
     labels = define_labels(mapping["elements"], mapping["atom_counts"])
-    print(f"Detected {'Direct' if unformat['is_direct'] else 'Cartesian'} coordinates ->"
-          f"Converting to {'Cartesian' if unformat['is_direct'] else 'Direct'} coordinates.\n")    direct = not unformat["is_direct"]
+    print(f"\nDetected {'Direct' if unformat['is_direct'] else 'Cartesian'} coordinates -> "
+          f"Converting to {'Cartesian' if unformat['is_direct'] else 'Direct'} coordinates.\n")
+    direct = not unformat["is_direct"]
     write_POSCAR(argv[2], unformat["lattice_matrix"], mapping["elements"], mapping["atom_counts"],
                  mapping["positions_cartesian"], mapping["positions_direct"], unformat["selective_dynamics"],
                  mapping["flags"], labels, direct)
