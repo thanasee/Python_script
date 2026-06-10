@@ -358,6 +358,16 @@ Supports optional Selective Dynamics and writes per-atom label comments (e.g., `
 
 ---
 
+#### `vaspConvert.py`
+
+Converts a VASP POSCAR/CONTCAR between Direct and Cartesian coordinate representations. Toggles the coordinate type of the input: Direct coordinates are converted to Cartesian, and Cartesian coordinates are converted to Direct. Handles VASP4/5/6 formats, all scaling factor conventions, Selective Dynamics, and duplicate element reordering.
+
+```
+Usage: vaspConvert.py <input POSCAR> <output POSCAR>
+```
+
+---
+
 #### `vaspDefect.py`
 
 Applies point defects to a VASP POSCAR and writes the modified structure. Atoms are reordered into contiguous element blocks before and after defect application. Four defect types are available interactively. Free-format atom selection (index, range e.g. `1-4`, element symbol, `all`) is used throughout.
@@ -539,6 +549,22 @@ Usage: mlab2extxyz.py <ML_AB input> <output.extxyz>
 ```
 
 Each configuration block is mapped to one extxyz frame with lattice, positions, energy, forces, and stress. Stress is converted from kbar to eV/Å<sup>3</sup>.
+
+---
+
+#### `xml2mlab.py`
+
+Converts VASP AIMD `vasprun.xml` trajectory files to VASP `ML_AB` training data format for MLFF training.
+
+```
+Usage: xml2mlab.py <vasprun1.xml> [vasprun2.xml ...]
+```
+
+Multiple files are concatenated into a single `ML_AB` output. Interactively prompts for equilibration skip (number of initial steps to discard) and stride (use every N-th step). A per-file and total configuration summary is printed before writing begins. CTIFOR is omitted (external training data convention); reference atomic energies are set to 0.0 and basis sets are written as dummy entries, both compatible with `ML_MODE = select`.
+
+Element sets are verified to be consistent across files; mismatches trigger a warning and the union of all element types is used. Stress is passed through without sign flip, consistent with native VASP MLFF output.
+
+**Output:** `ML_AB` written to the current directory.
 
 ---
 
