@@ -55,6 +55,7 @@ def read_POSCAR(filepath):
         elements            : list[str]                 — element symbols
         atom_counts         : list[int]                 — number of atoms per element
         total_atoms         : int                       — total number of atoms
+        is_direct           : bool                      — whether Direct coordinates are used
         positions_cartesian : np.ndarray, shape (N, 3)  — Cartesian coordinates in Å
         positions_direct    : np.ndarray, shape (N, 3)  — fractional coordinates
         species             : list[str]                 — element symbol per atom
@@ -148,6 +149,7 @@ def read_POSCAR(filepath):
             "elements":            elements,
             "atom_counts":         atom_counts,
             "total_atoms":         total_atoms,
+            "is_direct":           is_direct,
             "positions_cartesian": positions_cartesian,
             "positions_direct":    positions_direct,
             "species":             species,
@@ -331,7 +333,7 @@ def get_phonon_flags():
                 print("Input must be 3 or 4!")
         except ValueError:
             print("Invalid input. Please enter integer numbers.")
- 
+
  
 def write_CONTROL(filepath, lattice_matrix, elements, atom_counts, positions_direct,
                   ngrid, supercell_matrix, phonon_flags):
