@@ -224,7 +224,202 @@ def get_vacuum_index():
             return None
         else:
             print("Input must be Y or N!")
+
+
+def unwrap(positions_direct):
+    """Reconstruct a contiguous cluster by unwrapping periodic boundary conditions.
+
+    Shifts all atoms into the minimum-image frame relative to atom[0], so that
+    atoms split across a cell boundary are treated as geometrically contiguous.
+    Interatomic distances are preserved exactly.
+
+    Parameters
+    ----------
+    positions_direct : np.ndarray (N, 3) — fractional coordinates in [0, 1)
+
+    Returns
+    -------
+    reference : np.ndarray (3,)   — fractional coordinate of atom[0]
+    unwrapped : np.ndarray (N, 3) — unwrapped fractional coordinates
+    """
+    
+    reference = np.copy(positions_direct[0])
+    delta = positions_direct - reference
+    delta -= np.round(delta)
+    
+    return reference, reference + delta
+
+
+def shift_sheet(positions_direct, vacuum):
+    """Shift a 2D sheet so the vacuum direction is centered at 0.5 and the
+    periodic directions start at origin.
+
+    Intended for 2D periodic systems (monolayers, slabs) where the structure
+    is periodic in two directions and has vacuum in one direction.
+    The user is prompted to select the vacuum direction.
+
+    Parameters
+    ----------
+    positions_direct : np.ndarray (N, 3) — fractional coordinates in [0, 1)
+    vacuum           : int, axis index of vacuum direction (0, 1, or 2)
+
+    Returns
+    -------
+    np.ndarray (N, 3) — shifted fractional coordinates in [0, 1)
+    """
+    
+    reference, unwrapped = unwrap(positions_direct)
+    center = np.mean(unwrapped, axis=0)
+    periodic = [i for i in range(3) if i != vacuum]
+    new = np.copy(unwrapped)
+    new[:, periodic] = unwrapped[:, periodic] - reference[periodic]
+    new[:, vacuum]   = unwrapped[:, vacuum] - center[vacuum] + 0.5
+    
+    return new % 1.0
+
+
+VDW_RADIUS = {
+    'H':  1.20, 'He': 1.43, 'Li': 2.12, 'Be': 1.98, 'B':  1.91, 'C':  1.77,
+    'N':  1.66, 'O':  1.50, 'F':  1.46, 'Ne': 1.58, 'Na': 2.50, 'Mg': 2.51,
+    'Al': 2.25, 'Si': 2.19, 'P':  1.90, 'S':  1.89, 'Cl': 1.82, 'Ar': 1.83,
+    'K':  2.73, 'Ca': 2.62, 'Sc': 2.58, 'Ti': 2.46, 'V':  2.42, 'Cr': 2.45,
+    'Mn': 2.45, 'Fe': 2.44, 'Co': 2.40, 'Ni': 2.40, 'Cu': 2.38, 'Zn': 2.39,
+    'Ga': 2.32, 'Ge': 2.29, 'As': 1.88, 'Se': 1.82, 'Br': 1.86, 'Kr': 1.95,
+    'Rb': 3.21, 'Sr': 2.84, 'Y':  2.75, 'Zr': 2.52, 'Nb': 2.56, 'Mo': 2.45,
+    'Tc': 2.44, 'Ru': 2.46, 'Rh': 2.44, 'Pd': 2.15, 'Ag': 2.53, 'Cd': 2.49,
+    'In': 2.43, 'Sn': 2.42, 'Sb': 2.47, 'Te': 1.99, 'I':  2.04, 'Xe': 2.06,
+    'Cs': 3.48, 'Ba': 3.03, 'La': 2.98, 'Ce': 2.88, 'Pr': 2.92, 'Nd': 2.95,
+    'Pm': 2.90, 'Sm': 2.87, 'Eu': 2.83, 'Gd': 2.79, 'Tb': 2.87, 'Dy': 2.81,
+    'Ho': 2.76, 'Er': 2.75, 'Tm': 2.73, 'Yb': 2.76, 'Lu': 2.68, 'Hf': 2.63,
+    'Ta': 2.53, 'W':  2.57, 'Re': 2.49, 'Os': 2.48, 'Ir': 2.41, 'Pt': 2.29,
+    'Au': 2.32, 'Hg': 2.45, 'Tl': 2.47, 'Pb': 2.60, 'Bi': 2.54, 'Po': 2.80,
+    'At': 2.93, 'Rn': 2.02,
+}
+
+
+def compute_2d_thickness(lattice_matrix, species, positions_cartesian, vac_idx):
+    """Compute the effective 2D layer thickness using Alvarez vdW radii.
  
+    Atomic positions are projected onto the unit normal of the ab-plane to
+    correctly handle non-orthogonal cells where the c vector is tilted.
+    The renormalization factor accounts for this tilt.
+ 
+    Thickness formula:
+        t_eff = z_range + r_vdW_top + r_vdW_bottom
+ 
+    Renormalization factor:
+        factor_2d = (c · n̂) / t_eff
+        where n̂ = (a × b) / |a × b|  (unit normal to the ab-plane)
+ 
+    Parameters
+    ----------
+    lattice_matrix      : ndarray, shape (3, 3) — row vectors of the lattice in Å
+    species             : list of str, element symbol per atom
+    positions_cartesian : ndarray, shape (N, 3) — Cartesian coordinates in Å
+    vac_idx            : int, axis index of vacuum direction (0, 1, or 2)
+ 
+    Returns
+    -------
+    factor_2d : float, renormalization factor to convert 3D to effective 2D properties
+    t_eff     : float, effective 2D layer thickness in Å (vdW-corrected)
+    c_proj     : float, projection of the lattice vector along vac_idx onto the normal in Å
+    z_range    : float, atomic span along the normal in Å (max - min of projected positions)
+    projected  : ndarray, shape (N,), atomic positions projected onto the normal in Å
+    """
+ 
+    # Unit normal to the ab-plane
+    in_plane = [i for i in range(3) if i != vac_idx]
+    area_vector = np.cross(lattice_matrix[in_plane[0]], lattice_matrix[in_plane[1]])
+    vector_n    = area_vector / np.linalg.norm(area_vector)
+ 
+    # Projection of c onto the normal (scalar thickness of the periodic cell)
+    c_proj = np.abs(lattice_matrix[vac_idx] @ vector_n)
+ 
+    # Project all atomic positions onto the normal
+    projected = positions_cartesian @ vector_n
+ 
+    # Identify outermost atoms
+    idx_top = np.argmax(projected)
+    idx_bot = np.argmin(projected)
+    z_range = projected[idx_top] - projected[idx_bot]
+ 
+    # vdW radii; fall back to 2.00 Å if element not in table
+    r_top = VDW_RADIUS.get(species[idx_top], 2.00)
+    r_bot = VDW_RADIUS.get(species[idx_bot], 2.00)
+ 
+    t_eff     = z_range + r_top + r_bot
+    factor_2d = c_proj / t_eff
+ 
+    return factor_2d, t_eff, c_proj, z_range, projected
+
+
+def get_vacuum_thickness(lattice_matrix, species, positions_cartesian, positions_direct, vac_idx):
+    """
+    Reduce the vacuum gap along vac_idx to a target thickness.
+
+    Computes the effective 2D layer thickness (vdW-corrected) and offers
+    it as the default new cell length along vac_idx. Rescales the lattice
+    vector and atomic positions (already centered at 0.5 by shift_sheet)
+    accordingly. Rejects any target thickness smaller than the atomic span,
+    which would cause atoms to overlap across the periodic boundary.
+
+    Parameters
+    ----------
+    lattice_matrix      : ndarray, shape (3, 3) — row vectors of the lattice in Å
+    species             : list of str, element symbol per atom
+    positions_cartesian : ndarray, shape (N, 3) — Cartesian coordinates in Å
+    positions_direct    : ndarray, shape (N, 3) — fractional coordinates in [0, 1)
+    vac_idx             : int, axis index of vacuum direction (0, 1, or 2)
+
+    Returns
+    -------
+    lattice_matrix   : ndarray (3, 3), with lattice_matrix[vac_idx] rescaled
+    positions_direct : ndarray (N, 3), rescaled along vac_idx, wrapped to [0,1)
+    """
+    _, t_eff, c_proj, z_range, _ = compute_2d_thickness(lattice_matrix, species, positions_cartesian, vac_idx)
+
+    print(f"Effective 2D thickness: {t_eff:.6f} Angstrom")
+    print(f"Atomic span (z_range):  {z_range:.6f} Angstrom")
+
+    while True:
+        choice = input("Use effective thickness as new cell thickness? (Y/N): ").strip().lower()
+        if choice[0] == 'y':
+            new_length = t_eff
+            if new_length >= z_range:
+                break
+            else:
+                print(f"ERROR! Effective thickness ({new_length:.6f} Å) is not "
+                      f"greater than or equal to the atomic span ({z_range:.6f} Å).")
+                print("Please enter a custom value instead.")
+                choice = 'n'  # fall through to manual entry below
+
+        if choice[0] == 'n':
+            while True:
+                try:
+                    new_length = float(input("Enter target cell thickness in Angstrom: "))
+                    if new_length >= z_range:
+                        break
+                    else:
+                        print(f"ERROR! Target thickness ({new_length:.6f} Å) must be "
+                              f"greater than or equal to the atomic span ({z_range:.6f} Å).")
+                except ValueError:
+                    print("Invalid input. Please enter a number.")
+            break
+
+        if choice[0] not in ('y', 'n'):
+            print("Input must be Y or N!")
+
+    scale_factor = new_length / c_proj
+
+    new_lattice_matrix = lattice_matrix.copy()
+    new_lattice_matrix[vac_idx] *= scale_factor
+
+    new_positions_direct = positions_direct.copy()
+    new_positions_direct[:, vac_idx] = 0.5 + (new_positions_direct[:, vac_idx] - 0.5) / scale_factor
+    new_positions_direct %= 1.0
+
+    return new_lattice_matrix, new_positions_direct
+
  
 def get_ngrid(reciprocal_matrix, index):
     """
@@ -408,16 +603,24 @@ def main():
         usage()
  
     poscar = read_POSCAR(argv[1])
- 
-    reciprocal_matrix = 2. * np.pi * np.linalg.inv(poscar["lattice_matrix"]).T
     vac_idx = get_vacuum_index()
+
+    if vac_idx is not None:
+        shifted_positions_direct = shift_sheet(poscar["positions_direct"], vac_idx)
+        shifted_positions_cartesian = direct_to_cartesian(poscar["lattice_matrix"], shifted_positions_direct)
+        new_lattice_matrix, new_positions_direct = get_vacuum_thickness(poscar["lattice_matrix"], poscar["species"], shifted_positions_cartesian, shifted_positions_direct, vac_idx)
+    else:
+        new_lattice_matrix = poscar["lattice_matrix"]
+        new_positions_direct = poscar["positions_direct"]
+ 
+    reciprocal_matrix = 2. * np.pi * np.linalg.inv(new_lattice_matrix).T
     ngrid = get_ngrid(reciprocal_matrix, vac_idx)
     supercell_matrix = get_supercell_matrix()
     phonon_flags = get_phonon_flags()
  
     output_file = "CONTROL.initial"
-    write_CONTROL(output_file, poscar["lattice_matrix"], poscar["elements"], poscar["atom_counts"],
-                  poscar["positions_direct"], ngrid, supercell_matrix, phonon_flags)
+    write_CONTROL(output_file, new_lattice_matrix, poscar["elements"], poscar["atom_counts"],
+                  new_positions_direct, ngrid, supercell_matrix, phonon_flags)
  
     print(f"Written: {output_file}")
  
