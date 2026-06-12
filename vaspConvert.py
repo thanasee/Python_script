@@ -55,6 +55,7 @@ def read_POSCAR(filepath):
         elements            : list[str]                 — element symbols
         atom_counts         : list[int]                 — number of atoms per element
         total_atoms         : int                       — total number of atoms
+        is_direct           : bool                      — whether Direct coordinates are used
         positions_cartesian : np.ndarray, shape (N, 3)  — Cartesian coordinates in Å
         positions_direct    : np.ndarray, shape (N, 3)  — fractional coordinates
         species             : list[str]                 — element symbol per atom
