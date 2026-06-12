@@ -887,7 +887,7 @@ Method of positioning adsorbent
                                new_species, selective_dynamics, new_flags)
     labels = define_labels(mapping["elements"], mapping["atom_counts"])
     write_POSCAR(argv[3], substrate["lattice_matrix"], mapping["elements"], mapping["atom_counts"],
-                 mapping["positions_cartesian"], mapping["positions_direct"], mapping["selective_dynamics"],
+                 mapping["positions_cartesian"], mapping["positions_direct"], selective_dynamics,
                  mapping["flags"], labels)
 
     print(f"\nAdsorption structure written to: {argv[3]}")
