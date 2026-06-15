@@ -509,6 +509,22 @@ If either POSCAR has Selective Dynamics, flags are merged, and the other structu
 
 ---
 
+#### `vaspMove.py`
+
+Moves selected atoms within a VASP POSCAR by displacement or to absolute coordinates. Two move modes are available interactively.
+
+```
+Usage: vaspMove.py <input POSCAR> <output POSCAR>
+```
+
+Atom selection uses free-format input (index, range e.g. `1-4`, element symbol, `all`). For each mode, the coordinate system (Cartesian in Å or Direct fractional) is selected independently.
+
+**Mode 1 — Displace by vector:** Adds a (dx, dy, dz) displacement vector to all selected atoms.
+
+**Mode 2 — Move to absolute coordinates:** Translates the centroid of the selected atoms to a target point; all selected atoms are shifted rigidly by the same offset.
+
+---
+
 ### 5. MLFF Utilities
 
 Scripts for working with VASP Machine Learning Force Fields (MLFF).
