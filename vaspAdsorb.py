@@ -557,13 +557,6 @@ def place_onsite(lattice_matrix_substrate, total_atoms_substrate, total_atoms_ad
         side_label_sub = "highest" if side == 1 else "lowest"
         side_label_ads = "lowest"  if side == 1 else "highest"
 
-        print(f"""
-Choices of positioning adsorbent for adsorbent {n+1:>2}
-1) Choose atoms surround the positioning point
-   If 1 atom means ontop that atom
-   If 2 or more atoms mean on top of center point of these atoms
-2) Custom position in Direct coordinate""")
-
         # Choose substrate z reference
         print(f"""
 Method of reference height of substrate
@@ -638,6 +631,12 @@ Choices of selecting the drop point of adsorbent
                     print("ERROR!! Choose again")
 
         # Choose target xy site on substrate
+        print(f"""
+Choices of positioning adsorbent for adsorbent {n+1:>2}
+1) Choose atoms surround the positioning point
+   If 1 atom means ontop that atom
+   If 2 or more atoms mean on top of center point of these atoms
+2) Custom position in Direct coordinate""")
         while True:
             option_position = input("Enter choice: ")
             if option_position == '1':
@@ -922,25 +921,14 @@ Method of positioning adsorbent
     while True:
         option = input("Enter choice: ")
         if option == '1':
-            place = place_onsite(substrate["lattice_matrix"],
-                                 substrate["total_atoms"],
-                                 adsorbent["total_atoms"],
-                                 substrate["positions_cartesian"],
-                                 adsorbent["positions_cartesian"],
-                                 substrate["species"],
-                                 adsorbent["species"],
-                                 selective_dynamics,
-                                 flags_adsorbent)
+            place = place_onsite(substrate["lattice_matrix"], substrate["total_atoms"], adsorbent["total_atoms"],
+                                 substrate["positions_cartesian"], adsorbent["positions_cartesian"], substrate["species"],
+                                 adsorbent["species"], selective_dynamics, flags_adsorbent)
             break
         elif option == '2':
-            place = place_around(substrate["lattice_matrix"],
-                                 substrate["total_atoms"],
-                                 substrate["positions_cartesian"],
-                                 adsorbent["positions_cartesian"],
-                                 substrate["species"],
-                                 adsorbent["species"],
-                                 selective_dynamics,
-                                 flags_adsorbent)
+            place = place_around(substrate["lattice_matrix"], substrate["total_atoms"], substrate["positions_cartesian"],
+                                 adsorbent["positions_cartesian"], substrate["species"], adsorbent["species"],
+                                 selective_dynamics, flags_adsorbent)
             break
         else:
             print("ERROR! Wrong choice")
