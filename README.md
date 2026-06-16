@@ -1,6 +1,6 @@
 # VASP Python Utility Scripts
 
-A collection of Python scripts for VASP output analysis and related tasks, developed for computational materials science research on the LANTA HPC cluster.
+A collection of Python scripts for VASP output analysis and related tasks, developed for computational materials science research on the [LANTA HPC cluster](https://thaisc.io/thaisc-resorces/lanta).
 
 **Author:** [Thanasee Thanasarnsurapong](https://scholar.google.com/citations?user=4KHXv9gAAAAJ&hl=en)
 
@@ -501,9 +501,9 @@ Combines a substrate and an adsorbent POSCAR into a single POSCAR for adsorption
 Usage: vaspAdsorb.py <substrate POSCAR> <adsorbent POSCAR> <output POSCAR>
 ```
 
-**Mode 1 — on top of a specific site:** Places each adsorbent copy above a user-defined target point on the substrate. For each copy, the user selects: (a) the substrate reference height (highest atom, a selected atom, or average height); (b) the adsorbent anchor point (centroid or a specific/lowest atom); (c) the target xy position (by atom selection with free-format input, or custom fractional coordinates). The adsorbent is translated so its anchor lands at the target at the specified vertical distance.
+**Mode 1 — on top of a specific site:** Places each adsorbent copy above a user-defined target point on the substrate. For each copy, the user selects: (a) the placement side (top or bottom); (b) the substrate reference height (highest atom, a selected atom, or average height); (c) the adsorbent anchor point (centroid or a specific/lowest atom); (d) the target xy position (by atom selection with free-format input, or custom fractional coordinates). The adsorbent is translated so its anchor lands at the target at the specified vertical distance.
 
-**Mode 2 — ring around a target atom:** Places N copies evenly distributed at angular intervals of 2π/N around a chosen substrate atom using Rodrigues z-axis rotation. The user selects the target atom and the initial adsorption direction (by atom selection or custom fractional coordinates). The radial distance from the target atom is set by the distance input.
+**Mode 2 — ring around a target atom:** Places N copies evenly distributed at angular intervals of 2π/N around each chosen substrate atom using Rodrigues z-axis rotation. Supports multiple target atoms; the user specifies the number of targets and selects each one sequentially. The placement side (top or bottom) is auto-detected from the target atom z position relative to the substrate mean z. For each target, the user selects the initial adsorption direction (by atom selection or custom fractional coordinates). The radial distance from the target atom is set by the distance input.
 
 If either POSCAR has Selective Dynamics, flags are merged, and the other structure defaults to all-T. If neither has Selective Dynamics, the user is prompted after placement to optionally add constraints, with free-format atom and direction selection. A summary table of atom counts per element (substrate/adsorbent/total) is printed at the end.
 
