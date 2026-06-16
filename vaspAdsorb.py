@@ -318,12 +318,12 @@ def mapping_elements(elements, atom_counts, positions_cartesian, positions_direc
         new_atom_counts = sort_atom_counts
         new_elements = sort_elements
 
-    return {"elements":           new_elements,
-            "atom_counts":        new_atom_counts,
+    return {"elements":            new_elements,
+            "atom_counts":         new_atom_counts,
             "positions_cartesian": new_positions_cartesian,
-            "positions_direct":   new_positions_direct,
-            "species":            new_species,
-            "flags":              new_flags if selective_dynamics else None}
+            "positions_direct":    new_positions_direct,
+            "species":             new_species,
+            "flags":               new_flags if selective_dynamics else None}
 
 
 def define_labels(elements, atom_counts):
@@ -360,16 +360,16 @@ def write_POSCAR(filepath, lattice_matrix, elements, atom_counts, positions_cart
 
     Parameters
     ----------
-    filepath           : str
-    lattice_matrix     : np.ndarray (3, 3)  — lattice vectors in Å
-    elements           : list[str]          — element symbols in canonical order
-    atom_counts        : list[int]          — atoms per element
-    positions_cartesian: np.ndarray (N, 3)  — Cartesian coordinates in Å
-    positions_direct   : np.ndarray (N, 3)  — fractional coordinates
-    selective_dynamics : bool
-    flags              : np.ndarray or None  — per-atom T/F flags
-    labels             : list[str]          — per-atom comment labels
-    direct             : bool               — True for Direct coordinates, False for Cartesian
+    filepath            : str
+    lattice_matrix      : np.ndarray (3, 3)  — lattice vectors in Å
+    elements            : list[str]          — element symbols in canonical order
+    atom_counts         : list[int]          — atoms per element
+    positions_cartesian : np.ndarray (N, 3)  — Cartesian coordinates in Å
+    positions_direct    : np.ndarray (N, 3)  — fractional coordinates
+    selective_dynamics  : bool
+    flags               : np.ndarray or None — per-atom T/F flags
+    labels              : list[str]          — per-atom comment labels
+    direct              : bool               — True for Direct, False for Cartesian
     """
 
     with open(filepath, 'w') as o:
@@ -406,7 +406,7 @@ def selection_atoms(prompt, total_atoms, species):
     -------
     selected : list[int] — 0-based atom indexes
     """
-    
+
     print(prompt)
     while True:
         selected = []
@@ -442,11 +442,11 @@ def unwrap(positions_direct):
     reference : np.ndarray (3,)   — fractional coordinate of atom[0]
     unwrapped : np.ndarray (N, 3) — unwrapped fractional coordinates
     """
-    
+
     reference = np.copy(positions_direct[0])
     delta = positions_direct - reference
     delta -= np.round(delta)
-    
+
     return reference, reference + delta
 
 
@@ -463,7 +463,7 @@ def input_direct(lattice_matrix):
     -------
     np.ndarray (3,) — Cartesian coordinates in Å with z = 0
     """
-    
+
     coords = np.zeros(3)
     for i, direction in enumerate(('a', 'b')):
         while True:
@@ -476,14 +476,36 @@ def input_direct(lattice_matrix):
     return direct_to_cartesian(lattice_matrix, coords)
 
 
-def place_ontop(lattice_matrix_substrate, total_atoms_substrate, total_atoms_adsorbent, positions_substrate,
-                positions_adsorbent, species_substrate, species_adsorbent, selective_dynamics,
-                flags_adsorbent, number_adsorbent, delta):
-    """Place one or more adsorbent copies on top of user-selected substrate sites.
+def select_side():
+    """Prompt the user to select which side of the substrate to place the adsorbent.
 
-    The user selects a reference height method, an xy anchor point on the adsorbent,
-    and a target site on the substrate for each copy. The adsorbent is translated
-    so its anchor lands at the target site at the specified vertical distance.
+    Returns
+    -------
+    int : 1 for top (+z), -1 for bottom (-z)
+    """
+
+    print("""
+Side of substrate to place adsorbent
+1) Top side
+2) Bottom side""")
+    while True:
+        option = input("Enter choice: ")
+        if option == '1':
+            return 1
+        elif option == '2':
+            return -1
+        else:
+            print("ERROR!! Choose again")
+
+
+def place_onsite(lattice_matrix_substrate, total_atoms_substrate, total_atoms_adsorbent, positions_substrate,
+                 positions_adsorbent, species_substrate, species_adsorbent, selective_dynamics, flags_adsorbent):
+    """Place one or more adsorbent copies on user-selected substrate sites.
+
+    The user selects a side (top/bottom) per copy, a reference height method,
+    an xy anchor point on the adsorbent, and a target site on the substrate.
+    The adsorbent is translated so its anchor lands at the target site at the
+    specified vertical distance on the chosen side.
 
     Parameters
     ----------
@@ -496,98 +518,126 @@ def place_ontop(lattice_matrix_substrate, total_atoms_substrate, total_atoms_ads
     species_adsorbent        : list[str]
     selective_dynamics       : bool
     flags_adsorbent          : np.ndarray or None
-    number_adsorbent         : int  — number of copies to place
-    delta                    : float — vertical separation in Å
 
     Returns
     -------
     dict with keys:
         positions_adsorbent : np.ndarray (M*N, 3)
-        species_adsorbent   : np.ndarray
+        species_adsorbent   : list[str]
         flags_adsorbent     : np.ndarray or None
+        number_adsorbent    : int
     """
 
-    print("""
-Method of reference height of substrate
-1) highest atom in substrate
-2) selected atom in substrate
-3) average height from atoms in substrate""")
+    # Input number of adsorbents
     while True:
-        option_height = input("Enter choice: ")
-        if option_height == '1':
-            z_substrate = np.max(positions_substrate[:, 2])
-            break
-        elif option_height == '2':
-            while True:
-                try:
-                    select_substrate = int(input(f"Select atom in substrate ({1:>3} to {total_atoms_substrate:>3}): "))
-                    if 0 <= select_substrate - 1 < total_atoms_substrate:
-                        break
-                    print("WRONG No. of atom in substrate!")
-                except ValueError:
-                    print("Invalid input! Please enter a number.")
-            z_substrate = positions_substrate[int(select_substrate) - 1, 2]
-            break
-        elif option_height == '3':
-            z_substrate = np.mean(positions_substrate[:, 2])
-            break
-        else:
-            print("ERROR!! Choose again")
-
-    # Reference height of adsorbent (lowest atom)
-    reference_adsorbent = np.zeros(3)
-    reference_adsorbent[2] = np.min(positions_adsorbent[:, 2])
-
-    # Set distance in z component
-    distance = np.zeros(3)
-    distance[2] = z_substrate - reference_adsorbent[2] + delta
-
-    # Choose reference xy position of adsorbent
-    if total_atoms_adsorbent == 1:
-        reference_adsorbent[:2] = positions_adsorbent[0, :2]
-    else:
-        print("""
-Choices of selecting the drop point of adsorbent
-1) center of adsorbent
-2) selected atom in adsorbent or lowest atom in adsorbent""")
-        while True:
-            option_point = input("Enter choice: ")
-            if option_point == '1':
-                reference_adsorbent[:2] = np.mean(positions_adsorbent, axis=0)[:2]
+        try:
+            number_adsorbent = int(input("Enter number of adsorbent: "))
+            if number_adsorbent > 0:
                 break
-            elif option_point == '2':
-                lowest = [i + 1 for i in range(total_atoms_adsorbent) if np.isclose(positions_adsorbent[i, 2], np.min(positions_adsorbent[:, 2]))]
-                if len(lowest) == 1:
-                    select_adsorbent = lowest[0] - 1
-                else:
-                    print(f"The lowest atom in adsorbent : {lowest}")
-                    for j in range(total_atoms_adsorbent):
-                        print(f"{species_adsorbent[j]} atom : {j + 1:>3}")
-                    while True:
-                        try:
-                            select_adsorbent = int(input(f"Select atom in adsorbent (  1 to {total_atoms_adsorbent:>3}): "))
-                            if 0 <= select_adsorbent - 1 < total_atoms_adsorbent:
-                                break
-                            print('WRONG No. of atom in adsorbent!')
-                        except ValueError:
-                            print("Invalid input! Please enter a number.")
-                reference_adsorbent[:2] = positions_adsorbent[select_adsorbent][:2]
-                break
-            else:
-                print("ERROR!! Choose again")
+            print("Number of adsorbent must be positive integer")
+        except ValueError:
+            print("Invalid input! Please enter a number.")
 
-    # Place each adsorbent copy
+    # Input vertical distance
+    while True:
+        delta = input("Enter distance between substrate and adsorbent (Angstrom): ")
+        if delta.lstrip('-').replace('.', '', 1).isdigit():
+            delta = float(delta)
+            break
+        print("Distance must be number")
+
     new_positions_adsorbent = []
     new_species_adsorbent = []
     new_flags_adsorbent = [] if selective_dynamics else None
 
     for n in range(number_adsorbent):
+
+        # Choose side for this copy
+        side = select_side()
+        side_label_sub = "highest" if side == 1 else "lowest"
+        side_label_ads = "lowest"  if side == 1 else "highest"
+
         print(f"""
 Choices of positioning adsorbent for adsorbent {n+1:>2}
 1) Choose atoms surround the positioning point
    If 1 atom means ontop that atom
    If 2 or more atoms mean on top of center point of these atoms
 2) Custom position in Direct coordinate""")
+
+        # Choose substrate z reference
+        print(f"""
+Method of reference height of substrate
+1) {side_label_sub} atom in substrate
+2) selected atom in substrate
+3) average height from atoms in substrate""")
+        while True:
+            option_height = input("Enter choice: ")
+            if option_height == '1':
+                z_substrate = np.max(positions_substrate[:, 2]) if side == 1 else np.min(positions_substrate[:, 2])
+                break
+            elif option_height == '2':
+                while True:
+                    try:
+                        select_substrate = int(input(f"Select atom in substrate ({1:>3} to {total_atoms_substrate:>3}): "))
+                        if 0 <= select_substrate - 1 < total_atoms_substrate:
+                            break
+                        print("WRONG No. of atom in substrate!")
+                    except ValueError:
+                        print("Invalid input! Please enter a number.")
+                z_substrate = positions_substrate[select_substrate - 1, 2]
+                break
+            elif option_height == '3':
+                z_substrate = np.mean(positions_substrate[:, 2])
+                break
+            else:
+                print("ERROR!! Choose again")
+
+        # Reference atom of adsorbent in z
+        reference_adsorbent = np.zeros(3)
+        ref_z = np.min(positions_adsorbent[:, 2]) if side == 1 else np.max(positions_adsorbent[:, 2])
+        reference_adsorbent[2] = ref_z
+
+        # Set distance in z component
+        distance = np.zeros(3)
+        distance[2] = z_substrate - ref_z + side * delta
+
+        # Choose reference xy position of adsorbent
+        if total_atoms_adsorbent == 1:
+            reference_adsorbent[:2] = positions_adsorbent[0, :2]
+        else:
+            print(f"""
+Choices of selecting the drop point of adsorbent
+1) center of adsorbent
+2) selected atom in adsorbent or {side_label_ads} atom in adsorbent""")
+            while True:
+                option_point = input("Enter choice: ")
+                if option_point == '1':
+                    reference_adsorbent[:2] = np.mean(positions_adsorbent, axis=0)[:2]
+                    break
+                elif option_point == '2':
+                    ref_atoms = [i + 1 for i in range(total_atoms_adsorbent)
+                                 if np.isclose(positions_adsorbent[i, 2], ref_z)]
+                    if len(ref_atoms) == 1:
+                        select_adsorbent = ref_atoms[0] - 1
+                    else:
+                        print(f"The {side_label_ads} atom in adsorbent : {ref_atoms}")
+                        for j in range(total_atoms_adsorbent):
+                            print(f"{species_adsorbent[j]} atom : {j + 1:>3}")
+                        while True:
+                            try:
+                                select_adsorbent = int(input(f"Select atom in adsorbent (  1 to {total_atoms_adsorbent:>3}): "))
+                                if 0 <= select_adsorbent - 1 < total_atoms_adsorbent:
+                                    select_adsorbent -= 1
+                                    break
+                                print('WRONG No. of atom in adsorbent!')
+                            except ValueError:
+                                print("Invalid input! Please enter a number.")
+                    reference_adsorbent[:2] = positions_adsorbent[select_adsorbent][:2]
+                    break
+                else:
+                    print("ERROR!! Choose again")
+
+        # Choose target xy site on substrate
         while True:
             option_position = input("Enter choice: ")
             if option_position == '1':
@@ -595,7 +645,8 @@ Choices of positioning adsorbent for adsorbent {n+1:>2}
                           f"({1:>3} to {total_atoms_substrate:>3})\n"
                           f"(Free-format input, e.g., 1 3 1-4 C H all)")
                 selected_atoms = selection_atoms(prompt, total_atoms_substrate, species_substrate)
-                selected_positions_direct = cartesian_to_direct(lattice_matrix_substrate, positions_substrate[selected_atoms])
+                selected_positions_direct = cartesian_to_direct(lattice_matrix_substrate,
+                                                                positions_substrate[selected_atoms])
                 _, selected_positions_unwrapped = unwrap(selected_positions_direct)
                 centroid_direct = np.mean(selected_positions_unwrapped, axis=0)
                 target = direct_to_cartesian(lattice_matrix_substrate, centroid_direct)
@@ -613,18 +664,20 @@ Choices of positioning adsorbent for adsorbent {n+1:>2}
             new_flags_adsorbent.append(flags_adsorbent)
 
     return {"positions_adsorbent": np.vstack(new_positions_adsorbent),
-            "species_adsorbent": new_species_adsorbent,
-            "flags_adsorbent": np.vstack(new_flags_adsorbent) if selective_dynamics else None}
+            "species_adsorbent":   new_species_adsorbent,
+            "flags_adsorbent":     np.vstack(new_flags_adsorbent) if selective_dynamics else None,
+            "number_adsorbent":    number_adsorbent}
 
 
 def place_around(lattice_matrix_substrate, total_atoms_substrate, positions_substrate, positions_adsorbent,
-                 species_substrate, species_adsorbent, selective_dynamics, flags_adsorbent, number_adsorbent,
-                 delta):
-    """Place adsorbent copies symmetrically around a chosen substrate atom.
+                 species_substrate, species_adsorbent, selective_dynamics, flags_adsorbent):
+    """Place adsorbent copies symmetrically around one or more chosen substrate atoms.
 
-    Copies are distributed evenly at angle intervals of 2π/N around the target
-    atom. Each copy is rotated about the z-axis using the Rodrigues formula and
-    translated to its ring position at the specified radial distance.
+    For each target atom, number_adsorbent copies are distributed evenly at angle
+    intervals of 2π/number_adsorbent around it. The side (top/bottom) is detected
+    automatically from the target atom z position relative to the substrate mean z.
+    The adsorbent lowest atom (top) or highest atom (bottom) is aligned to the
+    target atom z.
 
     Parameters
     ----------
@@ -636,92 +689,130 @@ def place_around(lattice_matrix_substrate, total_atoms_substrate, positions_subs
     species_adsorbent        : list[str]
     selective_dynamics       : bool
     flags_adsorbent          : np.ndarray or None
-    number_adsorbent         : int   — number of copies to place around the target
-    delta                    : float — radial distance from target atom in Å
 
     Returns
     -------
     dict with keys:
-        positions_adsorbent : np.ndarray (M*N, 3)
-        species_adsorbent   : np.ndarray
+        positions_adsorbent : np.ndarray (M*N*T, 3)
+        species_adsorbent   : list[str]
         flags_adsorbent     : np.ndarray or None
+        number_adsorbent    : int — total number of adsorbent copies placed
     """
 
     reference_adsorbent = np.zeros(3)
     reference_adsorbent[:2] = np.mean(positions_adsorbent, axis=0)[:2]
-    reference_adsorbent[2] = np.min(positions_adsorbent[:, 2])
 
-    # Choose target atom in substrate to decorate around
+    # Input radial distance
+    while True:
+        delta = input("Enter radial distance from target atom (Angstrom): ")
+        if delta.lstrip('-').replace('.', '', 1).isdigit():
+            delta = float(delta)
+            break
+        print("Distance must be number")
+
+    # Input number of adsorbents per target
     while True:
         try:
-            target_atom = int(input(f"Select target atom in substrate ({1:>3} to {total_atoms_substrate:>3}): "))
-            if 0 <= target_atom - 1 < total_atoms_substrate:
+            number_adsorbent = int(input("Enter number of adsorbent per target: "))
+            if number_adsorbent > 0:
                 break
-            print("WRONG No. of atom in substrate!")
+            print("Number of adsorbent must be positive integer")
         except ValueError:
             print("Invalid input! Please enter a number.")
-    target_center = positions_substrate[int(target_atom) - 1, :]
 
-    # Choose initial adsorption site direction
-    print("""
-Choices of define initial adsorption site
-1) Choose atoms surround the positioning point
-   If 1 atom means ontop that atom
-   If 2 or more atoms mean on top of center point of these atoms
-2) Custom position in Direct coordinate""")
+    # Input number of target atoms
     while True:
-        option_site = input("Enter choice: ")
-        if option_site == '1':
-            prompt = (f"\nInput element-symbol and/or atom-indexes to choose "
-                      f"({1:>3} to {total_atoms_substrate:>3})\n"
-                      f"(Free-format input, e.g., 1 3 1-4 C H all)")
-            selected_atoms = selection_atoms(prompt, total_atoms_substrate, species_substrate)
-            selected_positions_direct = cartesian_to_direct(lattice_matrix_substrate, positions_substrate[selected_atoms])
-            _, selected_positions_unwrapped = unwrap(selected_positions_direct)
-            centroid_direct = np.mean(selected_positions_unwrapped, axis=0)
-            target_initial = direct_to_cartesian(lattice_matrix_substrate, centroid_direct)
-            break
-        elif option_site == '2':
-            target_initial = input_direct(lattice_matrix_substrate)
-            break
-        else:
-            print("ERROR!! Choose again")
-
-    # Compute initial displacement direction
-    xy_distance = target_initial[:2] - target_center[:2]
-    norm = np.linalg.norm(xy_distance)
-    if norm == 0:
-        print("ERROR! Initial site cannot be the same as the target atom.")
-        exit(1)
-    xy_unit = xy_distance / norm
-
-    distance = np.zeros(3)
-    distance[:2] = delta * xy_unit
-    distance[2] = target_center[2] - reference_adsorbent[2]
+        try:
+            number_targets = int(input("Enter number of target atoms: "))
+            if number_targets > 0:
+                break
+            print("Number of target atoms must be positive integer")
+        except ValueError:
+            print("Invalid input! Please enter a number.")
 
     angle_step = 2 * np.pi / number_adsorbent
+    z_mean = np.mean(positions_substrate[:, 2])
 
     new_positions_adsorbent = []
     new_species_adsorbent = []
     new_flags_adsorbent = [] if selective_dynamics else None
 
-    for i in range(number_adsorbent):
-        rotate_matrix = rotation_matrix(i, angle_step)
+    for t in range(number_targets):
+        print(f"\nTarget atom {t+1:>2} of {number_targets}")
 
-        displacement = rotate_matrix @ distance
-        new_site = target_center + displacement
+        # Choose target atom
+        while True:
+            try:
+                target_atom = int(input(f"Select target atom in substrate ({1:>3} to {total_atoms_substrate:>3}): "))
+                if 0 <= target_atom - 1 < total_atoms_substrate:
+                    break
+                print("WRONG No. of atom in substrate!")
+            except ValueError:
+                print("Invalid input! Please enter a number.")
+        target_center = positions_substrate[target_atom - 1, :]
 
-        rotate_position_adsorbent = (positions_adsorbent - reference_adsorbent) @ rotate_matrix.T + reference_adsorbent
-        translate = new_site - reference_adsorbent
+        # Detect side from target atom z relative to substrate mean z
+        side = 1 if target_center[2] > z_mean else -1
+        ref_z = np.min(positions_adsorbent[:, 2]) if side == 1 else np.max(positions_adsorbent[:, 2])
+        reference_adsorbent[2] = ref_z
 
-        new_positions_adsorbent.append(rotate_position_adsorbent + translate)
-        new_species_adsorbent.extend(species_adsorbent)
-        if selective_dynamics:
-            new_flags_adsorbent.append(flags_adsorbent)
+        # Choose initial adsorption site direction
+        print(f"""
+Choices of define initial adsorption site of target {t+1:>2}
+1) Choose atoms surround the positioning point
+   If 1 atom means ontop that atom
+   If 2 or more atoms mean on top of center point of these atoms
+2) Custom position in Direct coordinate""")
+        while True:
+            option_site = input("Enter choice: ")
+            if option_site == '1':
+                prompt = (f"\nInput element-symbol and/or atom-indexes to choose "
+                          f"({1:>3} to {total_atoms_substrate:>3})\n"
+                          f"(Free-format input, e.g., 1 3 1-4 C H all)")
+                selected_atoms = selection_atoms(prompt, total_atoms_substrate, species_substrate)
+                selected_positions_direct = cartesian_to_direct(lattice_matrix_substrate,
+                                                                positions_substrate[selected_atoms])
+                _, selected_positions_unwrapped = unwrap(selected_positions_direct)
+                centroid_direct = np.mean(selected_positions_unwrapped, axis=0)
+                target_initial = direct_to_cartesian(lattice_matrix_substrate, centroid_direct)
+                break
+            elif option_site == '2':
+                target_initial = input_direct(lattice_matrix_substrate)
+                break
+            else:
+                print("ERROR!! Choose again")
+
+        # Compute initial displacement direction
+        xy_distance = target_initial[:2] - target_center[:2]
+        norm = np.linalg.norm(xy_distance)
+        if norm == 0:
+            print("ERROR! Initial site cannot be the same as the target atom.")
+            exit(1)
+        xy_unit = xy_distance / norm
+
+        distance = np.zeros(3)
+        distance[:2] = delta * xy_unit
+        distance[2] = target_center[2] - ref_z
+
+        for i in range(number_adsorbent):
+            rotate_matrix = rotation_matrix(i, angle_step)
+
+            displacement = rotate_matrix @ distance
+            new_site = target_center + displacement
+
+            rotate_position_adsorbent = ((positions_adsorbent - reference_adsorbent)
+                                         @ rotate_matrix.T + reference_adsorbent)
+            translate = new_site - reference_adsorbent
+
+            new_positions_adsorbent.append(rotate_position_adsorbent + translate)
+            new_species_adsorbent.extend(species_adsorbent)
+            if selective_dynamics:
+                new_flags_adsorbent.append(flags_adsorbent)
 
     return {"positions_adsorbent": np.vstack(new_positions_adsorbent),
-            "species_adsorbent": new_species_adsorbent,
-            "flags_adsorbent": np.vstack(new_flags_adsorbent) if selective_dynamics else None}
+            "species_adsorbent":   new_species_adsorbent,
+            "flags_adsorbent":     np.vstack(new_flags_adsorbent) if selective_dynamics else None,
+            "number_adsorbent":    number_adsorbent * number_targets}
 
 
 def rotation_matrix(i, angle_step):
@@ -740,7 +831,7 @@ def rotation_matrix(i, angle_step):
     -------
     rotate : np.ndarray (3, 3) — rotation matrix
     """
-    
+
     degree = i * angle_step
 
     # define trigonometry functions
@@ -750,7 +841,7 @@ def rotation_matrix(i, angle_step):
 
     # Matrix of rotation
     rotate = cos * np.eye(3) + sin * np.cross(np.eye(3), u) + (1 - cos) * np.outer(u, u)
-    
+
     return rotate
 
 
@@ -765,7 +856,7 @@ def select_direction():
     -------
     fix_coordinates : list[int] — 0-based direction indexes to fix (subset of [0, 1, 2])
     """
-    
+
     print("""
 Input the direction index to fix (1 to 3):
 1) x direction
@@ -774,9 +865,7 @@ Input the direction index to fix (1 to 3):
 (Free-format input, e.g., 1 3 1-3 all)""")
     while True:
         fix_coordinates = []
-        input_coordinates = input().split()
- 
-        for coordinate in input_coordinates:
+        for coordinate in input().split():
             if 'all' in coordinate.lower():
                 fix_coordinates = [0, 1, 2]
                 break
@@ -790,7 +879,7 @@ Input the direction index to fix (1 to 3):
                 fix_coordinates.append(int(coordinate) - 1)
             else:
                 print("Invalid direction format! Try again.")
- 
+
         if fix_coordinates and all(0 <= idx < 3 for idx in fix_coordinates):
             return fix_coordinates
         else:
@@ -799,18 +888,21 @@ Input the direction index to fix (1 to 3):
 
 def main():
     """
-    Parse arguments, define distance and number of adsorbent, select method to place adsorbents,
-    write output, and display number of atoms per element.
+    Parse arguments, read substrate and adsorbent POSCARs, select placement method,
+    assemble combined structure, handle Selective Dynamics, write output POSCAR,
+    and display summary table.
     """
 
     if os.environ.get('USER') == 'nchotsis':
         print("If you're so unhappy with how I refine my code, feel free to write it yourself.")
-    
+
     if '-h' in argv or '--help' in argv or len(argv) != 4:
         usage()
-    
+
     substrate = read_POSCAR(argv[1])
     adsorbent = read_POSCAR(argv[2])
+
+    # Resolve Selective Dynamics flags
     selective_dynamics_substrate = substrate["selective_dynamics"]
     selective_dynamics_adsorbent = adsorbent["selective_dynamics"]
     selective_dynamics = selective_dynamics_substrate or selective_dynamics_adsorbent
@@ -821,44 +913,49 @@ def main():
             flags_adsorbent = np.full((adsorbent["total_atoms"], 3), 'T')
         elif selective_dynamics_adsorbent and not selective_dynamics_substrate:
             flags_substrate = np.full((substrate["total_atoms"], 3), 'T')
+
+    # Choose placement method
+    print("""
+Method of positioning adsorbent
+1) On site
+2) Around target atom""")
     while True:
-        input_number = input("Enter number of adsorbent: ")
-        if input_number.isdigit() and int(input_number) > 0:
-            number_adsorbent = int(input_number)
+        option = input("Enter choice: ")
+        if option == '1':
+            place = place_onsite(substrate["lattice_matrix"],
+                                 substrate["total_atoms"],
+                                 adsorbent["total_atoms"],
+                                 substrate["positions_cartesian"],
+                                 adsorbent["positions_cartesian"],
+                                 substrate["species"],
+                                 adsorbent["species"],
+                                 selective_dynamics,
+                                 flags_adsorbent)
             break
-        print("Number of adsorbent must be positive integer")
-    while True:
-        delta = input("Enter distance between substrate and adsorbent (Angstrom): ")
-        if delta.lstrip('-').replace('.', '', 1).isdigit():
-            delta = float(delta)
+        elif option == '2':
+            place = place_around(substrate["lattice_matrix"],
+                                 substrate["total_atoms"],
+                                 substrate["positions_cartesian"],
+                                 adsorbent["positions_cartesian"],
+                                 substrate["species"],
+                                 adsorbent["species"],
+                                 selective_dynamics,
+                                 flags_adsorbent)
             break
-        print("Distance must be number")
+        else:
+            print("ERROR! Wrong choice")
+
+    # Assemble combined structure
+    number_adsorbent = place["number_adsorbent"]
+    new_positions_cartesian = np.vstack((substrate["positions_cartesian"], place["positions_adsorbent"]))
+    new_species = substrate["species"] + place["species_adsorbent"]
     new_total_atoms_adsorbent = adsorbent["total_atoms"] * number_adsorbent
     new_atom_counts_adsorbent = adsorbent["atom_counts"] * number_adsorbent
     total_atoms = substrate["total_atoms"] + new_total_atoms_adsorbent
     atom_counts = substrate["atom_counts"] + new_atom_counts_adsorbent
     elements = substrate["elements"] + adsorbent["elements"]
-    species = substrate["species"] + adsorbent["species"] * number_adsorbent
-    print("""
-Method of positioning adsorbent
-1) On top specific site
-2) Around target atom""")
-    while True:
-        option = input("Enter choice: ")
-        if option == '1':
-            place = place_ontop(substrate["lattice_matrix"], substrate["total_atoms"], adsorbent["total_atoms"],
-                                substrate["positions_cartesian"], adsorbent["positions_cartesian"], substrate["species"],
-                                adsorbent["species"], selective_dynamics, flags_adsorbent, number_adsorbent, delta)
-            break
-        elif option == '2':
-            place = place_around(substrate["lattice_matrix"], substrate["total_atoms"], substrate["positions_cartesian"],
-                                 adsorbent["positions_cartesian"], substrate["species"], adsorbent["species"],
-                                 selective_dynamics, flags_adsorbent, number_adsorbent, delta)
-            break
-        else:
-            print("ERROR! Wrong choice")
-    new_positions_cartesian = np.vstack((substrate["positions_cartesian"], place["positions_adsorbent"]))
-    new_species = substrate["species"] + place["species_adsorbent"]
+
+    # Resolve Selective Dynamics flags for combined structure
     if selective_dynamics:
         new_flags = np.vstack((flags_substrate, place["flags_adsorbent"]))
     else:
@@ -868,13 +965,12 @@ Method of positioning adsorbent
             if selective[0] == 'Y':
                 selective_dynamics = True
                 new_flags = np.full((total_atoms, 3), 'T')
-
                 fix_prompt = (f"\nInput element-symbol and/or atom-indexes to choose "
                               f"(  1 to {total_atoms:>3})\n"
                               f"(Free-format input, e.g., 1 3 1-4 C H all)")
+                species = substrate["species"] + adsorbent["species"] * number_adsorbent
                 fixed_atoms = selection_atoms(fix_prompt, total_atoms, species)
                 fix_coordinates = select_direction()
-                
                 for atom in fixed_atoms:
                     for direction in fix_coordinates:
                         new_flags[atom][direction] = 'F'
@@ -884,6 +980,8 @@ Method of positioning adsorbent
                 break
             else:
                 print("ERROR! Wrong input selective dynamic mode")
+
+    # Convert to direct and map elements
     new_positions_direct = cartesian_to_direct(substrate["lattice_matrix"], new_positions_cartesian)
     mapping = mapping_elements(elements, atom_counts, new_positions_cartesian, new_positions_direct,
                                new_species, selective_dynamics, new_flags)
@@ -892,6 +990,7 @@ Method of positioning adsorbent
                  mapping["positions_cartesian"], mapping["positions_direct"], selective_dynamics,
                  mapping["flags"], labels)
 
+    # Summary
     print(f"\nAdsorption structure written to: {argv[3]}")
     print("-" * 49)
     print("  Element  |  Substrate  |  Adsorbent  |  Total")
