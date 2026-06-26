@@ -712,10 +712,10 @@ def place_around(lattice_matrix_substrate, total_atoms_substrate, positions_subs
     # Input number of adsorbents per target
     while True:
         try:
-            number_adsorbent = int(input("Enter number of adsorbent per target: "))
+            number_adsorbent = int(input("Enter number of adsorbents per target: "))
             if number_adsorbent > 0:
                 break
-            print("Number of adsorbent must be positive integer")
+            print("Number of adsorbents per target must be positive integer")
         except ValueError:
             print("Invalid input! Please enter a number.")
 
@@ -737,7 +737,7 @@ def place_around(lattice_matrix_substrate, total_atoms_substrate, positions_subs
     new_flags_adsorbent = [] if selective_dynamics else None
 
     for t in range(number_targets):
-        print(f"\nTarget atom {t+1:>2} of {number_targets}")
+        print(f"\nTarget atom {t+1:>2}")
 
         # Choose target atom
         while True:
