@@ -3,6 +3,7 @@
 from sys import argv, exit
 import os
 import subprocess
+import readline
 import numpy as np
 import h5py as h5
 
