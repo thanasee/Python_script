@@ -14,7 +14,7 @@ from hiphive.utilities import extract_parameters
 def usage():
     """Print usage information and exit."""
     print("""
-Usage: enforceIFC.py <input FORCE_CONSTANTS> <output FORCE_CONSTANTS>
+Usage: enforceIFC.py <input FORCE_CONSTANTS> [output FORCE_CONSTANTS]
 
 This script enforces the rotational sum rules on the second-order interatomic force constants (IFC2) of a supercell structure.
 It reads the primitive and supercell structures, extracts the IFC2 from a specified file, applies the rotational sum rules, and writes the modified IFC2 back to a file.
