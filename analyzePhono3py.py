@@ -11,7 +11,7 @@ import h5py as h5
 def usage():
     """Print usage information and exit."""
     print("""
-Usage: analyzePhono3py.py <kappa input> <gruneisen input (optional)>
+Usage: analyzePhono3py.py <kappa input> [gruneisen input]
 
 This script obtain thermal properties form HDF5 files
 some kind of thermal properties obtain at specified temperature
