@@ -49,7 +49,7 @@ Scripts in this category post-process force constants and read HDF5 output files
 Enforces rotational sum rules (Huang and Born-Huang) on second-order interatomic force constants (IFC2) using [hiPhive](https://hiphive.materialsmodeling.org/), and writes the corrected IFC2 in Phonopy-compatible format. Reads `POSCAR` (primitive cell) and `SPOSCAR` (supercell) from the working directory. If no input IFC file is found, the script auto-generates one by calling Phonopy on any `vasprun.xml-*` displacement files present in the working directory.
 
 ```
-Usage: enforceIFC.py <input FORCE_CONSTANTS> <output FORCE_CONSTANTS>
+Usage: enforceIFC.py <input FORCE_CONSTANTS> [output FORCE_CONSTANTS]
 ```
 
 File format is auto-detected from the extension: `.hdf5` → HDF5; any other extension → Phonopy text format. Both input and output independently follow this rule. The cutoff radius for the hiPhive cluster space is set to the maximum cutoff supported by the supercell geometry minus a small margin (10<sup>-5</sup> Å).
@@ -147,7 +147,7 @@ Automatically scans for all `kappa-m*.hdf5` files, sorts them by mesh number, an
 Extracts mode-resolved thermal transport properties from a single Phono3py `kappa-mXXX.hdf5` file and writes output files suitable for plotting in xmgrace or matplotlib. Supports all Phono3py calculation modes (`--br`, `--lbte`, `--wigner`). If a Grüneisen HDF5 file is provided, Grüneisen parameters and group velocities are also extracted.
 
 ```
-Usage: analyzePhono3py.py <kappa HDF5 file> <gruneisen HDF5 file (optional)>
+Usage: analyzePhono3py.py <kappa HDF5 file> [gruneisen HDF5 file]
 ```
 
 Output filenames follow the pattern `<tag>-mXXXXXX.dat`, where the mesh token is preserved from the input filename (e.g., `kappa-m111111.hdf5` → `KappaVsT-m111111.dat`). All κ<sub>L</sub> tensor components are written in Voigt notation (xx, yy, zz, yz, xz, xy) in W/(m·K).
