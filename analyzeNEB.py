@@ -3,6 +3,7 @@
 from sys import argv, exit
 import os
 import re
+import readline
 import numpy as np
 
 
