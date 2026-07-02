@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
 from sys import argv, exit
-import os, re
+import os
+import re
+import readline
 import numpy as np
 import h5py as h5
 
@@ -504,13 +506,11 @@ def ask_dimensionality():
  
     # 2D: locate POSCAR
     poscar_path = 'POSCAR'
-    if not os.path.exists(poscar_path):
-        poscar_path = input("POSCAR not found in current directory. Enter path to POSCAR: ").strip()
-        if not os.path.exists(poscar_path):
-            print(f"ERROR! POSCAR file '{poscar_path}' does not exist. Using 3D (no renormalization).")
-            return 1.0, None
+    if not os.path.exists('POSCAR'):
+        print(f"ERROR! POSCAR file does not exist. Using 3D (no renormalization).")
+        return 1.0, None
  
-    poscar                              = read_POSCAR(poscar_path)
+    poscar = read_POSCAR(poscar_path)
     factor_2d, t_eff, c_proj, z_range, _ = compute_2d_thickness(poscar)
  
     print("\n  2D renormalization summary:")
