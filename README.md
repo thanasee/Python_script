@@ -678,7 +678,7 @@ All scripts follow the same conventions:
 
 - Single-responsibility functions with NumPy-style docstrings (`Parameters`, `Returns`, inline notes for unit conversions and formulas)
 - `main()` entry point with `if __name__ == '__main__'` guard
-- Interactive input loops with validation and retry on invalid input
+- Interactive input loops with validation and retry on invalid input; `readline` (stdlib) is imported in all scripts that use `input()` to enable arrow-key navigation and line editing at prompts
 - Handles both VASP4 (no element line), VASP5, and VASP6 (with Hash code) POSCAR formats
 - Handles Selective Dynamics, anisotropic scale factors, and non-orthogonal cells
 - Atom-label comments (e.g., `Mo001`, `S002`) in output POSCARs for VESTA/XCrySDen identification
