@@ -2,6 +2,7 @@
 
 from sys import argv, exit
 import os
+import readline
 import numpy as np
 from ase.io import read
 from ase.spacegroup.symmetrize import check_symmetry
