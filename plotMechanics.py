@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from sys import argv, exit
+import readline
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
