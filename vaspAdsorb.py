@@ -939,7 +939,7 @@ Method of positioning adsorbent
     new_positions_cartesian = np.vstack((substrate["positions_cartesian"], place["positions_adsorbent"]))
     new_species = substrate["species"] + place["species_adsorbent"]
     new_total_atoms_adsorbent = adsorbent["total_atoms"] * number_adsorbent
-    new_atom_counts_adsorbent = adsorbent["atom_counts"] * number_adsorbent
+    new_atom_counts_adsorbent = [count * number_adsorbent for count in adsorbent["atom_counts"]]
     total_atoms = substrate["total_atoms"] + new_total_atoms_adsorbent
     atom_counts = substrate["atom_counts"] + new_atom_counts_adsorbent
     elements = substrate["elements"] + adsorbent["elements"]
