@@ -842,7 +842,7 @@ def main():
     labels = define_labels(final["elements"], final["atom_counts"])
 
     write_POSCAR(argv[2], undoped["lattice_matrix"], final["elements"], final["atom_counts"],
-                 final["positions_cartesian"], final["positions_direct"], final["selective_dynamics"],
+                 final["positions_cartesian"], final["positions_direct"], undoped["selective_dynamics"],
                  final["flags"], labels)
 
 
