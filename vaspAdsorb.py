@@ -674,9 +674,10 @@ def place_around(lattice_matrix_substrate, total_atoms_substrate, positions_subs
     """Place adsorbent copies symmetrically around one or more chosen substrate atoms.
 
     For each target atom, number_adsorbent copies are distributed evenly at angle
-    intervals of 2π/number_adsorbent around it. The adsorbent's centroid (mean of
-    all its atom positions) is aligned to the target atom's z, regardless of
-    which side of the substrate the target sits on.
+    intervals of 2π/number_adsorbent around it. The side (top/bottom) is detected
+    automatically from the target atom z position relative to the substrate mean z.
+    The adsorbent lowest atom (top) or highest atom (bottom) is aligned to the
+    target atom z.
 
     Parameters
     ----------
@@ -729,6 +730,7 @@ def place_around(lattice_matrix_substrate, total_atoms_substrate, positions_subs
             print("Invalid input! Please enter a number.")
 
     angle_step = 2 * np.pi / number_adsorbent
+    z_mean = np.mean(positions_substrate[:, 2])
 
     new_positions_adsorbent = []
     new_species_adsorbent = []
@@ -747,6 +749,8 @@ def place_around(lattice_matrix_substrate, total_atoms_substrate, positions_subs
             except ValueError:
                 print("Invalid input! Please enter a number.")
         target_center = positions_substrate[target_atom, :]
+
+        reference_adsorbent[2] = np.min(positions_adsorbent[:, 2]) if target_center[2] > z_mean else np.max(positions_adsorbent[:, 2])
 
         # Choose initial adsorption site direction
         print(f"""
