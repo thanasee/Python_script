@@ -674,10 +674,9 @@ def place_around(lattice_matrix_substrate, total_atoms_substrate, positions_subs
     """Place adsorbent copies symmetrically around one or more chosen substrate atoms.
 
     For each target atom, number_adsorbent copies are distributed evenly at angle
-    intervals of 2π/number_adsorbent around it. The side (top/bottom) is detected
-    automatically from the target atom z position relative to the substrate mean z.
-    The adsorbent lowest atom (top) or highest atom (bottom) is aligned to the
-    target atom z.
+    intervals of 2π/number_adsorbent around it. The adsorbent's centroid (mean of
+    all its atom positions) is aligned to the target atom's z, regardless of
+    which side of the substrate the target sits on.
 
     Parameters
     ----------
@@ -699,8 +698,7 @@ def place_around(lattice_matrix_substrate, total_atoms_substrate, positions_subs
         number_adsorbent    : int — total number of adsorbent copies placed
     """
 
-    reference_adsorbent = np.zeros(3)
-    reference_adsorbent[:2] = np.mean(positions_adsorbent, axis=0)[:2]
+    reference_adsorbent = np.mean(positions_adsorbent, axis=0)
 
     # Input radial distance
     while True:
@@ -731,7 +729,6 @@ def place_around(lattice_matrix_substrate, total_atoms_substrate, positions_subs
             print("Invalid input! Please enter a number.")
 
     angle_step = 2 * np.pi / number_adsorbent
-    z_mean = np.mean(positions_substrate[:, 2])
 
     new_positions_adsorbent = []
     new_species_adsorbent = []
@@ -743,18 +740,13 @@ def place_around(lattice_matrix_substrate, total_atoms_substrate, positions_subs
         # Choose target atom
         while True:
             try:
-                target_atom = int(input(f"Select target atom in substrate ({1:>3} to {total_atoms_substrate:>3}): "))
-                if 0 <= target_atom - 1 < total_atoms_substrate:
+                target_atom = int(input(f"Select target atom in substrate ({1:>3} to {total_atoms_substrate:>3}): ")) - 1
+                if 0 <= target_atom < total_atoms_substrate:
                     break
                 print("WRONG No. of atom in substrate!")
             except ValueError:
                 print("Invalid input! Please enter a number.")
-        target_center = positions_substrate[target_atom - 1, :]
-
-        # Detect side from target atom z relative to substrate mean z
-        side = 1 if target_center[2] > z_mean else -1
-        ref_z = np.min(positions_adsorbent[:, 2]) if side == 1 else np.max(positions_adsorbent[:, 2])
-        reference_adsorbent[2] = ref_z
+        target_center = positions_substrate[target_atom, :]
 
         # Choose initial adsorption site direction
         print(f"""
@@ -792,7 +784,6 @@ Choices of define initial adsorption site of target {t+1:>2}
 
         distance = np.zeros(3)
         distance[:2] = delta * xy_unit
-        distance[2] = target_center[2] - ref_z
 
         for i in range(number_adsorbent):
             rotate_matrix = rotation_matrix(i, angle_step)
@@ -837,7 +828,7 @@ def rotation_matrix(i, angle_step):
     # define trigonometry functions
     sin = np.sin(degree)
     cos = np.cos(degree)
-    u = np.array([0., 0., 1.])
+    u = np.array([0., 0., 1.]) # unit vector along z-axis
 
     # Matrix of rotation
     rotate = cos * np.eye(3) + sin * np.cross(np.eye(3), u) + (1 - cos) * np.outer(u, u)
