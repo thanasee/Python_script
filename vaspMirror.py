@@ -436,7 +436,7 @@ def main():
         usage()
     
     unmirror = read_POSCAR(argv[1])
-    reflect_positions_cartesian, = reflect(unmirror["positions_cartesian"])
+    reflect_positions_cartesian = reflect(unmirror["positions_cartesian"])
     reflect_positions_direct = cartesian_to_direct(unmirror["lattice_matrix"], reflect_positions_cartesian)
     mapping = mapping_elements(unmirror["elements"], unmirror["atom_counts"], reflect_positions_cartesian,
                                reflect_positions_direct, unmirror["species"], unmirror["selective_dynamics"],
