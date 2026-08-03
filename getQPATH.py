@@ -32,30 +32,52 @@ def read_band_dat(filepath):
     q_points : numpy.ndarray, shape (N,)
         Q-path distances (1/Angstrom) extracted from the second line of the file.
     fmin : float
-        Floor of the minimum frequency (THz) found in the data columns.
+        Minimum frequency (THz) found in the data columns, rounded down
+        to the nearest multiple of 5.
     fmax : float
-        Ceiling of the maximum frequency (THz) found in the data columns.
+        Maximum frequency (THz) found in the data columns, rounded up
+        to the nearest multiple of 5.
     """
     with open(filepath, 'r') as f:
         lines = f.readlines()
  
+    if len(lines) < 2:
+        raise ValueError(
+            f"{filepath}: file has {len(lines)} line(s), expected a header "
+            "and a q-point line."
+        )
+ 
+    if not lines[1].lstrip().startswith('#'):
+        raise ValueError(
+            "Line 2 does not start with '#' — not a phonopy --gnuplot "
+            "band.dat file."
+        )
+ 
     q_points = np.array([float(x) for x in lines[1].split()[1:]])
  
     freqs = []
-    for line in lines[2:]:
+    for num, line in enumerate(lines[2:], start=3):
         parts = line.strip().split()
-        if len(parts) < 2:
+        if not parts:
             continue
+        if len(parts) != 2:
+            raise ValueError(
+                f"Line {num}: expected 2 columns (distance, frequency), "
+                f"got {len(parts)}: {line.strip()!r}"
+            )
         try:
             freqs.append(float(parts[1]))
         except ValueError:
-            pass
+            raise ValueError(
+                f"Line {num}: could not parse frequency from {parts[1]!r}"
+            )
  
     if not freqs:
         raise ValueError("No frequency data found in input file (2nd column).")
  
-    fmin = np.floor((min(freqs) - 0.50) * 1.10)
-    fmax = np.ceil(max(freqs) * 1.25)
+    # Round outward to the nearest multiple of 5 so the last digit is 0 or 5
+    fmin = 5 * np.floor(min(freqs) / 5)
+    fmax = 5 * np.ceil(max(freqs) / 5)
  
     return q_points, fmin, fmax
 
@@ -112,7 +134,12 @@ def main():
         print(f"ERROR!\nFile: {input_file} does not exist.")
         exit(1)
  
-    q_points, fmin, fmax = read_band_dat(input_file)
+    try:
+        q_points, fmin, fmax = read_band_dat(input_file)
+    except ValueError as e:
+        print(f"ERROR!\n{e}")
+        exit(1)
+ 
     write_QLINES(q_points, fmin, fmax)
  
  
