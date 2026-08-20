@@ -608,14 +608,14 @@ def atom_molecule(total_atoms, positions_cartesian, species, labels, image_offse
     print("# Atom     Molecule  Distance")
     for (atom, mol), min_distance in zip(pair, distances):
         print(f"  {atom:>5s}  {mol:>5s}    {min_distance:>12.8f}")
-    print(f"      Average   {np.mean(distances):>12.8f}")
+    print(f"        Average   {np.mean(distances):>12.8f}")
  
     with open('distance-atom-molecule.dat', 'w') as o:
         o.write("# Distance between selected atom and molecule\n")
         o.write("# Atom     Molecule  Distance\n")
         for (atom, mol), min_distance in zip(pair, distances):
             o.write(f"  {atom:>5s}  {mol:>5s}    {min_distance:>12.8f}\n")
-        o.write(f"      Average   {np.mean(distances):>12.8f}\n")
+        o.write(f"        Average   {np.mean(distances):>12.8f}\n")
 
 
 def z_distance(total_atoms, positions, species):
