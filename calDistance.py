@@ -533,12 +533,12 @@ def atom_pairs(total_atoms, positions_cartesian, labels, image_offsets):
     for i in range(number_pair):
         print(f"\nFor pair {i + 1:>3}")
         while True:
-            s1 = input(f"\n  Choose the 1st selected atom of pair {i + 1:>3} (  1 to {total_atoms:>3}): ")
+            s1 = input(f"  Choose the 1st selected atom of pair {i + 1:>3} (  1 to {total_atoms:>3}): ")
             if s1.isdigit() and 0 < int(s1) <= total_atoms:
                 idx1 = int(s1) - 1; break
             print('WRONG No. of the 1st selected atom')
         while True:
-            s2 = input(f"\n  Choose the 2nd selected atom of pair {i + 1:>3} (  1 to {total_atoms:>3}): ")
+            s2 = input(f"  Choose the 2nd selected atom of pair {i + 1:>3} (  1 to {total_atoms:>3}): ")
             if s2.isdigit() and 0 < int(s2) <= total_atoms:
                 idx2 = int(s2) - 1; break
             print('WRONG No. of the 2nd selected atom')
@@ -591,7 +591,7 @@ def atom_molecule(total_atoms, positions_cartesian, species, labels, image_offse
         print(f"\nFor pair {i + 1:>3}")
  
         while True:
-            sel = input(f"\n  Choose the selected atom of pair {i + 1:>3} (  1 to {total_atoms:>3}): ")
+            sel = input(f"  Choose the selected atom of pair {i + 1:>3} (  1 to {total_atoms:>3}): ")
             if sel.isdigit() and 0 < int(sel) <= total_atoms:
                 index_select = int(sel) - 1; break
             print('WRONG No. of the selected atom')
