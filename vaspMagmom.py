@@ -6,6 +6,7 @@ import re
 import readline
 import numpy as np
 from itertools import groupby
+from collections import Counter
 
 
 def usage():
@@ -38,6 +39,24 @@ _ELEMENT_SYMBOLS = [
     "Db", "Sg", "Bh", "Hs", "Mt", "Ds", "Rg", "Cn",
     "Nh", "Fl", "Mc", "Lv", "Ts", "Og"
 ]
+
+_ELEMENT_UNPAIRED = [
+    1.0,  0.0,  1.0,  0.0,  1.0,  2.0,  3.0,  2.0,
+    1.0,  0.0,  1.0,  0.0,  1.0,  2.0,  3.0,  2.0,
+    1.0,  0.0,  1.0,  0.0,  1.0,  2.0,  3.0,  6.0,
+    5.0,  4.0,  3.0,  2.0,  1.0,  0.0,  1.0,  2.0,
+    3.0,  2.0,  1.0,  0.0,  1.0,  0.0,  1.0,  2.0,
+    5.0,  6.0,  5.0,  4.0,  3.0,  0.0,  1.0,  0.0,
+    1.0,  2.0,  3.0,  2.0,  1.0,  0.0,  1.0,  0.0,
+    1.0,  2.0,  3.0,  4.0,  5.0,  6.0,  7.0,  8.0,
+    5.0,  4.0,  3.0,  2.0,  1.0,  0.0,  1.0,  2.0,
+    3.0,  4.0,  5.0,  4.0,  3.0,  2.0,  1.0,  0.0,
+    1.0,  2.0,  3.0,  2.0,  1.0,  0.0,  1.0,  0.0,
+    1.0,  2.0,  3.0,  4.0,  5.0,  6.0,  7.0,  8.0,
+    5.0,  4.0,  3.0,  2.0,  1.0,  0.0,  1.0,  2.0,
+    3.0,  4.0,  5.0,  4.0,  3.0,  2.0,  1.0,  0.0,
+    1.0,  2.0,  3.0,  2.0,  1.0,  0.0
+]
  
 _ELEMENT_MAGMOM = [
     0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
@@ -56,7 +75,7 @@ _ELEMENT_MAGMOM = [
     0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
     0.0,  0.0,  0.0,  0.0,  0.0,  0.0
 ]
- 
+
  
 def read_POSCAR(filepath):
     """Read a VASP POSCAR file and return its contents as a dictionary.
@@ -236,25 +255,61 @@ def get_default_magmom(element):
         return _ELEMENT_MAGMOM[idx]
     except ValueError:
         return 0.0
- 
- 
-def build_default_magmom_values(unique_elements):
-    """Look up the standard initial magnetic moment for every unique element.
- 
-    Non-interactive: always uses the _ELEMENT_MAGMOM table value. Leaving
-    MAGMOM unset lets VASP fall back to its own initial guess, which can
-    trigger convergence errors in some magnetic calculations — writing an
-    explicit default avoids that.
+
+
+def get_unpaired_electrons(element):
+    """Look up the free-atom ground-state unpaired electron count for an element.
  
     Parameters
     ----------
-    unique_elements : list[str] — unique element symbols, first-occurrence order
+    element : str — element symbol
+ 
+    Returns
+    -------
+    float — value from _ELEMENT_UNPAIRED, or 0.0 if not found
+    """
+    try:
+        idx = _ELEMENT_SYMBOLS.index(element)
+        return _ELEMENT_UNPAIRED[idx]
+    except ValueError:
+        return 0.0
+ 
+ 
+def build_default_magmom_values(unique_elements, element_counts):
+    """Look up the initial magnetic moment for every unique element.
+ 
+    Non-interactive: normally uses the _ELEMENT_MAGMOM bulk-default table.
+    Leaving MAGMOM unset lets VASP fall back to its own initial guess, which
+    can trigger convergence errors in some magnetic calculations — writing
+    an explicit default avoids that.
+ 
+    Single-atom override: if an element's bulk default is 0.0 AND only one
+    atom of that element is present in the whole structure (an isolated
+    atom, e.g. a dopant/adatom/defect rather than a bulk species), the bulk
+    default is replaced with that element's number of unpaired electrons
+    (Hund's rule, neutral free-atom ground state, from _ELEMENT_UNPAIRED).
+    A single isolated atom can carry its free-atom moment even when the
+    element is conventionally non-magnetic in bulk, so the plain bulk
+    default of 0.0 would otherwise bias the calculation toward the wrong
+    spin state. Elements with a nonzero bulk default are never touched by
+    this override, regardless of atom count.
+ 
+    Parameters
+    ----------
+    unique_elements : list[str]      — unique element symbols, first-occurrence order
+    element_counts  : dict[str, int] — element -> total atom count in the structure
  
     Returns
     -------
     dict[str, float] — element -> magnetic moment (mu_B)
     """
-    return {element: get_default_magmom(element) for element in unique_elements}
+    magmom_values = {}
+    for element in unique_elements:
+        default = get_default_magmom(element)
+        if default == 0.0 and element_counts[element] == 1:
+            default = float(get_unpaired_electrons(element))
+        magmom_values[element] = default
+    return magmom_values
  
  
 def build_magmom_string(species, magmom_values):
@@ -417,8 +472,9 @@ def main():
     # First-occurrence order avoids reordering atoms; MAGMOM must follow the
     # exact atom order already present in the POSCAR file.
     unique_elements = list(dict.fromkeys(poscar["species"]))
+    element_counts = Counter(poscar["species"])
  
-    magmom_values = build_default_magmom_values(unique_elements)
+    magmom_values = build_default_magmom_values(unique_elements, element_counts)
     magmom_string = build_magmom_string(poscar["species"], magmom_values)
  
     if os.path.exists(incar_file):
