@@ -1352,7 +1352,7 @@ If [output prefix] is omitted, the value-grid filename (without extension) is us
 
 
 
-**Plot:** filled contour (viridis colormap, 100 levels, equal aspect ratio) with a colorbar labeled for charge density (e/Å³ by default — edit the `CHGLAVG_LABEL` constant for other quantities), rendered in Times New Roman/serif per the toolkit's plot styling convention, saved at 300 dpi.
+**Plot:** filled contour (viridis colormap, 100 levels, equal aspect ratio) with a colorbar labeled for charge density (e/Å³ by default — edit the `CHGLAVG_LABEL` constant for other quantities), rendered in Times New Roman/serif per the toolkit's plot styling convention, saved at 300 dpi PNG.
 
 
 
