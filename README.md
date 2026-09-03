@@ -32,11 +32,11 @@ This repository is organized into eight functional categories:
 
 5. **MLFF utilities** — monitor training errors, evaluate MLFF accuracy against DFT references, and convert or merge VASP `ML_AB` training data files
 
-6. **Dielectric & polar properties** — extract dielectric tensors and Born effective charge tensors from VASP DFPT output files
+6. **NEB calculations** — generate interpolated image directories and analyze completed NEB runs
 
-7. **NEB calculations** — generate interpolated image directories and analyze completed NEB runs
+7. **Charge density visualization** — plot 2D charge density heatmaps and export Origin-compatible ASCII data from VASPKIT `.grd` grid files
 
-8. **Charge density visualization** — plot 2D charge density heatmaps and export Origin-compatible ASCII data from VASPKIT `.grd` grid files
+8. **Calculation setup** — build VASP/follow-on calculation-control tags (initial MAGMOM, dielectric/Born effective charges) from POSCAR or DFPT output
 
 
 
@@ -1214,43 +1214,7 @@ Resolves header metadata conflicts (reference energies, atomic masses) by first-
 
 
 
-### 6. Dielectric & Polar Properties
-
-
-
-Scripts for extracting dielectric and Born effective charge tensors from VASP DFPT output files.
-
-
-
----
-
-
-
-#### `vaspBorn.py`
-
-
-
-Extracts the ion-clamped (electronic) dielectric tensor and Born effective charge tensors from a VASP DFPT calculation (`LEPSILON=.TRUE.`) and writes them to `INCAR.LR`. Accepts either `OUTCAR` or `vasprun.xml`; file type is auto-detected by filename with content-based fallback.
-
-
-
-```
-
-Usage: vaspBorn.py <OUTCAR or vasprun.xml>
-
-```
-
-
-
-**Output:** `INCAR.LR` — `PHON_DIELECTRIC` and `PHON_BORN_CHARGES` tags in backslash-continuation format.
-
-
-
----
-
-
-
-### 7. NEB Calculations
+### 6. NEB Calculations
 
 
 
@@ -1348,7 +1312,7 @@ Usage: analyzeNEB.py [nj]
 
 
 
-### 8. Charge Density Visualization
+### 7. Charge Density Visualization
 
 
 
@@ -1397,6 +1361,74 @@ If [output prefix] is omitted, the value-grid filename (without extension) is us
 - `<prefix>.png` — filled-contour heatmap
 
 - `<prefix>.dat` — plain three-column `X Y CHGLAVG` ASCII file, importable via Origin's Data > Convert to Matrix > XYZ Gridding, or any generic contour/3D plotting tool
+
+
+
+---
+
+
+
+### 8. Calculation Setup
+
+
+
+Scripts for preparing calculation-control tags for VASP and follow-on codes — initial MAGMOM values, and dielectric/Born-effective-charge tags derived from DFPT output.
+
+
+
+---
+
+
+
+#### `vaspBorn.py`
+
+
+
+Extracts the ion-clamped (electronic) dielectric tensor and Born effective charge tensors from a VASP DFPT calculation (`LEPSILON=.TRUE.`) and writes them to `INCAR.LR`. Accepts either `OUTCAR` or `vasprun.xml`; file type is auto-detected by filename with content-based fallback.
+
+
+
+```
+
+Usage: vaspBorn.py <OUTCAR or vasprun.xml>
+
+```
+
+
+
+**Output:** `INCAR.LR` — `PHON_DIELECTRIC` and `PHON_BORN_CHARGES` tags in backslash-continuation format.
+
+
+
+---
+
+
+
+#### `vaspMagmom.py`
+
+
+
+Builds an initial `MAGMOM` tag from a POSCAR/CONTCAR's element composition and writes it into `INCAR`, using standard per-element default magnetic moments (a built-in periodic-table lookup table, non-zero mainly for 3d/4d transition metals).
+
+
+
+```
+
+Usage: vaspMagmom.py <POSCAR>
+
+```
+
+
+
+Reads the structure via the toolkit's shared VASP4/5 POSCAR parser (prompts for element names only if a VASP4-format file lacks the element-symbol line). Per-atom moments are expanded in POSCAR atom order and run-length-encoded into VASP's `count*value` shorthand (e.g. `3*5.0 2*0.0`).
+
+
+
+**INCAR handling:** If `INCAR` already exists in the working directory, only the `MAGMOM` tag is set/overwritten in place (existing tags, comments, and ordering are preserved), and `ISPIN` is forced to `2` if not already set to `2`. If no `INCAR` exists, a fresh one is written from a standard spin-polarized template.
+
+
+
+**Output:** `INCAR` (created or updated in place).
 
 
 
