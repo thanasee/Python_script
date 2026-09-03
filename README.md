@@ -1294,7 +1294,7 @@ Usage: analyzeNEB.py [nj]
 
 - `nebef.dat` — image-by-image table: max force (eV/Å), absolute energy (eV), relative energy (eV)
 
-- `nebefs.dat` — extended table adding stress (kBar), volume (Å³), magnetic moment (μ_B) *(SSNEB mode only)*
+- `nebefs.dat` — extended table adding stress (kBar), volume (Å³), magnetic moment (μB) *(SSNEB mode only)*
 
 - `movie` — concatenated POSCAR-format trajectory from all image CONTCARs (or POSCARs)
 
