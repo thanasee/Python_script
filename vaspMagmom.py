@@ -41,39 +41,39 @@ _ELEMENT_SYMBOLS = [
 ]
 
 _ELEMENT_UNPAIRED = [
-    1.0,  0.0,  1.0,  0.0,  1.0,  2.0,  3.0,  2.0,
-    1.0,  0.0,  1.0,  0.0,  1.0,  2.0,  3.0,  2.0,
-    1.0,  0.0,  1.0,  0.0,  1.0,  2.0,  3.0,  6.0,
-    5.0,  4.0,  3.0,  2.0,  1.0,  0.0,  1.0,  2.0,
-    3.0,  2.0,  1.0,  0.0,  1.0,  0.0,  1.0,  2.0,
-    5.0,  6.0,  5.0,  4.0,  3.0,  0.0,  1.0,  0.0,
-    1.0,  2.0,  3.0,  2.0,  1.0,  0.0,  1.0,  0.0,
+    1.0,  0.6,  1.0,  0.6,  1.0,  2.0,  3.0,  2.0,
+    1.0,  0.6,  1.0,  0.6,  1.0,  2.0,  3.0,  2.0,
+    1.0,  0.6,  1.0,  0.6,  1.0,  2.0,  3.0,  6.0,
+    5.0,  4.0,  3.0,  2.0,  1.0,  0.6,  1.0,  2.0,
+    3.0,  2.0,  1.0,  0.6,  1.0,  0.6,  1.0,  2.0,
+    5.0,  6.0,  5.0,  4.0,  3.0,  0.6,  1.0,  0.6,
+    1.0,  2.0,  3.0,  2.0,  1.0,  0.6,  1.0,  0.6,
     1.0,  2.0,  3.0,  4.0,  5.0,  6.0,  7.0,  8.0,
-    5.0,  4.0,  3.0,  2.0,  1.0,  0.0,  1.0,  2.0,
-    3.0,  4.0,  5.0,  4.0,  3.0,  2.0,  1.0,  0.0,
-    1.0,  2.0,  3.0,  2.0,  1.0,  0.0,  1.0,  0.0,
+    5.0,  4.0,  3.0,  2.0,  1.0,  0.6,  1.0,  2.0,
+    3.0,  4.0,  5.0,  4.0,  3.0,  2.0,  1.0,  0.6,
+    1.0,  2.0,  3.0,  2.0,  1.0,  0.6,  1.0,  0.6,
     1.0,  2.0,  3.0,  4.0,  5.0,  6.0,  7.0,  8.0,
-    5.0,  4.0,  3.0,  2.0,  1.0,  0.0,  1.0,  2.0,
-    3.0,  4.0,  5.0,  4.0,  3.0,  2.0,  1.0,  0.0,
-    1.0,  2.0,  3.0,  2.0,  1.0,  0.0
+    5.0,  4.0,  3.0,  2.0,  1.0,  0.6,  1.0,  2.0,
+    3.0,  4.0,  5.0,  4.0,  3.0,  2.0,  1.0,  0.6,
+    1.0,  2.0,  3.0,  2.0,  1.0,  0.6
 ]
  
 _ELEMENT_MAGMOM = [
-    0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-    0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-    0.0,  0.0,  0.0,  0.0,  1.0,  2.0,  3.0,  5.0,
-    5.0,  5.0,  3.0,  2.0,  1.0,  0.0,  0.0,  0.0,
-    0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  1.0,  2.0,
-    3.0,  4.0,  5.0,  4.0,  3.0,  2.0,  1.0,  0.0,
-    0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-    0.0,  1.0,  2.0,  3.0,  4.0,  5.0,  7.0,  7.0,
-    6.0,  5.0,  4.0,  3.0,  2.0,  1.0,  0.0,  2.0,
-    3.0,  4.0,  5.0,  4.0,  3.0,  2.0,  1.0,  0.0,
-    0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-    0.0,  0.0,  0.0,  2.0,  0.0,  0.0,  0.0,  0.0,
-    0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-    0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-    0.0,  0.0,  0.0,  0.0,  0.0,  0.0
+    0.6,  0.6,  0.6,  0.6,  0.6,  0.6,  0.6,  0.6,
+    0.6,  0.6,  0.6,  0.6,  0.6,  0.6,  0.6,  0.6,
+    0.6,  0.6,  0.6,  0.6,  1.0,  2.0,  3.0,  5.0,
+    5.0,  5.0,  3.0,  2.0,  1.0,  0.6,  0.6,  0.6,
+    0.6,  0.6,  0.6,  0.6,  0.6,  0.6,  1.0,  2.0,
+    3.0,  4.0,  5.0,  4.0,  3.0,  2.0,  1.0,  0.6,
+    0.6,  0.6,  0.6,  0.6,  0.6,  0.6,  0.6,  0.6,
+    0.6,  1.0,  2.0,  3.0,  4.0,  5.0,  7.0,  7.0,
+    6.0,  5.0,  4.0,  3.0,  2.0,  1.0,  0.6,  2.0,
+    3.0,  4.0,  5.0,  4.0,  3.0,  2.0,  1.0,  0.6,
+    0.6,  0.6,  0.6,  0.6,  0.6,  0.6,  0.6,  0.6,
+    0.6,  0.6,  0.6,  2.0,  0.6,  0.6,  0.6,  0.6,
+    0.6,  0.6,  0.6,  0.6,  0.6,  0.6,  0.6,  0.6,
+    0.6,  0.6,  0.6,  0.6,  0.6,  0.6,  0.6,  0.6,
+    0.6,  0.6,  0.6,  0.6,  0.6,  0.6
 ]
 
  
@@ -248,13 +248,13 @@ def get_default_magmom(element):
  
     Returns
     -------
-    float — default moment from _ELEMENT_MAGMOM, or 0.0 if not found
+    float — default moment from _ELEMENT_MAGMOM, or 0.6 if not found
     """
     try:
         idx = _ELEMENT_SYMBOLS.index(element)
         return _ELEMENT_MAGMOM[idx]
     except ValueError:
-        return 0.0
+        return 0.6
 
 
 def get_unpaired_electrons(element):
@@ -266,13 +266,13 @@ def get_unpaired_electrons(element):
  
     Returns
     -------
-    float — value from _ELEMENT_UNPAIRED, or 0.0 if not found
+    float — value from _ELEMENT_UNPAIRED, or 0.6 if not found
     """
     try:
         idx = _ELEMENT_SYMBOLS.index(element)
         return _ELEMENT_UNPAIRED[idx]
     except ValueError:
-        return 0.0
+        return 0.6
  
  
 def build_default_magmom_values(unique_elements, element_counts):
@@ -283,14 +283,14 @@ def build_default_magmom_values(unique_elements, element_counts):
     can trigger convergence errors in some magnetic calculations — writing
     an explicit default avoids that.
  
-    Single-atom override: if an element's bulk default is 0.0 AND only one
+    Single-atom override: if an element's bulk default is 0.6 AND only one
     atom of that element is present in the whole structure (an isolated
     atom, e.g. a dopant/adatom/defect rather than a bulk species), the bulk
     default is replaced with that element's number of unpaired electrons
     (Hund's rule, neutral free-atom ground state, from _ELEMENT_UNPAIRED).
     A single isolated atom can carry its free-atom moment even when the
     element is conventionally non-magnetic in bulk, so the plain bulk
-    default of 0.0 would otherwise bias the calculation toward the wrong
+    default of 0.6 would otherwise bias the calculation toward the wrong
     spin state. Elements with a nonzero bulk default are never touched by
     this override, regardless of atom count.
  
@@ -306,7 +306,7 @@ def build_default_magmom_values(unique_elements, element_counts):
     magmom_values = {}
     for element in unique_elements:
         default = get_default_magmom(element)
-        if default == 0.0 and element_counts[element] == 1:
+        if default == 0.6 and element_counts[element] == 1:
             default = float(get_unpaired_electrons(element))
         magmom_values[element] = default
     return magmom_values
@@ -325,7 +325,7 @@ def build_magmom_string(species, magmom_values):
  
     Returns
     -------
-    str — MAGMOM tag value, e.g. '3*5.0 2*0.0 4*1.0'
+    str — MAGMOM tag value, e.g. '3*5.0 2*0.6 4*1.0'
     """
     per_atom = list(zip(species, (round(magmom_values[s], 1) for s in species)))
     groups = []
