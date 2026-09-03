@@ -11,7 +11,7 @@ from itertools import groupby
 def usage():
     """Print usage information and exit."""
     print("""
-Usage: vaspMAGMOM.py <POSCAR>
+Usage: vaspMagmom.py <POSCAR>
 
 This script writes an initial MAGMOM tag to INCAR based on element composition
 read from a POSCAR/CONTCAR file, using standard per-element default moments.
