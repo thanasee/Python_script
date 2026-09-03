@@ -277,28 +277,29 @@ def get_unpaired_electrons(element):
  
 def build_default_magmom_values(unique_elements, element_counts):
     """Look up the initial magnetic moment for every unique element.
- 
-    Non-interactive: normally uses the _ELEMENT_MAGMOM bulk-default table.
-    Leaving MAGMOM unset lets VASP fall back to its own initial guess, which
-    can trigger convergence errors in some magnetic calculations — writing
-    an explicit default avoids that.
- 
-    Single-atom override: if an element's bulk default is 0.6 AND only one
-    atom of that element is present in the whole structure (an isolated
-    atom, e.g. a dopant/adatom/defect rather than a bulk species), the bulk
-    default is replaced with that element's number of unpaired electrons
-    (Hund's rule, neutral free-atom ground state, from _ELEMENT_UNPAIRED).
-    A single isolated atom can carry its free-atom moment even when the
-    element is conventionally non-magnetic in bulk, so the plain bulk
-    default of 0.6 would otherwise bias the calculation toward the wrong
-    spin state. Elements with a nonzero bulk default are never touched by
-    this override, regardless of atom count.
- 
+
+    Uses the _ELEMENT_MAGMOM bulk-default table by default. Leaving MAGMOM
+    unset lets VASP fall back to its own initial guess, which can trigger
+    convergence errors in some magnetic calculations — writing an explicit
+    value avoids that.
+
+    Single-atom override: if an element's bulk default is 0.6 (this
+    table's non-magnetic placeholder) and exactly one atom of that
+    element is present in the whole structure — an isolated dopant,
+    adatom, or defect rather than a bulk species — the placeholder is
+    replaced with that element's number of unpaired electrons (Hund's
+    rule, neutral free-atom ground state, from _ELEMENT_UNPAIRED). A
+    lone atom can carry its free-atom moment even when the element is
+    conventionally non-magnetic in bulk, so leaving it at the placeholder
+    would bias the calculation toward the wrong spin state. Elements
+    with a genuinely nonzero bulk default are never touched by this
+    override, regardless of atom count.
+
     Parameters
     ----------
     unique_elements : list[str]      — unique element symbols, first-occurrence order
     element_counts  : dict[str, int] — element -> total atom count in the structure
- 
+
     Returns
     -------
     dict[str, float] — element -> magnetic moment (mu_B)
