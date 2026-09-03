@@ -272,9 +272,9 @@ def build_magmom_string(species, magmom_values):
     -------
     str — MAGMOM tag value, e.g. '3*5.0 2*0.0 4*1.0'
     """
-    per_atom = [round(magmom_values[s], 1) for s in species]
+    per_atom = list(zip(species, (round(magmom_values[s], 1) for s in species)))
     groups = []
-    for value, group in groupby(per_atom):
+    for (_, value), group in groupby(per_atom):
         count = len(list(group))
         groups.append(f"{count}*{value:.1f}")
     return " ".join(groups)
