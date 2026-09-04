@@ -52,23 +52,42 @@ _ELEMENT_SYMBOLS = [
     "Nh", "Fl", "Mc", "Lv", "Ts", "Og"
 ]
 
-VDW_RADIUS = {
-    'H':  1.20, 'He': 1.43, 'Li': 2.12, 'Be': 1.98, 'B':  1.91, 'C':  1.77,
-    'N':  1.66, 'O':  1.50, 'F':  1.46, 'Ne': 1.58, 'Na': 2.50, 'Mg': 2.51,
-    'Al': 2.25, 'Si': 2.19, 'P':  1.90, 'S':  1.89, 'Cl': 1.82, 'Ar': 1.83,
-    'K':  2.73, 'Ca': 2.62, 'Sc': 2.58, 'Ti': 2.46, 'V':  2.42, 'Cr': 2.45,
-    'Mn': 2.45, 'Fe': 2.44, 'Co': 2.40, 'Ni': 2.40, 'Cu': 2.38, 'Zn': 2.39,
-    'Ga': 2.32, 'Ge': 2.29, 'As': 1.88, 'Se': 1.82, 'Br': 1.86, 'Kr': 1.95,
-    'Rb': 3.21, 'Sr': 2.84, 'Y':  2.75, 'Zr': 2.52, 'Nb': 2.56, 'Mo': 2.45,
-    'Tc': 2.44, 'Ru': 2.46, 'Rh': 2.44, 'Pd': 2.15, 'Ag': 2.53, 'Cd': 2.49,
-    'In': 2.43, 'Sn': 2.42, 'Sb': 2.47, 'Te': 1.99, 'I':  2.04, 'Xe': 2.06,
-    'Cs': 3.48, 'Ba': 3.03, 'La': 2.98, 'Ce': 2.88, 'Pr': 2.92, 'Nd': 2.95,
-    'Pm': 2.90, 'Sm': 2.87, 'Eu': 2.83, 'Gd': 2.79, 'Tb': 2.87, 'Dy': 2.81,
-    'Ho': 2.76, 'Er': 2.75, 'Tm': 2.73, 'Yb': 2.76, 'Lu': 2.68, 'Hf': 2.63,
-    'Ta': 2.53, 'W':  2.57, 'Re': 2.49, 'Os': 2.48, 'Ir': 2.41, 'Pt': 2.29,
-    'Au': 2.32, 'Hg': 2.45, 'Tl': 2.47, 'Pb': 2.60, 'Bi': 2.54, 'Po': 2.80,
-    'At': 2.93, 'Rn': 2.02,
-}
+_VDW_RADIUS = [
+    1.675, 1.414, 2.799, 2.269, 2.080, 1.910, 1.798, 1.715,
+    1.631, 1.554, 2.797, 2.485, 2.412, 2.265, 2.139, 2.063,
+    1.981, 1.905, 3.037, 2.792, 2.597, 2.608, 2.557, 2.540,
+    2.468, 2.436, 2.395, 2.355, 2.342, 2.277, 2.362, 2.288,
+    2.196, 2.186, 2.087, 2.021, 3.080, 2.873, 2.794, 2.651,
+    2.600, 2.557, 2.522, 2.489, 2.455, 2.153, 2.395, 2.334,
+    2.453, 2.382, 2.312, 2.271, 2.225, 2.167, 3.181, 3.009,
+    2.909, 2.890, 2.912, 2.896, 2.880, 2.863, 2.845, 2.785,
+    2.814, 2.801, 2.779, 2.764, 2.747, 2.734, 2.728, 2.619,
+    2.498, 2.466, 2.436, 2.407, 2.388, 2.348, 2.254, 2.235,
+    2.362, 2.342, 2.348, 2.319, 2.304, 2.245, 3.077, 2.966,
+    2.886, 2.916, 2.774, 2.705, 2.767, 2.715, 2.709, 2.746,
+    2.694, 2.683, 2.672, 2.656, 2.641, 2.644, 3.080, 2.651,
+    2.304, 2.288, 2.271, 2.254, 2.236, 2.216, 2.217, 2.174,
+    2.186, 2.206, 2.482, 3.000, 2.508, 2.413
+]
+
+
+def get_vdw_radius(element):
+    """Look up the van der Waals radius for an element.
+
+    Parameters
+    ----------
+    element : str — element symbol
+ 
+    Returns
+    -------
+    float — van der Waals radius in Angstrom, or 0.6 if not found
+    """
+    try:
+        idx = _ELEMENT_SYMBOLS.index(element)
+        return _VDW_RADIUS[idx]
+    except ValueError:
+        return 3.0
+
 
 def compute_interlayer_gap(bottom_species, bottom_positions_cartesian,
                            top_species, top_positions_cartesian):
@@ -98,17 +117,10 @@ def compute_interlayer_gap(bottom_species, bottom_positions_cartesian,
     bottom_element = bottom_species[bottom_top_index]
     top_element    = top_species[top_bottom_index]
 
-    bottom_radius = VDW_RADIUS.get(bottom_element)
-    top_radius    = VDW_RADIUS.get(top_element)
+    bottom_radius = get_vdw_radius(bottom_element)
+    top_radius    = get_vdw_radius(top_element)
 
-    if bottom_radius is None or top_radius is None:
-        missing = bottom_element if bottom_radius is None else top_element
-        interlayer_gap = 3.5
-        print(f"WARNING! No van der Waals radius known for '{missing}'. "
-              f"Falling back to default interlayer gap of {interlayer_gap} Angstrom.")
-        return interlayer_gap
-
-    interlayer_gap = bottom_radius + top_radius
+    interlayer_gap = ( bottom_radius + top_radius ) / 2.
     return interlayer_gap
 
 
