@@ -6,6 +6,19 @@ import readline
 import xml.etree.ElementTree as ET
 
 
+def usage():
+    """Print usage and exit."""
+    print("""
+Usage: xml2mlab.py <vasprun1.xml> [vasprun2.xml ...]
+
+Converts AIMD vasprun.xml trajectories to VASP ML_AB training data format.
+Multiple files are concatenated into a single ML_AB output file.
+
+This script was developed by Thanasee Thanasarnsurapong.
+""")
+    exit(0)
+
+
 _ATOMIC_MASS = {
     'H' : 1.00800, 'He': 4.00260, 'Li': 6.94000, 'Be': 9.01220,
     'B' : 10.8100, 'C' : 12.0110, 'N' : 14.0070, 'O' : 15.9990,
@@ -112,25 +125,6 @@ _CONFIGURATION_FMT_STR = """**************************************************
      XY YZ ZX
 --------------------------------------------------
 {stress_offdiag}"""
-
-
-def usage():
-    """Print usage and exit."""
-    print("""
-Usage: xml2mlab.py <vasprun1.xml> [vasprun2.xml ...]
-
-Converts AIMD vasprun.xml trajectories to VASP ML_AB training data format.
-Multiple files are concatenated into a single ML_AB output file.
-
-  - Step selection (equilibration skip, stride) set interactively
-  - CTIFOR is omitted (external training data convention)
-  - Reference atomic energies set to 0.0 (re-fitted during training)
-  - Basis sets written as dummy entries (compatible with ML_MODE = select)
-  - Element mismatch across files: warning issued, union taken
-
-Output: ML_AB (written in current directory)
-""")
-    exit(0)
 
 
 def get_std_atomic_mass(symbol):
