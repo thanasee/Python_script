@@ -278,22 +278,11 @@ def get_unpaired_electrons(element):
 def build_default_magmom_values(unique_elements, element_counts):
     """Look up the initial magnetic moment for every unique element.
 
-    Uses the _ELEMENT_MAGMOM bulk-default table by default. Leaving MAGMOM
-    unset lets VASP fall back to its own initial guess, which can trigger
-    convergence errors in some magnetic calculations — writing an explicit
-    value avoids that.
-
-    Single-atom override: if an element's bulk default is 0.6 (this
-    table's non-magnetic placeholder) and exactly one atom of that
-    element is present in the whole structure — an isolated dopant,
-    adatom, or defect rather than a bulk species — the placeholder is
-    replaced with that element's number of unpaired electrons (Hund's
-    rule, neutral free-atom ground state, from _ELEMENT_UNPAIRED). A
-    lone atom can carry its free-atom moment even when the element is
-    conventionally non-magnetic in bulk, so leaving it at the placeholder
-    would bias the calculation toward the wrong spin state. Elements
-    with a genuinely nonzero bulk default are never touched by this
-    override, regardless of atom count.
+    Normally uses the _ELEMENT_MAGMOM bulk-default table. If an element's
+    default is 0.6 (the non-magnetic placeholder) and only one atom of it
+    exists in the structure, use its free-atom unpaired-electron count
+    (_ELEMENT_UNPAIRED, Hund's rule) instead — an isolated atom can carry
+    its atomic moment even when the element is non-magnetic in bulk.
 
     Parameters
     ----------
@@ -340,18 +329,19 @@ _TAG_PATTERN = re.compile(r'^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=')
  
  
 def read_INCAR(filepath):
-    """Read an existing INCAR file into a list of lines.
- 
+    """Read an existing INCAR file into a list of lines, dropping full-line comments.
+
     Parameters
     ----------
     filepath : str
- 
+
     Returns
     -------
-    list[str] — lines of the file
+    list[str] — lines of the file, with '#'/'!' comment lines removed
     """
     with open(filepath, 'r') as f:
-        return f.readlines()
+        lines = f.readlines()
+    return [line for line in lines if not line.strip().startswith(('#', '!'))]
  
  
 def default_INCAR_lines(magmom_string):
@@ -423,8 +413,24 @@ def set_tag(lines, tag, value):
         if lines and not lines[-1].endswith('\n'):
             lines[-1] += '\n'
         lines.append(new_line)
- 
- 
+
+
+def remove_tag(lines, tag):
+    """Remove a tag's line from an INCAR line list, in place, if present.
+
+    Used for NUPDOWN, which fixes the total spin difference and conflicts
+    with a per-atom MAGMOM guess.
+
+    Parameters
+    ----------
+    lines : list[str] — modified in place
+    tag   : str
+    """
+    idx = find_tag_line(lines, tag)
+    if idx is not None:
+        del lines[idx]
+
+
 def ensure_ispin(lines):
     """Ensure ISPIN = 2 is set, overriding any other value (e.g. ISPIN = 1).
  
@@ -480,6 +486,7 @@ def main():
  
     if os.path.exists(incar_file):
         lines = read_INCAR(incar_file)
+        remove_tag(lines, "NUPDOWN")
         set_tag(lines, "MAGMOM", magmom_string)
         if ensure_ispin(lines):
             set_tag(lines, "ISPIN", "2")
