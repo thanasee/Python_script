@@ -39,6 +39,75 @@ _ELEMENT_SYMBOLS = [
 ]
 
 
+_VDW_RADIUS = [
+    1.675, 1.414, 2.799, 2.269, 2.080, 1.910, 1.798, 1.715,
+    1.631, 1.554, 2.797, 2.485, 2.412, 2.265, 2.139, 2.063,
+    1.981, 1.905, 3.037, 2.792, 2.597, 2.608, 2.557, 2.540,
+    2.468, 2.436, 2.395, 2.355, 2.342, 2.277, 2.362, 2.288,
+    2.196, 2.186, 2.087, 2.021, 3.080, 2.873, 2.794, 2.651,
+    2.600, 2.557, 2.522, 2.489, 2.455, 2.153, 2.395, 2.334,
+    2.453, 2.382, 2.312, 2.271, 2.225, 2.167, 3.181, 3.009,
+    2.909, 2.890, 2.912, 2.896, 2.880, 2.863, 2.845, 2.785,
+    2.814, 2.801, 2.779, 2.764, 2.747, 2.734, 2.728, 2.619,
+    2.498, 2.466, 2.436, 2.407, 2.388, 2.348, 2.254, 2.235,
+    2.362, 2.342, 2.348, 2.319, 2.304, 2.245, 3.077, 2.966,
+    2.886, 2.916, 2.774, 2.705, 2.767, 2.715, 2.709, 2.746,
+    2.694, 2.683, 2.672, 2.656, 2.641, 2.644, 3.080, 2.651,
+    2.304, 2.288, 2.271, 2.254, 2.236, 2.216, 2.217, 2.174,
+    2.186, 2.206, 2.482, 3.000, 2.508, 2.413
+]
+
+
+def get_vdw_radius(element):
+    """Look up the van der Waals radius for an element.
+
+    Parameters
+    ----------
+    element : str — element symbol
+ 
+    Returns
+    -------
+    float — van der Waals radius in Angstrom, or 0.6 if not found
+    """
+    try:
+        idx = _ELEMENT_SYMBOLS.index(element)
+        return _VDW_RADIUS[idx]
+    except ValueError:
+        return 3.0
+
+
+def compute_interlayer_gap(species, positions_cartesian):
+    """Compute a physically-motivated interlayer gap from van der Waals radii.
+
+    Sums the van der Waals radii of the topmost atom (highest z) in the
+    bottom layer and the bottommost atom (lowest z) in the top layer — the
+    pair that will directly face each other once stacked. Inputs should be
+    the original unit-cell arrays, not a tiled supercell, since in-plane
+    tiling never changes z.
+
+    Parameters
+    ----------
+    species             : list[str]
+    positions_cartesian : np.ndarray (N, 3)
+
+    Returns
+    -------
+    interlayer_gap : float -- interlayer gap in Angstrom
+    """
+
+    bottom_top_index = np.argmax(positions_cartesian[:, 2])
+    top_bottom_index = np.argmin(positions_cartesian[:, 2])
+
+    bottom_element = species[bottom_top_index]
+    top_element    = species[top_bottom_index]
+
+    bottom_radius = get_vdw_radius(bottom_element)
+    top_radius    = get_vdw_radius(top_element)
+
+    interlayer_gap = ( bottom_radius + top_radius ) / 2.
+    return interlayer_gap
+
+
 def read_POSCAR(filepath):
     """Read a VASP POSCAR file and return its contents as a dictionary.
 
@@ -388,7 +457,7 @@ def write_POSCAR(filepath, lattice_matrix, elements, atom_counts, positions_cart
             o.write(f"   {labels[i]:>6s}\n")
 
 
-def build_second_layer(positions_cartesian):
+def build_second_layer(species, positions_cartesian):
     """Build the second layer by shifting a copy of the monolayer upward in z.
 
     The vertical shift is set to the monolayer thickness plus a 3.5 Å interlayer
@@ -396,6 +465,7 @@ def build_second_layer(positions_cartesian):
 
     Parameters
     ----------
+    species             : list[str]        — element symbols of the monolayer
     positions_cartesian : np.ndarray, shape (N, 3) — Cartesian coordinates of the
                           monolayer in Å
 
@@ -406,9 +476,10 @@ def build_second_layer(positions_cartesian):
     second_positions_cartesian : np.ndarray, shape (N, 3) — Cartesian coordinates
                                  of the second layer in Å
     """
-    
+    interlayer_gap = compute_interlayer_gap(species, positions_cartesian)
     thickness = np.max(positions_cartesian[:, 2]) - np.min(positions_cartesian[:, 2])
-    shift = thickness + 3.5
+
+    shift = thickness + interlayer_gap
     
     second_positions_cartesion = positions_cartesian.copy()
     second_positions_cartesion[:, 2] += shift
