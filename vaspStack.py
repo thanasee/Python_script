@@ -67,7 +67,7 @@ def get_vdw_radius(element):
  
     Returns
     -------
-    float — van der Waals radius in Angstrom, or 0.6 if not found
+    float — van der Waals radius in Angstrom, or 3.0 if not found
     """
     try:
         idx = _ELEMENT_SYMBOLS.index(element)
@@ -76,7 +76,8 @@ def get_vdw_radius(element):
         return 3.0
 
 
-def compute_interlayer_gap(species, positions_cartesian):
+def compute_interlayer_gap(bottom_species, bottom_positions_cartesian,
+                           top_species, top_positions_cartesian):
     """Compute a physically-motivated interlayer gap from van der Waals radii.
 
     Sums the van der Waals radii of the topmost atom (highest z) in the
@@ -87,24 +88,26 @@ def compute_interlayer_gap(species, positions_cartesian):
 
     Parameters
     ----------
-    species             : list[str]
-    positions_cartesian : np.ndarray (N, 3)
+    bottom_species             : list[str]
+    bottom_positions_cartesian : np.ndarray (N, 3)
+    top_species                : list[str]
+    top_positions_cartesian    : np.ndarray (M, 3)
 
     Returns
     -------
     interlayer_gap : float -- interlayer gap in Angstrom
     """
 
-    bottom_top_index = np.argmax(positions_cartesian[:, 2])
-    top_bottom_index = np.argmin(positions_cartesian[:, 2])
+    bottom_top_index = np.argmax(bottom_positions_cartesian[:, 2])
+    top_bottom_index = np.argmin(top_positions_cartesian[:, 2])
 
-    bottom_element = species[bottom_top_index]
-    top_element    = species[top_bottom_index]
+    bottom_element = bottom_species[bottom_top_index]
+    top_element    = top_species[top_bottom_index]
 
     bottom_radius = get_vdw_radius(bottom_element)
     top_radius    = get_vdw_radius(top_element)
 
-    interlayer_gap = ( bottom_radius + top_radius ) / 2.
+    interlayer_gap = bottom_radius + top_radius
     return interlayer_gap
 
 
@@ -476,7 +479,7 @@ def build_second_layer(species, positions_cartesian):
     second_positions_cartesian : np.ndarray, shape (N, 3) — Cartesian coordinates
                                  of the second layer in Å
     """
-    interlayer_gap = compute_interlayer_gap(species, positions_cartesian)
+    interlayer_gap = compute_interlayer_gap(species, positions_cartesian, species, positions_cartesian)
     thickness = np.max(positions_cartesian[:, 2]) - np.min(positions_cartesian[:, 2])
 
     shift = thickness + interlayer_gap
