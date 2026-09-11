@@ -383,9 +383,9 @@ def write_POSCAR(filepath, lattice_matrix, elements, atom_counts, positions_cart
             o.write(f"   {labels[i]:>6s}\n")
 
 
-def select_index(total_atoms, species):
+def select_index(total_atoms, species, prompt=None, allow_all=True):
     """Prompt the user to select atoms by element symbol and/or atom index.
-
+    
     Accepts free-format input mixing element symbols (e.g. 'C'), single indexes
     (e.g. '3'), ranges (e.g. '1-4'), and the keyword 'all'. Repeats the prompt
     on invalid input. The selected_atoms list is reset on each retry to prevent
@@ -395,20 +395,31 @@ def select_index(total_atoms, species):
     ----------
     total_atoms : int       — total number of atoms (used for bounds checking)
     species     : list[str] — per-atom element label (used for symbol selection)
+    prompt      : srt       — message printed before the input prompt
+    allow_all   : bool      — whether the keyword 'all' is permitted (default True)
 
     Returns
     -------
     selected_atoms : list[int] — 0-based indexes of the chosen atoms
     """
-    print(f"""
+
+    if prompt != None:
+        print(prompt)
+    else:
+        print(f"""
 Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
 (Free-format input, e.g., 1 3 1-4 C H all)""")
     while True:
         selected_atoms = []
         input_select = input().split()
-
+        valid = True
+        
         for select in input_select:
             if 'all' in select:
+                if not allow_all:
+                    print("Cannot use 'all' in this session. TRY AGAIN!")
+                    valid = False
+                    break
                 selected_atoms.extend(range(total_atoms))
                 break
             if select.isnumeric() or '-' in select:
@@ -419,6 +430,9 @@ Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
                     selected_atoms.append(int(select) - 1)
             else:
                 selected_atoms.extend([i for i, label in enumerate(species) if label == select])
+
+        if not valid:
+            continue
 
         if len(selected_atoms) > total_atoms or not all(0 <= idx < total_atoms for idx in selected_atoms):
             print("Wrong input atom-indexes! TRY AGAIN!")
