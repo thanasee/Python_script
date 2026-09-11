@@ -553,12 +553,19 @@ Method for selecting the pivot point of molecule
                     print(f"{species[j]} atom : {j + 1:>3.0f}")
                 while True:
                     try:
-                        select_atom = int(input(f"Select the atom as the pivot point ({1:>3} to {total_atoms:>3}): "))
-                        if 0 < select_atom <= total_atoms:
-                            break
+                        select = [int(s) for s in input(f"Select the atom as the pivot point (  1 to {total_atoms:>3}): ").split()]
+                        if len(select) == 1:
+                            select_atom = select[0] - 1
+                            if 0 <= select_atom < total_atoms:
+                                break
+                            print('WRONG No. of atom')
+                            continue
+                        print("  Invalid input! Range of input must be 1.")
+                        continue
                     except ValueError:
-                        print("Wrong No. of atom")
-                return input_type, None, positions_cartesian[int(select_atom) - 1]
+                        print("  Invalid input! Please enter a number.")
+                        continue
+                return input_type, None, positions_cartesian[select_atom]
             elif option == '3':
                 point = []
                 for i in ('a', 'b', 'c'):
