@@ -414,52 +414,63 @@ def min_image_distances(position_reference, positions_others, image_offsets):
     return np.linalg.norm(diff_offset, axis=2).min(axis=1)              # (N,)
 
 
-def parse_group(prompt, total_atoms, species, allow_all=True):
-    """Interactively parse a free-format atom selection from the user.
-
-    Accepts a mix of:
-    - Individual atom indexes     : e.g. '1 3 5'
-    - Ranges of atom indexes      : e.g. '1-4'  (inclusive, 1-based)
-    - Element symbols             : e.g. 'Fe C'  (selects all atoms of that species)
-    - Keyword 'all'               : selects all atoms (only if allow_all=True)
-
-    Keeps prompting until a valid, non-empty selection within [1, total_atoms] is given.
+def select_index(total_atoms, species, prompt=None, allow_all=True):
+    """Prompt the user to select atoms by element symbol and/or atom index.
+    
+    Accepts free-format input mixing element symbols (e.g. 'C'), single indexes
+    (e.g. '3'), ranges (e.g. '1-4'), and the keyword 'all'. Repeats the prompt
+    on invalid input. The selected_atoms list is reset on each retry to prevent
+    duplicates accumulating across bad inputs.
 
     Parameters
     ----------
-    prompt      : str, message printed before the input prompt
-    total_atoms : int, total number of atoms in the system
-    species     : list of str, element symbol for each atom (length N)
-    allow_all   : bool, whether the keyword 'all' is permitted (default True)
+    total_atoms : int       — total number of atoms (used for bounds checking)
+    species     : list[str] — per-atom element label (used for symbol selection)
+    prompt      : srt       — message printed before the input prompt
+    allow_all   : bool      — whether the keyword 'all' is permitted (default True)
 
     Returns
     -------
-    group : list of int, 0-based atom indexes of the selected atoms
+    selected_atoms : list[int] — 0-based indexes of the chosen atoms
     """
 
-    print(prompt)
+    if prompt != None:
+        print(prompt)
+    else:
+        print(f"""
+Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
+(Free-format input, e.g., 1 3 1-4 C H all)""")
     while True:
-        group = []
-        raw = input().split()
+        selected_atoms = []
+        input_select = input().split()
         valid = True
-        for token in raw:
-            if token == 'all':
+        
+        for select in input_select:
+            if 'all' in select:
                 if not allow_all:
-                    print("  Cannot use 'all' in this method. TRY AGAIN!")
-                    valid = False; break
-                group.extend(range(total_atoms))
-            elif '-' in token:
-                start, end = map(int, token.split('-'))
-                group.extend(range(start - 1, end))
-            elif token.isdigit():
-                group.append(int(token) - 1)
+                    print("Cannot use 'all' in this session. TRY AGAIN!")
+                    valid = False
+                    break
+                selected_atoms.extend(range(total_atoms))
+                break
+            if select.isnumeric() or '-' in select:
+                if '-' in select:
+                    start, end = map(int, select.split('-'))
+                    selected_atoms.extend(range(start - 1, end))
+                else:
+                    selected_atoms.append(int(select) - 1)
             else:
-                group.extend([j for j, lbl in enumerate(species) if lbl == token])
+                selected_atoms.extend([i for i, label in enumerate(species) if label == select])
+
         if not valid:
             continue
-        if group and all(0 <= idx < total_atoms for idx in group):
-            return group
-        print("  Wrong input atom-indexes! TRY AGAIN!")
+
+        if len(selected_atoms) > total_atoms or not all(0 <= idx < total_atoms for idx in selected_atoms):
+            print("Wrong input atom-indexes! TRY AGAIN!")
+        else:
+            break
+
+    return selected_atoms
 
 
 def one_to_all(total_atoms, positions_cartesian, labels, image_offsets):
@@ -478,11 +489,19 @@ def one_to_all(total_atoms, positions_cartesian, labels, image_offsets):
     """
 
     while True:
-        select = input(f"Choose the selected atom (  1 to {total_atoms:>3}): ")
-        if select.isdigit() and 0 < int(select) <= total_atoms:
-            index_select = int(select) - 1
-            break
-        print('WRONG No. of the selected atom')
+        try:
+            select = [int(s) for s in input(f"Choose the selected atom (  1 to {total_atoms:>3}): ").split()]
+            if len(select) == 1:
+                index_select = select[0] - 1
+                if 0 <= index_select < total_atoms:
+                    break
+                print('WRONG No. of the selected atom')
+                continue
+            print("  Invalid input! Range of input must be 1.")
+            continue
+        except ValueError:
+            print("  Invalid input! Please enter a number.")
+            continue
 
     mask = np.arange(total_atoms) != index_select
     other_positions = positions_cartesian[mask]
@@ -524,24 +543,54 @@ def atom_pairs(total_atoms, positions_cartesian, labels, image_offsets):
     """
 
     while True:
-        inp = input("Enter number of pair atoms: ")
-        if inp.isdigit() and int(inp) > 0:
-            number_pair = int(inp); break
-        print("Number of pair atoms must be a positive integer.")
+        try:
+            input_pair = [int(p) for p in input("Enter number of pair atoms: ").split()]
+            if len(input_pair) == 1:
+                number_pair = input_pair[0]
+                if number_pair > 0:
+                    break
+                print("Number of pair atoms must be a positive integer.")
+                continue
+            print("ERROR! Range of number of pair atoms must be 1.")
+            continue
+        except ValueError:
+            print("ERROR! Please enter a number.")
+            continue
  
     distances, pair = [], []
     for i in range(number_pair):
-        print(f"\nFor pair {i + 1:>3}")
+        j = i + 1
+        print(f"\nFor pair {j:>3}")
+
         while True:
-            s1 = input(f"  Choose the 1st selected atom of pair {i + 1:>3} (  1 to {total_atoms:>3}): ")
-            if s1.isdigit() and 0 < int(s1) <= total_atoms:
-                idx1 = int(s1) - 1; break
-            print('WRONG No. of the 1st selected atom')
+            try:
+                s1 = [int(s) for s in input(f"Choose the 1st selected atom of pair {j:>3} (  1 to {total_atoms:>3}): ").split()]
+                if len(s1) == 1:
+                    idx1 = s1[0] - 1
+                    if 0 <= idx1 < total_atoms:
+                        break
+                    print('WRONG No. of the 1st selected atom')
+                    continue
+                print("  Invalid input! Range of input must be 1.")
+                continue
+            except ValueError:
+                print("  Invalid input! Please enter a number.")
+                continue
+
         while True:
-            s2 = input(f"  Choose the 2nd selected atom of pair {i + 1:>3} (  1 to {total_atoms:>3}): ")
-            if s2.isdigit() and 0 < int(s2) <= total_atoms:
-                idx2 = int(s2) - 1; break
-            print('WRONG No. of the 2nd selected atom')
+            try:
+                s2 = [int(s) for s in input(f"Choose the 2nd selected atom of pair {j:>3} (  1 to {total_atoms:>3}): ").split()]
+                if len(s2) == 1:
+                    idx2 = s2[0] - 1
+                    if 0 <= idx2 < total_atoms:
+                        break
+                    print('WRONG No. of the 2nd selected atom')
+                    continue
+                print("  Invalid input! Range of input must be 1.")
+                continue
+            except ValueError:
+                print("  Invalid input! Please enter a number.")
+                continue
  
         min_distance = min_image_distance(positions_cartesian[idx1], positions_cartesian[idx2], image_offsets)
         pair.append((labels[idx1], labels[idx2]))
@@ -579,25 +628,44 @@ def atom_molecule(total_atoms, positions_cartesian, species, labels, image_offse
     """
 
     digits = len(str(total_atoms)) + 1
- 
+
     while True:
-        inp = input("Enter number of pair atom-molecule: ")
-        if inp.isdigit() and int(inp) > 0:
-            number_pair = int(inp); break
-        print("Number of pair atom-molecule must be a positive integer.")
+        try:
+            input_pair = [int(p) for p in input("Enter number of pair atom-molecule: ").split()]
+            if len(input_pair) == 1:
+                number_pair = input_pair[0]
+                if number_pair > 0:
+                    break
+                print("Number of pair atom-molecule must be a positive integer.")
+                continue
+            print("ERROR! Range of number of pair atom-molecule must be 1.")
+            continue
+        except ValueError:
+            print("ERROR! Please enter a number.")
+            continue
  
     distances, pair = [], []
     for i in range(number_pair):
-        print(f"\nFor pair {i + 1:>3}")
- 
+        j = i + 1
+        print(f"\nFor pair {j:>3}")
+
         while True:
-            sel = input(f"  Choose the selected atom of pair {i + 1:>3} (  1 to {total_atoms:>3}): ")
-            if sel.isdigit() and 0 < int(sel) <= total_atoms:
-                index_select = int(sel) - 1; break
-            print('WRONG No. of the selected atom')
+            try:
+                select = [int(s) for s in input(f"Choose the selected atom of pair {j:>3} (  1 to {total_atoms:>3}): ").split()]
+                if len(select) == 1:
+                    index_select = select[0] - 1
+                    if 0 <= index_select < total_atoms:
+                        break
+                    print('WRONG No. of the selected atom')
+                    continue
+                print("  Invalid input! Range of input must be 1.")
+                continue
+            except ValueError:
+                print("  Invalid input! Please enter a number.")
+                continue
  
-        targets = parse_group(f"\nInput element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})\n"
-"(Free-format input, e.g., 1 3 1-4 C H all)", total_atoms, species, allow_all=True)
+        targets = select_index(total_atoms, species, f"\nInput element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})\n"
+"(Free-format input, e.g., 1 3 1-4 C H all)")
  
         target_site = np.mean(positions_cartesian[targets], axis=0)  # centroid (3,)
         min_distance = min_image_distance(positions_cartesian[index_select], target_site, image_offsets)
@@ -637,8 +705,8 @@ def z_distance(total_atoms, positions, species):
     print("Tip: this method can measure the thickness of your system.")
  
     # Substrate: find the atom with the maximum z-coordinate
-    substrate_index = parse_group(f"\nSubstrate — input element-symbol and/or atom-indexes ({1:>3} to {total_atoms:>3})\n"
-"(Free-format input, e.g., 1 3 1-4 C H  — 'all' not allowed)", total_atoms, species, allow_all=False)
+    substrate_index = select_index(total_atoms, species, f"\nSubstrate — input element-symbol and/or atom-indexes ({1:>3} to {total_atoms:>3})\n"
+"(Free-format input, e.g., 1 3 1-4 C H  — 'all' not allowed)", False)
  
     if len(substrate_index) == 1:
         highest_substrate = positions[substrate_index[0]]
@@ -651,18 +719,23 @@ def z_distance(total_atoms, positions, species):
             print(f"  The highest atoms in substrate : {[i + 1 for i in top_candidates]}")
             while True:
                 try:
-                    sel = int(input(f"  Select atom in substrate (  1 to {total_atoms:>3}): "))
+                    select = [int(s) for s in input(f"  Select atom in substrate (  1 to {total_atoms:>3}): ").split()]
+                    if len(select) == 1:
+                        index_select = select[0] - 1
+                        if index_select in top_candidates:
+                            highest_substrate = positions[index_select]
+                            break
+                        print('WRONG! No. of atom in substrate')
+                        continue
+                    print("  Invalid input! Range of input must be 1.")
+                    continue
                 except ValueError:
                     print("  Invalid input! Please enter a number.")
                     continue
-                if sel - 1 in top_candidates:
-                    highest_substrate = positions[sel - 1]
-                    break
-                print('WRONG No. of atom in substrate!')
  
     # Adsorbent: find the atom with the minimum z-coordinate
-    adsorbent_index = parse_group(f"\nAdsorbent — input element-symbol and/or atom-indexes ({1:>3} to {total_atoms:>3})\n"
-"(Free-format input, e.g., 1 3 1-4 C H  — 'all' not allowed)", total_atoms, species, allow_all=False)
+    adsorbent_index = select_index(total_atoms, species, f"\nAdsorbent — input element-symbol and/or atom-indexes ({1:>3} to {total_atoms:>3})\n"
+"(Free-format input, e.g., 1 3 1-4 C H  — 'all' not allowed)", False)
  
     if len(adsorbent_index) == 1:
         lowest_adsorbent = positions[adsorbent_index[0]]
@@ -675,13 +748,19 @@ def z_distance(total_atoms, positions, species):
             print(f"  The lowest atoms in adsorbent : {[i + 1 for i in bot_candidates]}")
             while True:
                 try:
-                    sel = int(input(f"  Select atom in adsorbent (  1 to {total_atoms:>3}): "))
+                    select = [int(s) for s in input(f"  Select atom in adsorbent (  1 to {total_atoms:>3}): ").split()]
+                    if len(select) == 1:
+                        index_select = select[0] - 1
+                        if index_select in bot_candidates:
+                            lowest_adsorbent = positions[index_select]
+                            break
+                        print('WRONG! No. of atom in adsorbent')
+                        continue
+                    print("  Invalid input! Range of input must be 1.")
+                    continue
                 except ValueError:
                     print("  Invalid input! Please enter a number.")
                     continue
-                if sel - 1 in bot_candidates:
-                    lowest_adsorbent = positions[sel - 1]; break
-                print('WRONG No. of atom in adsorbent!')
  
     distance = np.abs(lowest_adsorbent[2] - highest_substrate[2])
     print(f"Distance along z-axis is {distance:>12.8f} Angstrom.")
