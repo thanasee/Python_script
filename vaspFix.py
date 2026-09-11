@@ -433,54 +433,6 @@ def min_image_distance(position_i, position_j, image_offsets):
     return np.linalg.norm(diff_offset, axis=1).min()
 
 
-def parse_group(prompt, total_atoms, species, allow_all=True):
-    """Interactively parse a free-format atom selection from the user.
-
-    Accepts a mix of:
-    - Individual atom indexes     : e.g. '1 3 5'
-    - Ranges of atom indexes      : e.g. '1-4'  (inclusive, 1-based)
-    - Element symbols             : e.g. 'Fe C'  (selects all atoms of that species)
-    - Keyword 'all'               : selects all atoms (only if allow_all=True)
-
-    Keeps prompting until a valid, non-empty selection within [1, total_atoms] is given.
-
-    Parameters
-    ----------
-    prompt      : str, message printed before the input prompt
-    total_atoms : int, total number of atoms in the system
-    species     : list of str, element symbol for each atom (length N)
-    allow_all   : bool, whether the keyword 'all' is permitted (default True)
-
-    Returns
-    -------
-    group : list of int, 0-based atom indexes of the selected atoms
-    """
-
-    print(prompt)
-    while True:
-        group = []
-        raw = input().split()
-        valid = True
-        for token in raw:
-            if token == 'all':
-                if not allow_all:
-                    print("  Cannot use 'all' in this method. TRY AGAIN!")
-                    valid = False; break
-                group.extend(range(total_atoms))
-            elif '-' in token:
-                start, end = map(int, token.split('-'))
-                group.extend(range(start - 1, end))
-            elif token.isdigit():
-                group.append(int(token) - 1)
-            else:
-                group.extend([j for j, lbl in enumerate(species) if lbl == token])
-        if not valid:
-            continue
-        if group and all(0 <= idx < total_atoms for idx in group):
-            return group
-        print("  Wrong input atom-indexes! TRY AGAIN!")
-
-
 def refix(total_atoms, selective_dynamics, flags):
     """Initialise Selective Dynamics flags and ask how to proceed when they already exist.
  
@@ -528,32 +480,43 @@ Selective Dynamics already present in input
     return flags, skip
 
 
-def select_index(total_atoms, species):
+def select_index(total_atoms, species, prompt=None, allow_all=True):
     """Prompt the user to select atoms by element symbol and/or atom index.
- 
+    
     Accepts free-format input mixing element symbols (e.g. 'C'), single indexes
     (e.g. '3'), ranges (e.g. '1-4'), and the keyword 'all'. Repeats the prompt
     on invalid input. The selected_atoms list is reset on each retry to prevent
     duplicates accumulating across bad inputs.
- 
+
     Parameters
     ----------
     total_atoms : int       — total number of atoms (used for bounds checking)
     species     : list[str] — per-atom element label (used for symbol selection)
- 
+    prompt      : srt       — message printed before the input prompt
+    allow_all   : bool      — whether the keyword 'all' is permitted (default True)
+
     Returns
     -------
     selected_atoms : list[int] — 0-based indexes of the chosen atoms
     """
-    print(f"""
+
+    if prompt != None:
+        print(prompt)
+    else:
+        print(f"""
 Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
 (Free-format input, e.g., 1 3 1-4 C H all)""")
     while True:
         selected_atoms = []
         input_select = input().split()
- 
+        valid = True
+        
         for select in input_select:
             if 'all' in select:
+                if not allow_all:
+                    print("Cannot use 'all' in this session. TRY AGAIN!")
+                    valid = False
+                    break
                 selected_atoms.extend(range(total_atoms))
                 break
             if select.isnumeric() or '-' in select:
@@ -564,12 +527,15 @@ Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
                     selected_atoms.append(int(select) - 1)
             else:
                 selected_atoms.extend([i for i, label in enumerate(species) if label == select])
- 
+
+        if not valid:
+            continue
+
         if len(selected_atoms) > total_atoms or not all(0 <= idx < total_atoms for idx in selected_atoms):
             print("Wrong input atom-indexes! TRY AGAIN!")
         else:
             break
- 
+
     return selected_atoms
 
 
@@ -591,8 +557,10 @@ def select_radius(lattice_matrix, total_atoms, positions_cartesian, species):
     selected_atoms : list[int] — 0-based indexes of atoms outside the cutoff radius
     """
     
-    targets = parse_group(f"\nChoose reference point\nInput element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})\n"
-                          f"(Free-format input, e.g., 1 3 1-4 C H all)", total_atoms, species, allow_all=True)
+    targets = select_index(total_atoms, species, f"""
+Choose reference point
+Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
+(Free-format input, e.g., 1 3 1-4 C H all)""")
  
     reference_point = np.mean(positions_cartesian[targets], axis=0)
  
