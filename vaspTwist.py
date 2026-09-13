@@ -80,7 +80,7 @@ def get_vdw_radius(element):
  
     Returns
     -------
-    float — van der Waals radius in Angstrom, or 0.6 if not found
+    float — van der Waals radius in Angstrom, or 3.0 if not found
     """
     try:
         idx = _ELEMENT_SYMBOLS.index(element)
@@ -120,7 +120,7 @@ def compute_interlayer_gap(bottom_species, bottom_positions_cartesian,
     bottom_radius = get_vdw_radius(bottom_element)
     top_radius    = get_vdw_radius(top_element)
 
-    interlayer_gap = ( bottom_radius + top_radius ) / 2.
+    interlayer_gap = bottom_radius + top_radius
     return interlayer_gap
 
 
@@ -150,7 +150,6 @@ def read_POSCAR(filepath):
         selective_dynamics  : bool                      — whether Selective Dynamics is present
         flags               : np.ndarray or None        — T/F flags per atom, or None
     """
-
     if not os.path.exists(filepath):
         print(f"ERROR!\nFile: {filepath} does not exist.")
         exit(1)
@@ -158,6 +157,9 @@ def read_POSCAR(filepath):
     with open(filepath, 'r') as poscar:
         lines = poscar.readlines()
 
+    # Parse the scaling factor (line 2):
+    # - 1 value  : uniform scalar; negative means target volume in Å**3
+    # - 3 values : per-axis scale applied row-wise to the lattice matrix
     if len(lines[1].split()) == 1:
         raw_scale = float(lines[1])
         raw_lattice_matrix = np.array([[float(x) for x in line.split()]
@@ -179,42 +181,50 @@ def read_POSCAR(filepath):
         print("ERROR! The scaling factor must be 1 or 3 components.")
         exit(1)
 
-    elements = []
+    # Detect VASP4 vs VASP5 format by checking whether line 6 starts with a number.
+    # VASP4 has no element-symbol line, so the user is prompted for species names.
     is_number = lines[5].split()[0].isdecimal()
     if is_number:
-        for i in range(len(lines[5].split())):
-            while True:
-                name = input(f"Enter the name of species No. {i + 1:>3}: ").strip()
+        # VASP4 format: no element line -> try POTCAR, else prompt user
+        atom_counts = [int(x) for x in lines[5].split()]
+        elements = [None] * len(atom_counts)
+        while None in elements:
+            missing = [i for i, e in enumerate(elements) if e is None]
+            names = input(f"Enter the name of species No. {missing[0] + 1:>3}: ").strip().split()
+            for name, idx in zip(names, missing):
                 if name in _ELEMENT_SYMBOLS:
-                    break
+                    elements[idx] = name
                 else:
                     print("The name of species must be a valid element symbol.")
-            elements.append(name)
         atom_counts = [int(x) for x in lines[5].split()]
         selective_dynamics = lines[6].lower().startswith('s')
         position_start = 8 if selective_dynamics else 7
     else:
-        raw_elements = lines[5].split()
-        for name in raw_elements:
-            elements.append(name.split('/')[0].split('_')[0])
+        # VASP5 format: element symbols present.
+        # Strip potential PAW/GGA suffixes such as '_pv' or '/GGA'.
+        names = lines[5].split()
+        elements = [name.split('/')[0].split('_')[0] for name in names]
         atom_counts = [int(x) for x in lines[6].split()]
         selective_dynamics = lines[7].lower().startswith('s')
         position_start = 9 if selective_dynamics else 8
 
+    # Read atomic positions
     total_atoms = sum(atom_counts)
     position_stop = position_start + total_atoms
-
     positions = np.array([[float(x) for x in lines[i].split()[:3]]
                           for i in range(position_start, position_stop)])
 
+    # Build a per-atom species list (e.g. ['Mo', 'Mo', 'S', 'S', 'S'])
     species = [x for i, x in enumerate(elements)
                for _ in range(atom_counts[i])]
 
+    # Read Selective Dynamics T/F flags if present
     flags = None
     if selective_dynamics:
         flags = np.array([[x for x in lines[i].split()[3:6]]
                           for i in range(position_start, position_stop)])
 
+    # Convert coordinates to both Direct and Cartesian representations
     is_direct = lines[position_start - 1].strip().lower().startswith('d')
     if is_direct:
         positions_direct = positions % 1.0
