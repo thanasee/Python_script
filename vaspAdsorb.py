@@ -105,15 +105,18 @@ def read_POSCAR(filepath):
     if is_number:
         # VASP4 format: no element line -> try POTCAR, else prompt user
         atom_counts = [int(x) for x in lines[5].split()]
-        elements = [None] * len(atom_counts)
-        while None in elements:
-            missing = [i for i, e in enumerate(elements) if e is None]
-            names = input(f"Enter the name of species No. {missing[0] + 1:>3}: ").strip().split()
-            for name, idx in zip(names, missing):
-                if name in _ELEMENT_SYMBOLS:
-                    elements[idx] = name
-                else:
-                    print("The name of species must be a valid element symbol.")
+        potcar_path = os.path.join(os.path.dirname(os.path.abspath(filepath)), "POTCAR")
+        elements = read_POTCAR(potcar_path)
+        if elements is None or len(elements) != len(atom_counts):
+            elements = [None] * len(atom_counts)
+            while None in elements:
+                missing = [i for i, e in enumerate(elements) if e is None]
+                names = input(f"Enter the name of species No. {missing[0] + 1:>3}: ").strip().split()
+                for name, idx in zip(names, missing):
+                    if name in _ELEMENT_SYMBOLS:
+                        elements[idx] = name
+                    else:
+                        print("The name of species must be a valid element symbol.")
         atom_counts = [int(x) for x in lines[5].split()]
         selective_dynamics = lines[6].lower().startswith('s')
         position_start = 8 if selective_dynamics else 7
@@ -161,6 +164,30 @@ def read_POSCAR(filepath):
             "species":             species,
             "selective_dynamics":  selective_dynamics,
             "flags":               flags if selective_dynamics else None}
+
+
+def read_POTCAR(filepath):
+    """Read element symbols from a POTCAR file's TITEL lines.
+
+    Parameters
+    ----------
+    filepath : str
+        Path to the POTCAR file.
+
+    Returns
+    -------
+    elements : list[str] or None
+        Element symbols in POTCAR order (PAW suffixes stripped), or None
+        if the POTCAR file does not exist.
+    """
+    if not os.path.exists(filepath):
+        elements = None
+        return elements
+
+    with open(filepath, 'r') as f:
+        names = [line.split()[3] for line in f if line.strip().startswith('TITEL')]
+    elements = [name.split('/')[0].split('_')[0] for name in names]
+    return elements
 
 
 def direct_to_cartesian(lattice_matrix, positions_direct):
