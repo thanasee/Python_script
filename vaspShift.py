@@ -444,7 +444,7 @@ def unwrap(positions_direct):
     
 
 def get_direction(prompt):
-    """Prompt the user to select a lattice direction (X, Y, or Z).
+    """Prompt the user to select a lattice direction (a, b, or c).
 
     Parameters
     ----------
@@ -452,14 +452,14 @@ def get_direction(prompt):
 
     Returns
     -------
-    idx : int — 0-based axis index (0=X, 1=Y, 2=Z)
+    idx : int — 0-based axis index (0=a, 1=b, 2=c)
     """
     
     print(f"""
 Input the direction index of {prompt} direction (1 to 3):
-1) x direction
-2) y direction
-3) z direction""")
+1) a direction
+2) b direction
+3) c direction""")
     while True:
         try:
             idx = int(input()) - 1
@@ -602,30 +602,29 @@ def shift_bulk(positions_direct):
     np.ndarray (N, 3) — shifted fractional coordinates in [0, 1)
     """
 
-    try:
-        ref_index = int(input(f"Enter the atom index to shift to origin (1 to {len(positions_direct)}): ")) - 1
-        if 0 <= ref_index < len(positions_direct):
-            pass
-        else:
+    while True:
+        try:
+            ref_index = int(input(f"Enter the atom index to shift to origin (1 to {len(positions_direct)}): ")) - 1
+            if 0 <= ref_index < len(positions_direct):
+                break
             print("ERROR! Index out of range. Try again.")
-    except ValueError:
-        print("ERROR! Must enter a number. Try again.")
+        except ValueError:
+            print("ERROR! Must enter a number. Try again.")
 
     ref = np.copy(positions_direct[ref_index])
     delta = positions_direct - ref
     delta -= np.round(delta)
-    unwrapped = ref + delta
-    return (unwrapped - ref) % 1.0
+    return delta % 1.0
 
 
 def shift_special(total_atoms, positions_direct, species):
-    """Shift a selected adsorbate group so its centroid is centered in XY at (0.5, 0.5)
-    while the Z coordinates of all atoms are left unchanged.
+    """Shift a selected adsorbate group so its centroid is centered in ab at (0.5, 0.5)
+    while the c coordinates of all atoms are left unchanged.
 
     Intended for adsorption systems (2D sheet + adsorbate) where the vacuum
-    direction is always Z. The user selects the adsorbate atoms by index,
+    direction is always c. The user selects the adsorbate atoms by index,
     range, element symbol, or the keyword 'all'. The entire system is then
-    shifted rigidly in XY based on the adsorbate centroid only.
+    shifted rigidly in ab based on the adsorbate centroid only.
 
     Parameters
     ----------
@@ -666,7 +665,7 @@ def shift(total_atoms, positions_direct, species):
     1 — 1D wire      : extend direction → origin, transverse → center
     2 — 2D sheet     : vacuum direction → center, periodic → origin
     3 — 3D bulk      : selected atom shifted to origin
-    4 — Special      : adsorbate XY centered at 0.5, Z unchanged
+    4 — Special      : adsorbate ab centered at 0.5, c unchanged
 
     Parameters
     ----------
@@ -685,7 +684,7 @@ Choices of type of material
   1) 1D (wire)       -> origin in extend direction, center in other
   2) 2D (sheet)      -> origin in periodic, center in vacuum
   3) 3D (bulk)       -> shift all atoms to origin
-  4) Special!        -> adsorbate XY center, Z free""")
+  4) Special!        -> adsorbate ab center, c free""")
 
     dispatch = {
         '0': lambda: shift_molecule(positions_direct),
