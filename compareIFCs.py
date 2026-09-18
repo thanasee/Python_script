@@ -19,13 +19,6 @@ This script was developed by Thanasee Thanasarnsurapong.
     exit(0)
 
 
-def validate_file(filepath):
-    """Check if the given file path exists. Exit with error if not found."""
-    if not os.path.exists(filepath):
-        print(f"ERROR!\nFile: {filepath} does not exist.")
-        exit(1)
-
-
 def read_ifc_from_hdf5(filepath):
     """
     Read IFCs from a Phono3py HDF5 output file.
@@ -44,6 +37,11 @@ def read_ifc_from_hdf5(filepath):
     dict
         Dictionary with key 'fc2' and/or 'fc3' mapping to numpy arrays.
     """
+
+    if not os.path.exists(filepath):
+        print(f"ERROR!\nFile: {filepath} does not exist.")
+        exit(1)
+
     data = {}
     with h5.File(filepath, 'r') as f:
         if 'force_constants' in f:
@@ -182,9 +180,7 @@ def main():
         usage()
 
     dft_file  = argv[1]
-    validate_file(dft_file)
     mlff_file = argv[2]
-    validate_file(mlff_file)
 
     dft_data  = read_ifc_from_hdf5(dft_file)
     mlff_data = read_ifc_from_hdf5(mlff_file)
