@@ -403,6 +403,22 @@ All modes first unwrap atoms across periodic boundaries to compute a geometrical
 - **Mode 4 — Adsorbate:** selected adsorbate group centered in XY at (0.5, 0.5); z-coordinates of all atoms left unchanged. Adsorbate selection supports free-format input (index, range, element symbol, `all`)
 
 ---
+ 
+#### `vaspVacuum.py`
+ 
+Adds vacuum space to, or rebuilds it in, a VASP POSCAR along a chosen lattice direction (a, b, or c) — for adjusting the vacuum gap in slab or 2D-material cells.
+ 
+```
+Usage: vaspVacuum.py <POSCAR> <output POSCAR>
+```
+ 
+- **Mode 1 — Add vacuum:** Grows the chosen lattice vector's length by an entered thickness (Å), preserving its direction; the other two vectors are unchanged. Vacuum is added on top of whatever already exists.
+ 
+- **Mode 2 — Rebuild vacuum:** Resets the total vacuum along the chosen direction to an entered thickness, discarding whatever vacuum already exists — the vector is resized to (slab thickness + entered vacuum).
+ 
+**Output:** One VASP5-format POSCAR with Direct coordinates.
+ 
+---
 
 #### `vaspMirror.py`
 
