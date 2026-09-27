@@ -743,10 +743,10 @@ def z_distance(total_atoms, positions, species):
         if len(top_candidates) == 1:
             highest_substrate = positions[top_candidates[0]]
         else:
-            print(f"  The highest atoms in substrate : {[i + 1 for i in top_candidates]}")
+            print(f"The highest atoms in substrate : {[i + 1 for i in top_candidates]}")
             while True:
                 try:
-                    select = [int(s) for s in input(f"  Select atom in substrate (  1 to {total_atoms:>3}): ").split()]
+                    select = [int(s) for s in input(f"Select atom in substrate (  1 to {total_atoms:>3}): ").split()]
                     if len(select) == 1:
                         index_select = select[0] - 1
                         if index_select in top_candidates:
@@ -772,10 +772,10 @@ def z_distance(total_atoms, positions, species):
         if len(bot_candidates) == 1:
             lowest_adsorbent = positions[bot_candidates[0]]
         else:
-            print(f"  The lowest atoms in adsorbent : {[i + 1 for i in bot_candidates]}")
+            print(f"The lowest atoms in adsorbent : {[i + 1 for i in bot_candidates]}")
             while True:
                 try:
-                    select = [int(s) for s in input(f"  Select atom in adsorbent (  1 to {total_atoms:>3}): ").split()]
+                    select = [int(s) for s in input(f"Select atom in adsorbent (  1 to {total_atoms:>3}): ").split()]
                     if len(select) == 1:
                         index_select = select[0] - 1
                         if index_select in bot_candidates:
