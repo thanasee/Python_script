@@ -437,40 +437,74 @@ def write_POSCAR(filepath, lattice_matrix, elements, atom_counts, positions_cart
             o.write(f"   {labels[i]:>6s}\n")
 
 
-def selection_atoms(prompt, total_atoms, species):
-    """Parse free-format atom selection input and return a list of 0-based indexes.
-
-    Accepts element symbols, integer indexes, hyphen-separated ranges, and 'all'.
-    Loops until a valid, non-empty selection within bounds is entered.
+def select_index(total_atoms, species, prompt=None, allow_all=True):
+    """Prompt the user to select atoms by element symbol and/or atom index.
+    
+    Accepts free-format input mixing element symbols (e.g. 'C'), single indexes
+    (e.g. '3'), ranges (e.g. '1-4'), and the keyword 'all'. Repeats the prompt
+    on invalid input. The selected_atoms list is reset on each retry to prevent
+    duplicates accumulating across bad inputs.
 
     Parameters
     ----------
-    prompt      : str       — message printed before the input prompt
-    total_atoms : int       — upper bound (exclusive) for valid atom indexes
-    species     : list[str] — per-atom element labels for symbol-based selection
+    total_atoms : int       — total number of atoms (used for bounds checking)
+    species     : list[str] — per-atom element label (used for symbol selection)
+    prompt      : srt       — message printed before the input prompt
+    allow_all   : bool      — whether the keyword 'all' is permitted (default True)
 
     Returns
     -------
-    selected : list[int] — 0-based atom indexes
+    selected_atoms : list[int] — 0-based indexes of the chosen atoms
     """
 
-    print(prompt)
+    if prompt != None:
+        print(prompt)
+    else:
+        print(f"""
+Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
+(Free-format input, e.g., 1 3 1-4 C H all)""")
     while True:
-        selected = []
-        for token in input().split():
-            if token == 'all':
-                selected.extend(range(total_atoms))
+        selected_atoms = []
+        input_select = input().split()
+        valid = True
+        
+        for select in input_select:
+            if 'all' in select:
+                if not allow_all:
+                    print("Cannot use 'all' in this session. TRY AGAIN!")
+                    valid = False
+                    break
+                selected_atoms.extend(range(total_atoms))
                 break
-            elif '-' in token and not token.lstrip('-').isdigit():
-                start, end = map(int, token.split('-'))
-                selected.extend(range(start - 1, end))
-            elif token.isnumeric():
-                selected.append(int(token) - 1)
+            if select.isnumeric() or '-' in select:
+                if '-' in select:
+                    start, end = map(int, select.split('-'))
+                    if start < end:
+                        selected_atoms.extend(range(start - 1, end))
+                    else:
+                        selected_atoms.extend(range(end - 1, start))
+                else:
+                    selected_atoms.append(int(select) - 1)
             else:
-                selected.extend(i for i, s in enumerate(species) if s == token)
-        if selected and all(0 <= idx < total_atoms for idx in selected):
-            return selected
-        print("Wrong input atom-indexes! TRY AGAIN!")
+                if select not in species:
+                    print(f"  '{select}' is not a species in this structure. TRY AGAIN!")
+                    valid = False
+                    break
+                if select not in _ELEMENT_SYMBOLS:
+                    print(f"  '{select}' is not a valid element name. TRY AGAIN!")
+                    valid = False
+                    break
+                selected_atoms.extend([i for i, label in enumerate(species) if label == select])
+
+        if not valid:
+            continue
+
+        if len(selected_atoms) > total_atoms or not all(0 <= idx < total_atoms for idx in selected_atoms):
+            print("Wrong input atom-indexes! TRY AGAIN!")
+        else:
+            break
+
+    return selected_atoms
 
 
 def unwrap(positions_direct):
@@ -717,7 +751,7 @@ Choices of positioning adsorbent for adsorbent {n+1:>2}
                 prompt = (f"\nInput element-symbol and/or atom-indexes to choose "
                           f"({1:>3} to {total_atoms_substrate:>3})\n"
                           f"(Free-format input, e.g., 1 3 1-4 C H all)")
-                selected_atoms = selection_atoms(prompt, total_atoms_substrate, species_substrate)
+                selected_atoms = select_index(total_atoms_substrate, species_substrate, prompt)
                 selected_positions_direct = cartesian_to_direct(lattice_matrix_substrate,
                                                                 positions_substrate[selected_atoms])
                 _, selected_positions_unwrapped = unwrap(selected_positions_direct)
@@ -840,7 +874,7 @@ Choices of define initial adsorption site of target {t+1:>2}
                 prompt = (f"\nInput element-symbol and/or atom-indexes to choose "
                           f"({1:>3} to {total_atoms_substrate:>3})\n"
                           f"(Free-format input, e.g., 1 3 1-4 C H all)")
-                selected_atoms = selection_atoms(prompt, total_atoms_substrate, species_substrate)
+                selected_atoms = select_index(total_atoms_substrate, species_substrate, prompt)
                 selected_positions_direct = cartesian_to_direct(lattice_matrix_substrate,
                                                                 positions_substrate[selected_atoms])
                 _, selected_positions_unwrapped = unwrap(selected_positions_direct)
@@ -1030,7 +1064,7 @@ Method of positioning adsorbent
                               f"(  1 to {total_atoms:>3})\n"
                               f"(Free-format input, e.g., 1 3 1-4 C H all)")
                 species = substrate["species"] + adsorbent["species"] * number_adsorbent
-                fixed_atoms = selection_atoms(fix_prompt, total_atoms, species)
+                fixed_atoms = select_index(total_atoms, species, fix_prompt)
                 fix_coordinates = select_direction()
                 for atom in fixed_atoms:
                     for direction in fix_coordinates:
