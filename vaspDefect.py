@@ -452,10 +452,21 @@ Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
             if select.isnumeric() or '-' in select:
                 if '-' in select:
                     start, end = map(int, select.split('-'))
-                    selected_atoms.extend(range(start - 1, end))
+                    if start < end:
+                        selected_atoms.extend(range(start - 1, end))
+                    else:
+                        selected_atoms.extend(range(end - 1, start))
                 else:
                     selected_atoms.append(int(select) - 1)
             else:
+                if select not in species:
+                    print(f"  '{select}' is not a species in this structure. TRY AGAIN!")
+                    valid = False
+                    break
+                if select not in _ELEMENT_SYMBOLS:
+                    print(f"  '{select}' is not a valid element name. TRY AGAIN!")
+                    valid = False
+                    break
                 selected_atoms.extend([i for i, label in enumerate(species) if label == select])
 
         if not valid:
