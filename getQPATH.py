@@ -76,7 +76,7 @@ def read_band_dat(filepath):
         raise ValueError("No frequency data found in input file (2nd column).")
  
     # Round outward to the nearest multiple of 5 so the last digit is 0 or 5
-    fmin = 5 * np.floor(min(freqs) / 5)
+    fmin = min(5 * np.floor(min(freqs) / 5), -5)
     fmax = 5 * np.ceil(max(freqs) / 5)
  
     return q_points, fmin, fmax
