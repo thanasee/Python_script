@@ -564,39 +564,39 @@ def compute_mechanical_properties_3d(elastic_3d, structure):
     total_atoms = len(structure)
 
     # VRH averages
-    bulk_voigt    = (C11 + C22 + C33 + 2 * (C12 + C23 + C13)) / 9
-    shear_voigt   = (C11 + C22 + C33 - C12 - C23 - C13 + 3 * (C44 + C55 + C66)) / 15
-    bulk_reuss    = 1 / (S11 + S22 + S33 + 2 * (S12 + S23 + S13))
-    shear_reuss   = 15 / (4 * (S11 + S22 + S33 - S12 - S23 - S13) + 3 * (S44 + S55 + S66))
-    bulk_modulus  = (bulk_voigt + bulk_reuss) / 2
-    shear_modulus = (shear_voigt + shear_reuss) / 2
+    bulk_voigt    = (C11 + C22 + C33 + 2. * (C12 + C23 + C13)) / 9
+    shear_voigt   = (C11 + C22 + C33 - C12 - C23 - C13 + 3. * (C44 + C55 + C66)) / 15
+    bulk_reuss    = 1. / (S11 + S22 + S33 + 2. * (S12 + S23 + S13))
+    shear_reuss   = 15. / (4. * (S11 + S22 + S33 - S12 - S23 - S13) + 3. * (S44 + S55 + S66))
+    bulk_modulus  = (bulk_voigt + bulk_reuss) * 0.5
+    shear_modulus = (shear_voigt + shear_reuss) * 0.5
 
-    young_modulus  = (9 * bulk_modulus * shear_modulus) / (3 * bulk_modulus + shear_modulus)
+    young_modulus  = (9. * bulk_modulus * shear_modulus) / (3. * bulk_modulus + shear_modulus)
     pugh_ratio     = bulk_modulus / shear_modulus
-    poisson_ratio  = (3 * bulk_modulus - 2 * shear_modulus) / (2 * (3 * bulk_modulus + shear_modulus))
-    pwave_modulus  = bulk_modulus + 4 * shear_modulus / 3
-    lame_parameter = bulk_modulus - 2 * shear_modulus / 3
+    poisson_ratio  = (3. * bulk_modulus - 2. * shear_modulus) / (2. * (3. * bulk_modulus + shear_modulus))
+    pwave_modulus  = bulk_modulus + 4. * shear_modulus / 3.
+    lame_parameter = bulk_modulus - 2. * shear_modulus / 3.
 
     # Anisotropy indices
     universal_anisotropy = 5 * (shear_voigt / shear_reuss) + (bulk_voigt / bulk_reuss) - 6
     bulk_anisotropy      = (bulk_voigt - bulk_reuss) / (bulk_voigt + bulk_reuss)
     shear_anisotropy     = (shear_voigt - shear_reuss) / (shear_voigt + shear_reuss)
-    anisotropy_1 = 4 * C44 / (C11 + C33 - 2 * C13)
-    anisotropy_2 = 4 * C55 / (C22 + C33 - 2 * C23)
-    anisotropy_3 = 4 * C66 / (C11 + C22 - 2 * C12)
+    anisotropy_1 = 4. * C44 / (C11 + C33 - 2. * C13)
+    anisotropy_2 = 4. * C55 / (C22 + C33 - 2. * C23)
+    anisotropy_3 = 4. * C66 / (C11 + C22 - 2. * C12)
 
     # Unit conversions
     unit_modulus = 1e9            # GPa to Pa
     unit_mass    = 1e-3 / Avogadro  # amu to kg
-    unit_volume  = (1e-10)**3     # Angstrom^3 to m^3
+    unit_volume  = (1e-10)**3.     # Angstrom^3 to m^3
     unit_density = unit_mass / unit_volume  # kg / m^3
 
     # Sound velocities
     v_t = np.sqrt((shear_modulus * unit_modulus) / (density * unit_density))                               # m/s
-    v_l = np.sqrt(((3 * bulk_modulus + 4 * shear_modulus) * unit_modulus) / (3 * density * unit_density))  # m/s
-    v_m = np.cbrt(((2 / v_t**3) + (1 / v_l**3)) / 3) ** -1                                                # m/s
+    v_l = np.sqrt(((3. * bulk_modulus + 4. * shear_modulus) * unit_modulus) / (3. * density * unit_density))  # m/s
+    v_m = np.cbrt(((2. / v_t**3) + (1. / v_l**3)) / 3.) ** -1.                                            # m/s
 
-    debye_temperature = (h / k) * np.cbrt((3 * total_atoms) / (4 * np.pi * volume * unit_volume)) * v_m   # K
+    debye_temperature = (h / k) * np.cbrt((3. * total_atoms) / (4. * np.pi * volume * unit_volume)) * v_m   # K
 
     return {
         'bulk_voigt': bulk_voigt, 'bulk_reuss': bulk_reuss,
