@@ -82,7 +82,7 @@ def read_elastic_tensor(outcar_file):
 
     moduli_lines = outcar_lines[moduli_index + 3:moduli_index + 9]
     elastic_vasp = np.array([[float(x) for x in line.split()[1:]]
-                             for line in moduli_lines]) / 10  # Convert unit kBar to GPa
+                             for line in moduli_lines]) * 0.1  # Convert unit kBar to GPa
 
     # Reorder from VASP convention (xx,yy,zz,xy,yz,xz) to Voigt notation (1,2,3,4,5,6)
     elastic_coef = elastic_vasp[:, [0, 1, 2, 4, 5, 3]][[0, 1, 2, 4, 5, 3], :]
@@ -143,7 +143,7 @@ def compute_elastic_2d(structure, elastic_coef):
     C16, C26 : float
         Off-diagonal elastic constants (N/m); zero for non-oblique lattices.
     factor_2d : float
-        Out-of-plane thickness in nm, used for GPa*Angstrom to N/m conversion.
+        Out-of-plane thickness in nm, used for GPa*nm to N/m conversion.
     """
 
     vector_a = structure.cell[0]
@@ -152,9 +152,9 @@ def compute_elastic_2d(structure, elastic_coef):
 
     area_vector = np.cross(vector_a, vector_b)
     vector_n    = area_vector / np.linalg.norm(area_vector)
-    factor_2d   = np.abs(vector_c @ vector_n) / 10  # Angstrom to nm (for GPa*nm = N/m conversion)
+    factor_2d   = np.abs(vector_c @ vector_n) * 0.1  # Angstrom to nm
 
-    elastic_2d = elastic_coef[np.ix_([0, 1, 5], [0, 1, 5])] * factor_2d  # Convert unit GPa*Angstrom to N/m
+    elastic_2d = elastic_coef[np.ix_([0, 1, 5], [0, 1, 5])] * factor_2d  # Convert unit GPa*nm to N/m
 
     lattice_type = get_2d_lattice_type(structure)
     print(f"This material is {lattice_type}.")
@@ -268,21 +268,21 @@ def compute_directional_properties_2d(elastic_2d):
     S26 = compliance_2d[1, 2]
 
     # Calculate Young's modulus, Poisson's ratio, and shear modulus from Sij
-    A = (S11 * cos**4 + S22 * sin**4
-         + (2 * S12 + S66) * cos**2 * sin**2
-         + 2 * S16 * cos**3 * sin
-         + 2 * S26 * cos * sin**3)
-    young_modulus = 1 / A
+    A = (S11 * cos**4. + S22 * sin**4.
+         + (2. * S12 + S66) * cos**2. * sin**2.
+         + 2. * S16 * cos**3. * sin
+         + 2. * S26 * cos * sin**3.)
+    young_modulus = 1. / A
 
-    B = ((S11 + S22 - S66) * cos**2 * sin**2
-         + S12 * (cos**4 + sin**4)
-         + (S26 - S16) * (cos**3 * sin - cos * sin**3))
-    poisson_ratio = -B / A
+    B = ((S11 + S22 - S66) * cos**2. * sin**2.
+         + S12 * (cos**4. + sin**4.)
+         + (S26 - S16) * (cos**3. * sin - cos * sin**3.))
+    poisson_ratio = -1. * B / A
 
-    C = (4 * (S11 + S22 - 2 * S12) * cos**2 * sin**2
-         + S66 * (cos**2 - sin**2)**2
-         + 4 * (S16 - S26) * (cos**3 * sin - cos * sin**3))
-    shear_modulus = 1 / C
+    C = (4. * (S11 + S22 - 2. * S12) * cos**2. * sin**2.
+         + S66 * (cos**2. - sin**2.)**2.
+         + 4. * (S16 - S26) * (cos**3. * sin - cos * sin**3.))
+    shear_modulus = 1. / C
 
     max_min = {
         "max_young":         np.max(young_modulus),
