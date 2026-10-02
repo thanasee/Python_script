@@ -779,7 +779,7 @@ def compute_mechanical_properties(elastic_tensor):
         shear_modulus : np.ndarray (M,) — G(θ) in N/m
     """
 
-    degrees = np.arange(0, 360.0, 0.1)
+    degrees = np.arange(0.0, 360.0, 0.1)
     radians = np.deg2rad(degrees)
     sin = np.sin(radians)
     cos = np.cos(radians)
