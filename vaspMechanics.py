@@ -253,7 +253,7 @@ def compute_directional_properties_2d(elastic_2d):
         corresponding angles (degrees).
     """
 
-    degrees = np.arange(0, 360.0, 0.1)
+    degrees = np.arange(0.0, 360.0, 0.1)
     radians = np.radians(degrees)
     sin = np.sin(radians)
     cos = np.cos(radians)
