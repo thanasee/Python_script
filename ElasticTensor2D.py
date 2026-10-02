@@ -504,16 +504,16 @@ def build_strain_matrix(strain_type, strain):
     np.ndarray, shape (3, 3) — the strain tensor ε
     """
 
-    d = strain
-    h = strain / 2
+    epsilon = strain
+    delta = strain * 0.5
 
     strain_matrices = {
-        'C11':          np.array([[d, 0, 0], [0, 0, 0], [0, 0, 0]], dtype=float),
-        'C22':          np.array([[0, 0, 0], [0, d, 0], [0, 0, 0]], dtype=float),
-        'C11_C22_2C12': np.array([[d, 0, 0], [0, d, 0], [0, 0, 0]], dtype=float),
-        'C66':          np.array([[0, h, 0], [h, 0, 0], [0, 0, 0]], dtype=float),
-        'C11_C66_2C16': np.array([[d, h, 0], [h, 0, 0], [0, 0, 0]], dtype=float),
-        'C22_C66_2C26': np.array([[0, h, 0], [h, d, 0], [0, 0, 0]], dtype=float),
+        'C11':          np.array([[epsilon, 0, 0], [0, 0, 0], [0, 0, 0]], dtype=float),
+        'C22':          np.array([[0, 0, 0], [0, epsilon, 0], [0, 0, 0]], dtype=float),
+        'C11_C22_2C12': np.array([[epsilon, 0, 0], [0, epsilon, 0], [0, 0, 0]], dtype=float),
+        'C66':          np.array([[0, delta, 0], [delta, 0, 0], [0, 0, 0]], dtype=float),
+        'C11_C66_2C16': np.array([[epsilon, delta, 0], [delta, 0, 0], [0, 0, 0]], dtype=float),
+        'C22_C66_2C26': np.array([[0, delta, 0], [delta, epsilon, 0], [0, 0, 0]], dtype=float),
     }
 
     return strain_matrices[strain_type]
@@ -700,7 +700,7 @@ def obtain_elastic_tensor(constants, crystal_system):
     np.ndarray (3, 3) or None — elastic tensor in N/m, or None if any constant is missing
     """
 
-    missing = [k for k, v in constants.items() if v is None]
+    missing = [key for key, value in constants.items() if value is None]
     if missing:
         for key in missing:
             print(f"ERROR! {key} is not calculated.")
@@ -709,13 +709,13 @@ def obtain_elastic_tensor(constants, crystal_system):
     C11 = constants['C11']
     C22 = constants['C22']
     C66 = constants['C66']
-    C12 = (constants['C11_C22_2C12'] - C11 - C22) / 2
+    C12 = (constants['C11_C22_2C12'] - C11 - C22) * 0.5
     C16 = 0.
     C26 = 0.
 
     if crystal_system == 'oblique':
-        C16 = (constants['C11_C66_2C16'] - C11 - C66) / 2
-        C26 = (constants['C22_C66_2C26'] - C22 - C66) / 2
+        C16 = (constants['C11_C66_2C16'] - C11 - C66) * 0.5
+        C26 = (constants['C22_C66_2C26'] - C22 - C66) * 0.5
 
     elastic_tensor = np.array([[C11, C12, C16],
                                [C12, C22, C26],
@@ -746,7 +746,7 @@ def check_stability(elastic_tensor, lattice_matrix, area_vector, area):
     """
 
     vector_n  = area_vector / area
-    factor_2d = np.abs(lattice_matrix[2] @ vector_n) / 10
+    factor_2d = np.abs(lattice_matrix[2] @ vector_n) * 0.1  # Angstrom to nm
 
     return np.all(np.linalg.eigvalsh(elastic_tensor) > 1e-5 * factor_2d)
 
@@ -792,20 +792,20 @@ def compute_mechanical_properties(elastic_tensor):
     S16 = compliance_tensor[0, 2]
     S26 = compliance_tensor[1, 2]
 
-    A = (S11 * cos**4 + S22 * sin**4
-         + (2 * S12 + S66) * cos**2 * sin**2
-         + 2 * S16 * cos**3 * sin
-         + 2 * S26 * cos * sin**3)
-    B = ((S11 + S22 - S66) * cos**2 * sin**2
-         + S12 * (cos**4 + sin**4)
-         + (S26 - S16) * (cos**3 * sin - cos * sin**3))
-    C = (4 * (S11 + S22 - 2 * S12) * cos**2 * sin**2
-         + S66 * (cos**2 - sin**2)**2
-         + 4 * (S16 - S26) * (cos**3 * sin - cos * sin**3))
+    A = (S11 * cos**4. + S22 * sin**4.
+         + (2. * S12 + S66) * cos**2. * sin**2.
+         + 2. * S16 * cos**3. * sin
+         + 2. * S26 * cos * sin**3.)
+    B = ((S11 + S22 - S66) * cos**2. * sin**2.
+         + S12 * (cos**4. + sin**4.)
+         + (S26 - S16) * (cos**3. * sin - cos * sin**3.))
+    C = (4. * (S11 + S22 - 2. * S12) * cos**2. * sin**2.
+         + S66 * (cos**2. - sin**2.)**2.
+         + 4. * (S16 - S26) * (cos**3. * sin - cos * sin**3.))
 
-    young_modulus = 1 / A
-    poisson_ratio = -B / A
-    shear_modulus = 1 / C
+    young_modulus = 1. / A
+    poisson_ratio = -1. * B / A
+    shear_modulus = 1. / C
 
     return {"degrees":       degrees,
             "young_modulus": young_modulus,
