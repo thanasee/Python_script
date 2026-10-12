@@ -123,7 +123,6 @@ def read_POSCAR(filepath):
                         elements[idx] = name
                     else:
                         print("The name of species must be a valid element symbol.")
-        atom_counts = [int(x) for x in lines[5].split()]
         selective_dynamics = lines[6].lower().startswith('s')
         position_start = 8 if selective_dynamics else 7
     else:
@@ -623,7 +622,7 @@ def fitting_strain_energy(strain_type, strain_range, strain_energy, area):
         o.write(f"# Strain vs Energy per area — {strain_type}\n")
         o.write("# Strain    U(eV/Å²)\n")
         for s, u in zip(strain_range, energy_per_area):
-            o.write(f"  {s:>+6.2f}   {u:>14.6f}\n")
+            o.write(f"  {s:>+6.3f}   {u:>14.6f}\n")
 
     coef, _ = curve_fit(quadratic, strain_range, energy_per_area)
     constant = 2 * coef[0] * eVpA2_to_Npm
@@ -659,7 +658,7 @@ def collect_fitting_coef(strain_types, strain_range, area):
         all_converged = True
 
         for strain in strain_range:
-            strain_path = os.path.join(strain_type, f"strain{strain:+.2f}")
+            strain_path = os.path.join(strain_type, f"strain{strain:+.3f}")
             outcar = os.path.join(strain_path, 'OUTCAR')
             energy, converged = read_OUTCAR(outcar)
             strain_energy.append(energy)
@@ -801,7 +800,7 @@ def compute_mechanical_properties(elastic_tensor):
          + (S26 - S16) * (cos**3. * sin - cos * sin**3.))
     C = (4. * (S11 + S22 - 2. * S12) * cos**2. * sin**2.
          + S66 * (cos**2. - sin**2.)**2.
-         + 4. * (S16 - S26) * (cos**3. * sin - cos * sin**3.))
+         + 4. * (S26 - S16) * (cos**3. * sin - cos * sin**3.))
 
     young_modulus = 1. / A
     poisson_ratio = -1. * B / A
@@ -912,18 +911,18 @@ def mode_pre(filepath):
     unstrain_path = 'unstrain'
     os.makedirs(unstrain_path, exist_ok=True)
     write_POSCAR(os.path.join(unstrain_path, 'POSCAR'), poscar["lattice_matrix"], mapping["elements"], mapping["atom_counts"],
-                 poscar["positions_cartesian"], poscar["positions_direct"], mapping["selective_dynamics"],
+                 mapping["positions_cartesian"], mapping["positions_direct"], poscar["selective_dynamics"],
                  mapping["flags"], labels)
 
     # Write strained structures
     for strain_type in strain_types:
         for strain in STRAIN_RANGE:
-            strain_path = os.path.join(strain_type, f"strain{strain:+.2f}")
+            strain_path = os.path.join(strain_type, f"strain{strain:+.3f}")
             os.makedirs(strain_path, exist_ok=True)
             strain_matrix = build_strain_matrix(strain_type, strain)
             new_lattice_matrix = applying_strain(poscar["lattice_matrix"], strain_matrix)
             write_POSCAR(os.path.join(strain_path, 'POSCAR'), new_lattice_matrix, mapping["elements"], mapping["atom_counts"],
-                         mapping["positions_cartesian"], mapping["positions_direct"], mapping["selective_dynamics"],
+                         mapping["positions_cartesian"], mapping["positions_direct"], poscar["selective_dynamics"],
                          mapping["flags"], labels)
 
     print(f"Done. Strained POSCARs written for {len(strain_types)} strain types "
