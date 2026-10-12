@@ -419,65 +419,94 @@ def write_POSCAR(filepath, lattice_matrix, elements, atom_counts, positions_cart
             o.write(f"   {labels[i]:>6s}\n")
 
 
-def input_expansion():
-    """Prompt the user to enter a supercell expansion matrix and validate it.
+def build_expansion():
+    """Read the supercell expansion matrix from TRANSMAT.in, or prompt for it.
 
-    Accepts either 3 components (diagonal) or 9 components (full 3×3 matrix).
-    Validates that the determinant is a positive integer, which is required for
-    the expansion matrix to define a valid supercell.
+    TRANSMAT.in (if present): first line skipped, then 3 rows of 3 integers.
+    Prompt: 3 components (diagonal) or 9 components (full 3×3 matrix).
+    The determinant must be a positive integer; otherwise, or if TRANSMAT.in
+    is invalid, the user is prompted again. A prompted matrix is written to TRANSMAT.
 
     Returns
     -------
     expansion_matrix : np.ndarray, shape (3, 3) — integer expansion matrix
-    det_int          : int                       — determinant (number of unit-cell replicas)
+    replicas         : int                       — number of unit-cell replicas (= det of expansion_matrix)
     """
-    
+
     text = """
 Expansion matrix components:
-  3 components  ->  S_xx S_yy S_zz  (diagonal)
-  9 components  ->  S_xx S_xy S_xz  S_yx S_yy S_yz  S_zx S_zy S_zz  (full 3×3)
+ 3 components  ->  S_xx S_yy S_zz  (diagonal)
+ 9 components  ->  S_xx S_xy S_xz  S_yx S_yy S_yz  S_zx S_zy S_zz  (full 3×3)
 Enter expansion matrix (separate by space):"""
-    print(text)
+
+    expansion_matrix = None
+    detect = os.path.exists("TRANSMAT.in")
+
+    if detect:
+        with open("TRANSMAT.in", 'r') as f:
+            initial_expansion = [line.split() for line in f.readlines()[1:] if line.strip()]
+        if len(initial_expansion) != 3 or any(len(row) != 3 for row in initial_expansion):
+            print("Invalid TRANSMAT.in: must contain 9 components (3 per row).")
+        else:
+            try:
+                expansion_matrix = np.array([[int(x) for x in row] for row in initial_expansion])
+            except ValueError:
+                print("Invalid TRANSMAT.in: components must be integer numbers.")
+
+    prompted = False
 
     while True:
-        expansion = input()
-        try:
-            values = np.array(list(map(int, expansion.split())))
+        if expansion_matrix is None:
+            if not prompted:
+                print(text)
+                prompted = True
+            detect = False
+            try:
+                values = np.array(list(map(int, input().split())))
+            except ValueError:
+                print("Invalid input. Please enter integer numbers separated by spaces.")
+                continue
             if len(values) == 3:
                 expansion_matrix = np.diag(values)
             elif len(values) == 9:
                 expansion_matrix = values.reshape(3, 3)
             else:
-                print("Input must be 3 or 9 compenents!")
+                print("Input must be 3 or 9 components!")
                 continue
-        except ValueError:
-            print("Invalid input. Please enter integer numbers separated by spaces.")
-            continue
+
         det = np.linalg.det(expansion_matrix)
-        det_int = int(round(det))
-        if det > 1e-10 and abs(det - det_int) < 1e-6 and det_int > 0:
+        replicas = int(round(det))
+        if det > 1e-10 and abs(det - replicas) < 1e-6 and replicas > 0:
             break
         elif det <= 1e-10:
             print("Invalid expansion matrix: determinant must be a positive integer.")
         else:
-            print("Invalid expansion matrix: determinant is not an integer. "
-"Please enter integer components that yield a positive integer determinant.")
-    
-    return expansion_matrix, det_int
+            print("""Invalid expansion matrix: determinant is not an integer.
+Please enter integer components that yield a positive integer determinant.""")
+        expansion_matrix = None
+
+    if detect:
+        print("\nExpansion matrix read from: TRANSMAT.in")
+    else:
+        with open("TRANSMAT", 'w') as f:
+            f.write("# Supercell expansion matrix\n")
+            for row in expansion_matrix:
+                f.write(f" {row[0]:>6d} {row[1]:>6d} {row[2]:>6d}\n")
+
+    return expansion_matrix, replicas
 
 
-def build_supercell(expansion_matrix, replicas, lattice_matrix, atom_counts, total_atoms,
-                    positions_cartesian, species, selective_dynamics, flags):
+def build_supercell(lattice_matrix, atom_counts, total_atoms, positions_cartesian,
+                    species, selective_dynamics, flags):
     """Construct a supercell from a unit cell using an integer expansion matrix.
 
-    Generates the supercell lattice, enumerates all valid unit-cell translation
-    vectors inside the supercell via an integer adjugate filter, and replicates
-    all atomic positions, species, and Selective Dynamics flags accordingly.
+    Obtains the expansion matrix via build_expansion(), generates the supercell
+    lattice, enumerates all valid unit-cell translation vectors inside the
+    supercell via an integer adjugate filter, and replicates all atomic positions,
+    species, and Selective Dynamics flags accordingly.
 
     Parameters
     ----------
-    expansion_matrix    : np.ndarray, shape (3, 3) — integer supercell expansion matrix
-    replicas            : int                       — number of unit-cell replicas (= det of expansion_matrix)
     lattice_matrix      : np.ndarray, shape (3, 3)  — unit-cell lattice vectors in Å
     atom_counts         : list[int]                 — atoms per element in the unit cell
     total_atoms         : int                       — total atoms in the unit cell
@@ -496,7 +525,10 @@ def build_supercell(expansion_matrix, replicas, lattice_matrix, atom_counts, tot
         positions_cartesian : np.ndarray, shape (N·R, 3)    — supercell Cartesian coordinates in Å
         species             : list[str]                     — per-atom element label in the supercell
         flags               : np.ndarray or None            — replicated T/F flags, or None
+        replicas            : int                           — number of unit-cell replicas in the supercell
     """
+
+    expansion_matrix, replicas = build_expansion()
     
     # Expansion of lattice matrix
     new_lattice_matrix = expansion_matrix @ lattice_matrix
@@ -550,7 +582,8 @@ def build_supercell(expansion_matrix, replicas, lattice_matrix, atom_counts, tot
             "positions_direct": new_positions_direct,
             "positions_cartesian": new_positions_cartesian,
             "species": new_species,
-            "flags": new_flags if selective_dynamics else None}
+            "flags": new_flags if selective_dynamics else None,
+            "replicas": replicas}
 
 
 def main():
@@ -559,9 +592,8 @@ def main():
         usage()
     
     unitcell = read_POSCAR(argv[1])
-    expansion_matrix, replicas = input_expansion()
-    supercell = build_supercell(expansion_matrix, replicas, unitcell["lattice_matrix"], unitcell["atom_counts"], unitcell["total_atoms"],
-                                unitcell["positions_cartesian"], unitcell["species"], unitcell["selective_dynamics"], unitcell["flags"])
+    supercell = build_supercell(unitcell["lattice_matrix"], unitcell["atom_counts"], unitcell["total_atoms"], unitcell["positions_cartesian"],
+                                unitcell["species"], unitcell["selective_dynamics"], unitcell["flags"])
     mapping = mapping_elements(unitcell["elements"], supercell["atom_counts"], supercell["positions_cartesian"], supercell["positions_direct"],
                                supercell["species"], unitcell["selective_dynamics"], supercell["flags"])
     labels = define_labels(mapping["elements"], mapping["atom_counts"])
@@ -571,7 +603,7 @@ def main():
     
     # Summary
     print(f"\nSupercell written to: {argv[2]}")
-    print(f"Expansion matrix determinant: {replicas}")
+    print(f"Expansion matrix determinant: {supercell['replicas']}")
     print("-" * 39)
     print("  Element  |  Unit cell  |  Supercell")
     print("-" * 39)
