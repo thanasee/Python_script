@@ -836,27 +836,23 @@ Choices of defect types:
         if defect_type == '1':
             print("\nVacancy: select atom(s) to remove")
             selected_atoms = select_index(total_atoms, species)
-            result = apply_vacancy(positions_cartesian, positions_direct,
-                                species, selective_dynamics, flags, selected_atoms)
+            result = apply_vacancy(positions_cartesian, positions_direct, species, selective_dynamics, flags, selected_atoms)
             break
     
         elif defect_type == '2':
             print("\nSubstitution: select atom(s) to replace")
             selected_atoms = select_index(total_atoms, species)
-            result = apply_substitution(positions_cartesian, positions_direct,
-                                        species, selective_dynamics, flags, selected_atoms)
+            result = apply_substitution(positions_cartesian, positions_direct, species, selective_dynamics, flags, selected_atoms)
             break
     
         elif defect_type == '3':
             print("\nInterstitial: define insertion site")
-            result = apply_interstitial(lattice_matrix, positions_cartesian, positions_direct,
-                                        species, selective_dynamics, flags)
+            result = apply_interstitial(lattice_matrix, positions_cartesian, positions_direct, species, selective_dynamics, flags)
             break
     
         elif defect_type == '4':
             print("\nDisplacement: select atom(s) to move")
-            result = apply_displacement(lattice_matrix, positions_cartesian, positions_direct,
-                                        species, selective_dynamics, flags)
+            result = apply_displacement(lattice_matrix, positions_cartesian, positions_direct, species, selective_dynamics, flags)
             break
         else:
             print("ERROR! Choose again.")
@@ -872,24 +868,17 @@ def main():
     undoped = read_POSCAR(argv[1])
 
     # Reorder atoms into contiguous element blocks before applying the defect
-    mapping = mapping_elements(
-        undoped["elements"], undoped["atom_counts"],
-        undoped["positions_cartesian"], undoped["positions_direct"],
-        undoped["species"], undoped["selective_dynamics"], undoped["flags"])
+    mapping = mapping_elements(undoped["elements"], undoped["atom_counts"], undoped["positions_cartesian"], undoped["positions_direct"],
+                               undoped["species"], undoped["selective_dynamics"], undoped["flags"])
 
-    result = apply_defect(
-        undoped["lattice_matrix"],
-        mapping["positions_cartesian"], mapping["positions_direct"],
-        mapping["species"], undoped["selective_dynamics"], mapping["flags"])
+    result = apply_defect(undoped["lattice_matrix"], mapping["positions_cartesian"], mapping["positions_direct"], mapping["species"],
+                          undoped["selective_dynamics"], mapping["flags"])
 
     # Re-map to canonical element blocks after the defect (handles new/removed species)
     final_elements = list(dict.fromkeys(result["species"]))
     final_atom_counts = [result["species"].count(e) for e in final_elements]
-    final = mapping_elements(
-        final_elements, final_atom_counts,
-        result["positions_cartesian"], result["positions_direct"],
-        result["species"], undoped["selective_dynamics"], result["flags"],
-        sort_elements=final_elements)
+    final = mapping_elements(final_elements, final_atom_counts, result["positions_cartesian"], result["positions_direct"], result["species"],
+                             undoped["selective_dynamics"], result["flags"], sort_elements=final_elements)
 
     labels = define_labels(final["elements"], final["atom_counts"])
 
