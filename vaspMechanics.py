@@ -281,7 +281,7 @@ def compute_directional_properties_2d(elastic_2d):
 
     C = (4. * (S11 + S22 - 2. * S12) * cos**2. * sin**2.
          + S66 * (cos**2. - sin**2.)**2.
-         + 4. * (S16 - S26) * (cos**3. * sin - cos * sin**3.))
+         + 4. * (S26 - S16) * (cos**3. * sin - cos * sin**3.))
     shear_modulus = 1. / C
 
     max_min = {
