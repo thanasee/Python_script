@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from sys import argv, exit
-import os
+import os, re
 import readline
 import numpy as np
 
@@ -18,6 +18,10 @@ Mode:
 - pre  <structure_file> : prepare structure files for elastic tensor calculations
 - post                  : get energy and calculate elastic tensor
 
+Method:
+1) energy : energy-strain method
+2) stress : stress-strain method (requires converged ENCUT, ~1.3*ENMAX)
+
 This script was developed by Thanasee Thanasarnsurapong.
 """)
     exit(0)
@@ -27,7 +31,9 @@ ANGSTROM = 1e-10
 ALL_STRAIN = ['C11', 'C22', 'C11_C22_2C12', 'C66']
 STRAIN_RANGE = np.linspace(-0.02, 0.02, 9)
 ZERO_STRAIN_IDX = len(STRAIN_RANGE) // 2
-
+METHOD_CHOICES = {'1': ['energy'], 'energy': ['energy'],
+                  '2': ['stress'], 'stress': ['stress'],
+                  '3': ['energy', 'stress'], 'both': ['energy', 'stress']}
 
 _ELEMENT_SYMBOLS = [
     "H",  "He", "Li", "Be", "B",  "C",  "N",  "O",
@@ -456,21 +462,28 @@ def get_2d_lattice_type(lattice_matrix):
         return 'oblique'
 
 
-def get_strain_types(crystal_system):
-    """Return the list of strain deformation types required for the given crystal system.
+def get_strain_types(crystal_system, method):
+    """Return the list of strain deformation types required for the given crystal system and method.
 
-    Square, rectangular, and hexagonal lattices require four strain types to
-    determine C11, C22, C12, and C66. Oblique lattices additionally require
-    two mixed strain types to resolve the off-diagonal constants C16 and C26.
+    Energy-strain: square, rectangular, and hexagonal lattices require four
+    strain types to determine C11, C22, C12, and C66. Oblique lattices
+    additionally require two mixed strain types to resolve C16 and C26.
+
+    Stress-strain: the three single-component strain types C11, C22, and C66
+    give one column of the elastic tensor each, for every lattice type.
 
     Parameters
     ----------
     crystal_system : str — output of get_2d_lattice_type()
+    method         : str — 'energy' or 'stress'
 
     Returns
     -------
     list[str] — strain type labels corresponding to keys in build_strain_matrix()
     """
+
+    if method == 'stress':
+        return ['C11', 'C22', 'C66']
 
     strain_types = ALL_STRAIN.copy()
     if crystal_system == 'oblique':
@@ -507,12 +520,12 @@ def build_strain_matrix(strain_type, strain):
     delta = strain * 0.5
 
     strain_matrices = {
-        'C11':          np.array([[epsilon, 0, 0], [0, 0, 0], [0, 0, 0]], dtype=float),
-        'C22':          np.array([[0, 0, 0], [0, epsilon, 0], [0, 0, 0]], dtype=float),
-        'C11_C22_2C12': np.array([[epsilon, 0, 0], [0, epsilon, 0], [0, 0, 0]], dtype=float),
-        'C66':          np.array([[0, delta, 0], [delta, 0, 0], [0, 0, 0]], dtype=float),
-        'C11_C66_2C16': np.array([[epsilon, delta, 0], [delta, 0, 0], [0, 0, 0]], dtype=float),
-        'C22_C66_2C26': np.array([[0, delta, 0], [delta, epsilon, 0], [0, 0, 0]], dtype=float),
+        'C11':          np.array([[epsilon, 0., 0.], [0., 0., 0.], [0., 0., 0.]], dtype=float),
+        'C22':          np.array([[0., 0., 0.], [0., epsilon, 0.], [0., 0., 0.]], dtype=float),
+        'C11_C22_2C12': np.array([[epsilon, 0., 0.], [0., epsilon, 0.], [0., 0., 0.]], dtype=float),
+        'C66':          np.array([[0., delta, 0.], [delta, 0., 0.], [0., 0., 0.]], dtype=float),
+        'C11_C66_2C16': np.array([[epsilon, delta, 0.], [delta, 0., 0.], [0., 0., 0.]], dtype=float),
+        'C22_C66_2C26': np.array([[0., delta, 0.], [delta, epsilon, 0.], [0., 0., 0.]], dtype=float),
     }
 
     return strain_matrices[strain_type]
@@ -539,12 +552,13 @@ def applying_strain(lattice_matrix, strain_matrix):
 
 
 def read_OUTCAR(filepath):
-    """Extract the final total energy and convergence status from a VASP OUTCAR file.
+    """Extract the final energy, stress tensor, and convergence status from a VASP OUTCAR file.
 
     Convergence is determined by the presence of 'reached required accuracy'
-    anywhere in the file. The final energy is the last occurrence of the line
-    containing 'energy  without entropy=', which corresponds to the energy
-    after the last ionic step.
+    anywhere in the file. The final energy is the last value E(sigma->0) on the
+    line containing 'energy  without entropy='. The final stress is the last
+    'in kB' line, parsed with a regular expression so that fused fixed-width
+    numbers (e.g. '-1234.56789-1234.56789') are split correctly.
 
     Parameters
     ----------
@@ -552,32 +566,36 @@ def read_OUTCAR(filepath):
 
     Returns
     -------
-    energy    : float or None — total energy in eV, or None if not found
-    converged : bool          — True if the calculation reached required accuracy
+    dict with keys:
+        energy    : float or None         — total energy in eV
+        stress    : np.ndarray (6,) or None — stress in kB, VASP order and sign (XX YY ZZ XY YZ ZX)
+        converged : bool                  — True if the calculation reached required accuracy
     """
+
+    outcar = {"energy": None, "stress": None, "converged": False}
 
     if not os.path.exists(filepath):
         print(f"ERROR! File not found: {filepath}")
-        return None, False
+        return outcar
 
     with open(filepath, 'r') as f:
         outcar_lines = f.readlines()
 
-    converged = any('reached required accuracy' in line for line in outcar_lines)
-
-    if not converged:
+    outcar["converged"] = any('reached required accuracy' in line for line in outcar_lines)
+    if not outcar["converged"]:
         print(f"WARNING! {filepath} has not reached required accuracy.")
 
-    energy = None
     for line in reversed(outcar_lines):
-        if 'energy  without entropy=' in line:
-            energy = float(line.split()[-1])
+        if outcar["energy"] is None and 'energy  without entropy=' in line:
+            outcar["energy"] = float(line.split()[-1])
+        if outcar["stress"] is None and line.strip().startswith('in kB'):
+            values = re.findall(r'[-+]?\d+\.\d+', line)
+            if len(values) == 6:
+                outcar["stress"] = np.array(values, dtype=float)
+        if outcar["energy"] is not None and outcar["stress"] is not None:
             break
 
-    if energy is None:
-        print(f"WARNING! Could not extract energy from {filepath}.")
-
-    return energy, converged
+    return outcar
 
 
 def fitting_strain_energy(strain_type, strain_range, strain_energy, area):
@@ -630,48 +648,121 @@ def fitting_strain_energy(strain_type, strain_range, strain_energy, area):
     return constant
 
 
-def collect_fitting_coef(strain_types, strain_range, area):
-    """Collect energies from all strain OUTCAR files and fit each strain-energy curve.
+def fitting_strain_stress(strain_type, strain_range, strain_stress, thickness):
+    """Fit the strain-stress curves linearly and return one column of the elastic tensor.
 
-    For each strain type, reads OUTCAR files from directories named
-    '<strain_type>/strain<±δ>' and checks convergence. If any calculation
-    in a strain set is unconverged or missing, that strain type is skipped
-    and its constant is set to None.
+    The VASP stress (kB, pressure sign convention) is converted to the 2D stress
+    in N/m by flipping the sign and multiplying by the out-of-plane cell length:
+        σ_2D = −σ_kB × 0.01 × L_z
+    Each of σxx, σyy, and σxy is fit to σ(δ) = slope · δ + intercept, where the
+    intercept absorbs any residual stress of the reference structure.
+
+    The strain-stress data for each strain type is also written to a .dat file
+    named StrainVsStress_<strain_type>.dat.
 
     Parameters
     ----------
-    strain_types : list[str]       — strain type labels
-    strain_range : np.ndarray (M,) — strain values δ
-    area         : float           — in-plane cell area in Å**2
+    strain_type   : str               — label used for the output filename
+    strain_range  : np.ndarray (M,)   — strain values δ
+    strain_stress : np.ndarray (M, 6) — stress in kB, VASP order and sign
+    thickness     : float             — out-of-plane cell length L_z in Å
 
     Returns
     -------
-    dict[str, float or None] — fitted elastic constant (N/m) per strain type,
-                               or None if that strain type could not be fitted
+    np.ndarray (3,) — slopes of σxx, σyy, σxy in N/m
+    """
+
+    stress_2d = -strain_stress[:, [0, 1, 3]] * 0.01 * thickness  # kB·Å to N/m
+
+    output_file = f"StrainVsStress_{strain_type}.dat"
+    with open(output_file, 'w') as o:
+        o.write(f"# Strain vs 2D stress — {strain_type}\n")
+        o.write("# Strain         XX(N/m)         YY(N/m)         XY(N/m)\n")
+        for s, (sxx, syy, sxy) in zip(strain_range, stress_2d):
+            o.write(f"  {s:>+6.3f}   {sxx:>14.6f}  {syy:>14.6f}  {sxy:>14.6f}\n")
+
+    slopes = np.polyfit(strain_range, stress_2d, 1)[0]
+
+    return slopes
+
+
+def collect_outcars(crystal_system, methods, strain_range):
+    """Read every OUTCAR needed by the selected methods once.
+
+    Parameters
+    ----------
+    crystal_system : str             — output of get_2d_lattice_type()
+    methods        : list[str]       — selected methods ('energy' and/or 'stress')
+    strain_range   : np.ndarray (M,) — strain values δ
+
+    Returns
+    -------
+    dict[str, list[dict]] — read_OUTCAR() results per strain type, ordered as strain_range
+    """
+
+    strain_types = list(dict.fromkeys(strain_type for method in methods
+                                      for strain_type in get_strain_types(crystal_system, method)))
+
+    outcars = {}
+    for strain_type in strain_types:
+        outcars[strain_type] = [read_OUTCAR(os.path.join(strain_type, f"strain{strain:+.3f}", 'OUTCAR'))
+                                for strain in strain_range]
+
+    return outcars
+
+
+def collect_fitting_coef(method, crystal_system, outcars, strain_range, area, thickness):
+    """Fit each strain set of the given method from the collected OUTCAR data.
+
+    Energy-strain requires a converged energy at every strain point.
+    Stress-strain requires a converged stress tensor at every strain point.
+    If any point fails, that strain type is skipped and its result is set
+    to None.
+
+    Parameters
+    ----------
+    method         : str                    — 'energy' or 'stress'
+    crystal_system : str                    — output of get_2d_lattice_type()
+    outcars        : dict[str, list[dict]]  — output of collect_outcars()
+    strain_range   : np.ndarray (M,)        — strain values δ
+    area           : float                  — in-plane cell area in Å**2
+    thickness      : float                  — out-of-plane cell length L_z in Å
+
+    Returns
+    -------
+    dict[str, float or np.ndarray or None]
+        energy : fitted elastic constant (N/m) per strain type
+        stress : slopes of σxx, σyy, σxy (N/m) per strain type
     """
 
     constants = {}
 
-    for strain_type in strain_types:
+    for strain_type in get_strain_types(crystal_system, method):
 
-        strain_energy = []
-        all_converged = True
+        valid = True
+        for strain, outcar in zip(strain_range, outcars[strain_type]):
+            filepath = os.path.join(strain_type, f"strain{strain:+.3f}", 'OUTCAR')
+            if not outcar["converged"]:  # missing or unconverged, already reported by read_OUTCAR()
+                valid = False
+                continue
+            if method == 'energy' and outcar["energy"] is None:
+                print(f"WARNING! Could not extract energy from {filepath}.")
+                valid = False
+            if method == 'stress' and outcar["stress"] is None:
+                print(f"WARNING! Could not extract stress from {filepath}.")
+                valid = False
 
-        for strain in strain_range:
-            strain_path = os.path.join(strain_type, f"strain{strain:+.3f}")
-            outcar = os.path.join(strain_path, 'OUTCAR')
-            energy, converged = read_OUTCAR(outcar)
-            strain_energy.append(energy)
-            if not converged:
-                all_converged = False
-
-        if not all_converged or None in strain_energy:
-            print(f"WARNING! Skipping '{strain_type}' — incomplete or unconverged calculations.")
+        if not valid:
+            print(f"WARNING! Skipping '{strain_type}' for {method}-strain — incomplete or unconverged calculations.")
             constants[strain_type] = None
             continue
 
-        strain_energy = np.array(strain_energy, dtype=float)
-        constants[strain_type] = fitting_strain_energy(strain_type, strain_range, strain_energy, area)
+        if method == 'energy':
+            strain_energy = np.array([outcar["energy"] for outcar in outcars[strain_type]], dtype=float)
+            constants[strain_type] = fitting_strain_energy(strain_type, strain_range, strain_energy, area)
+        else:
+            strain_stress = np.array([outcar["stress"] for outcar in outcars[strain_type]], dtype=float)
+            constants[strain_type] = fitting_strain_stress(strain_type, strain_range, strain_stress, thickness)
 
     return constants
 
@@ -719,6 +810,58 @@ def obtain_elastic_tensor(constants, crystal_system):
     elastic_tensor = np.array([[C11, C12, C16],
                                [C12, C22, C26],
                                [C16, C26, C66]])
+
+    return elastic_tensor
+
+
+def obtain_elastic_tensor_stress(constants, crystal_system):
+    """Assemble the 2D elastic tensor from the fitted strain-stress slopes.
+
+    Each strain set gives one column of the elastic tensor:
+        C11 set (εxx = δ) : C11, C12, C16
+        C22 set (εyy = δ) : C12, C22, C26
+        C66 set (γxy = δ) : C16, C26, C66
+    The raw tensor is symmetrized as (C + Cᵀ)/2 and printed together with the
+    asymmetry of the off-diagonal terms. For square, rectangular, and hexagonal
+    lattices, C16 and C26 are then forced to zero by symmetry.
+
+    Parameters
+    ----------
+    constants      : dict[str, np.ndarray or None] — output of collect_fitting_coef()
+    crystal_system : str                           — output of get_2d_lattice_type()
+
+    Returns
+    -------
+    np.ndarray (3, 3) or None — elastic tensor in N/m, or None if any column is missing
+    """
+
+    missing = [key for key, value in constants.items() if value is None]
+    if missing:
+        for key in missing:
+            print(f"ERROR! {key} is not calculated.")
+        return None
+
+    raw_tensor = np.column_stack([constants['C11'], constants['C22'], constants['C66']])
+    dC12 = np.abs(raw_tensor[0, 1] - raw_tensor[1, 0])
+    dC16 = np.abs(raw_tensor[0, 2] - raw_tensor[2, 0])
+    dC26 = np.abs(raw_tensor[1, 2] - raw_tensor[2, 1])
+
+    elastic_tensor = (raw_tensor + raw_tensor.T) * 0.5
+
+    print("\n# Elastic tensor from stress-strain (N/m, symmetrized, before forcing)\n"
+          f"# Cell type: {crystal_system}\n"
+          f"   {elastic_tensor[0,0]:>11.4f} {elastic_tensor[0,1]:>11.4f} {elastic_tensor[0,2]:>11.4f}\n"
+          f"   {elastic_tensor[1,0]:>11.4f} {elastic_tensor[1,1]:>11.4f} {elastic_tensor[1,2]:>11.4f}\n"
+          f"   {elastic_tensor[2,0]:>11.4f} {elastic_tensor[2,1]:>11.4f} {elastic_tensor[2,2]:>11.4f}\n"
+          f"# Asymmetry before symmetrization: |dC12| = {dC12:.4f}, |dC16| = {dC16:.4f}, |dC26| = {dC26:.4f}")
+
+    if np.abs(elastic_tensor[2, 2]) < 1.:
+        print("WARNING! C66 ≈ 0 — check that the C66 set is sheared.")
+
+    if crystal_system != 'oblique':
+        elastic_tensor[0, 2] = elastic_tensor[2, 0] = 0.
+        elastic_tensor[1, 2] = elastic_tensor[2, 1] = 0.
+        print(f"C16, C26 forced to 0 for {crystal_system} cell")
 
     return elastic_tensor
 
@@ -812,16 +955,17 @@ def compute_mechanical_properties(elastic_tensor):
             "shear_modulus": shear_modulus}
 
 
-def write_mechanical_properties(properties):
+def write_mechanical_properties(properties, suffix=""):
     """Write angular mechanical properties to three output .dat files.
 
-    Writes Young.dat, Poisson.dat, and Shear.dat. For Poisson's ratio, an
-    additional absolute-value column is included if any negative values are
-    present (indicating an auxetic material).
+    Writes Young<suffix>.dat, Poisson<suffix>.dat, and Shear<suffix>.dat. For
+    Poisson's ratio, an additional absolute-value column is included if any
+    negative values are present (indicating an auxetic material).
 
     Parameters
     ----------
-    properties : dict — output of compute_mechanical_properties()
+        properties : dict — output of compute_mechanical_properties()
+        suffix     : str  — filename suffix ('' or '_<method>')
     """
 
     degrees       = properties["degrees"]
@@ -829,13 +973,13 @@ def write_mechanical_properties(properties):
     poisson_ratio = properties["poisson_ratio"]
     shear_modulus = properties["shear_modulus"]
 
-    with open('Young.dat', 'w') as o:
+    with open(f'Young{suffix}.dat', 'w') as o:
         o.write("# Young's Modulus\n")
         o.write("#  Degree(°)  Y(N/m)\n")
         for dg, y in zip(degrees, young_modulus):
             o.write(f" {dg:>6.2f}     {y:>12.8f}\n")
 
-    with open('Poisson.dat', 'w') as o:
+    with open(f'Poisson{suffix}.dat', 'w') as o:
         o.write("# Poisson's Ratio\n")
         if (poisson_ratio < 0.).any():
             o.write("#  Degree(°) v             |v|\n")
@@ -846,26 +990,31 @@ def write_mechanical_properties(properties):
             for dg, nu in zip(degrees, poisson_ratio):
                 o.write(f" {dg:>6.2f}   {nu:>12.8f}\n")
 
-    with open('Shear.dat', 'w') as o:
+    with open(f'Shear{suffix}.dat', 'w') as o:
         o.write("# Shear Modulus\n")
         o.write("#  Degree(°)  G(N/m)\n")
         for dg, g in zip(degrees, shear_modulus):
             o.write(f" {dg:>6.2f}     {g:>12.8f}\n")
 
 
-def write_elastic_tensor(elastic_tensor):
-    """Write the 2D elastic tensor to Elastic.dat and print it to stdout.
+def write_elastic_tensor(elastic_tensor, crystal_system, method, suffix=""):
+    """Write the 2D elastic tensor to Elastic<suffix>.dat and print it to stdout.
 
     The tensor is written in Voigt notation as a 3×3 matrix with a descriptive
-    header indicating the component layout and units (N/m).
+    header indicating the method, the cell type, the component layout, and
+    units (N/m).
 
     Parameters
     ----------
     elastic_tensor : np.ndarray (3, 3) — 2D elastic tensor in N/m
+    crystal_system : str               — output of get_2d_lattice_type()
+    method         : str               — 'energy' or 'stress'
+    suffix         : str               — filename suffix ('' or '_<method>')
     """
 
     C = elastic_tensor
-    header = ("# Elastic tensor (N/m)\n"
+    header = (f"# Elastic tensor (N/m) — {method}-strain\n"
+              f"# Cell type: {crystal_system}\n"
               "#     C11         C12         C16\n"
               "#     C12         C22         C26\n"
               "#     C16         C26         C66\n\n")
@@ -873,19 +1022,110 @@ def write_elastic_tensor(elastic_tensor):
             f"   {C[1,0]:>11.4f} {C[1,1]:>11.4f} {C[1,2]:>11.4f}\n"
             f"   {C[2,0]:>11.4f} {C[2,1]:>11.4f} {C[2,2]:>11.4f}\n")
 
-    with open('Elastic.dat', 'w') as o:
+    with open(f'Elastic{suffix}.dat', 'w') as o:
         o.write(header + rows)
 
     print("\n" + header + rows)
 
 
+def compare_methods(tensors, crystal_system):
+    """Print and write the elastic constants from both methods side by side.
+
+    The relative difference is (stress − energy) / energy in percent. C16 and
+    C26 rows are included only for oblique lattices.
+
+    Parameters
+    ----------
+    tensors        : dict[str, np.ndarray (3, 3)] — elastic tensors keyed by 'energy' and 'stress'
+    crystal_system : str                          — output of get_2d_lattice_type()
+    """
+
+    components = [('C11', 0, 0), ('C22', 1, 1), ('C12', 0, 1), ('C66', 2, 2)]
+    if crystal_system == 'oblique':
+        components += [('C16', 0, 2), ('C26', 1, 2)]
+
+    lines = ["# Comparison of elastic constants (N/m)",
+             f"# Cell type: {crystal_system}",
+             "#  Cij      energy-strain   stress-strain    diff(%)"]
+    for name, i, j in components:
+        energy = tensors['energy'][i, j]
+        stress = tensors['stress'][i, j]
+        diff = f"{(stress - energy) / energy * 100:>10.2f}" if np.abs(energy) > 1e-8 else f"{'—':>10s}"
+        lines.append(f"   {name}   {energy:>14.4f}  {stress:>14.4f}  {diff}")
+    text = "\n".join(lines) + "\n"
+
+    with open('Elastic_compare.dat', 'w') as o:
+        o.write(text)
+
+    print("\n" + text)
+
+
+def select_method():
+    """Prompt the user to select the calculation method until a valid choice is entered.
+
+    Accepts the menu number or the method name (case-insensitive).
+
+    Returns
+    -------
+    list[str] — ['energy'], ['stress'], or ['energy', 'stress']
+    """
+
+    print("\nSelect the calculation method:\n"
+          "  1) energy-strain (energy)\n"
+          "  2) stress-strain (stress)\n"
+          "  3) both          (both)")
+    while True:
+        choice = input("Enter choice: ").strip().lower()
+        if choice in METHOD_CHOICES:
+            return list(METHOD_CHOICES[choice])
+        print("ERROR! Invalid choice. Enter 1, 2, 3 or energy, stress, both.")
+
+
+def write_METHOD(methods):
+    """Write the selected method to the METHOD file as a canonical name.
+
+    Parameters
+    ----------
+    methods : list[str] — output of select_method()
+    """
+
+    with open('METHOD', 'w') as o:
+        o.write(("both" if len(methods) == 2 else methods[0]) + "\n")
+
+
+def read_METHOD():
+    """Read the calculation method from the METHOD file.
+
+    Accepts the same keys as select_method() (menu number or method name).
+
+    Returns
+    -------
+    list[str] or None — selected methods, or None if the file is missing or invalid
+    """
+
+    if not os.path.exists('METHOD'):
+        return None
+
+    with open('METHOD', 'r') as f:
+        content = f.read().strip()
+
+    if content.lower() in METHOD_CHOICES:
+        return list(METHOD_CHOICES[content.lower()])
+
+    print(f"WARNING! Invalid METHOD file: '{content}'")
+    return None
+
+
 def mode_pre(filepath):
     """Run the pre-processing mode: generate strained POSCAR files for all strain types.
 
-    Reads the input structure, detects the 2D crystal system, and writes:
+    Reads the input structure, detects the 2D crystal system, prompts for the
+    calculation method, and writes:
+    - METHOD            : the selected method (energy, stress, or both)
     - unstrain/POSCAR   : the reference (zero-strain) structure
     - <strain_type>/strain<±δ>/POSCAR : one POSCAR per (strain_type, δ) combination
 
+    The strain types are the union of those required by the selected methods.
     The strained lattice is generated by applying the deformation gradient
     F = I + ε to the original lattice matrix, while atomic fractional
     coordinates are kept fixed (ions are not relaxed at this stage).
@@ -897,10 +1137,14 @@ def mode_pre(filepath):
 
     poscar = read_POSCAR(filepath)
     crystal_system = get_2d_lattice_type(poscar["lattice_matrix"])
-    strain_types = get_strain_types(crystal_system)
+    print(f"\nDetected cell type: {crystal_system}")
 
-    print(f"\nDetected crystal system: {crystal_system}")
-    print(f"Strain types to compute: {strain_types}\n")
+    methods = select_method()
+    write_METHOD(methods)
+
+    strain_types = list(dict.fromkeys(strain_type for method in methods
+                                      for strain_type in get_strain_types(crystal_system, method)))
+    print(f"\nStrain types to compute: {strain_types}\n")
 
     mapping = mapping_elements(poscar["elements"], poscar["atom_counts"], poscar["positions_cartesian"],
                                poscar["positions_direct"], poscar["species"], poscar["selective_dynamics"],
@@ -933,58 +1177,77 @@ def mode_post():
     """Run the post-processing mode: parse OUTCAR files and compute the elastic tensor.
 
     Reads the reference structure from unstrain/POSCAR to determine the crystal
-    system and in-plane area. Then:
-    1. Parses all strained OUTCAR files via collect_fitting_coef()
-    2. Assembles the elastic tensor via obtain_elastic_tensor()
-    3. Writes the tensor to Elastic.dat and prints it
-    4. Checks mechanical stability via eigenvalue positivity
-    5. Computes and writes angular Young's modulus, Poisson's ratio, and shear modulus
+    system, in-plane area, and out-of-plane thickness, and the method from the
+    METHOD file (or the prompt if the file is missing or invalid). Then:
+    1. Reads all required OUTCAR files once via collect_outcars()
+    2. For each method:
+       a. Fits the strain sets via collect_fitting_coef()
+       b. Assembles the elastic tensor via obtain_elastic_tensor() or obtain_elastic_tensor_stress()
+       c. Writes the tensor to Elastic<suffix>.dat and prints it
+       d. Checks mechanical stability via eigenvalue positivity
+       e. Computes and writes angular Young's modulus, Poisson's ratio, and shear modulus
+    3. Compares both methods if both were selected
+
+    A method that fails or is unstable does not stop the other method.
     """
 
     unstrain_poscar = os.path.join('unstrain', 'POSCAR')
     poscar = read_POSCAR(unstrain_poscar)
 
     crystal_system = get_2d_lattice_type(poscar["lattice_matrix"])
-    strain_types = get_strain_types(crystal_system)
+    print(f"\nDetected cell type: {crystal_system}")
 
-    print(f"\nDetected crystal system: {crystal_system}")
+    methods = read_METHOD()
+    if methods is None:
+        methods = select_method()
+    else:
+        print(f"Method (from METHOD): {'both' if len(methods) == 2 else methods[0]}")
 
     area_vector = np.cross(poscar["lattice_matrix"][0], poscar["lattice_matrix"][1])
     area = np.linalg.norm(area_vector)
+    thickness = np.abs(poscar["lattice_matrix"][2] @ (area_vector / area))
 
-    # Collect fitted elastic constants
-    constants = collect_fitting_coef(strain_types, STRAIN_RANGE, area)
+    outcars = collect_outcars(crystal_system, methods, STRAIN_RANGE)
 
-    # Assemble full elastic tensor
-    elastic_tensor = obtain_elastic_tensor(constants, crystal_system)
-    if elastic_tensor is None:
-        print("ERROR! Elastic tensor could not be assembled. Exiting.")
-        exit(1)
+    tensors = {}
+    for method in methods:
 
-    write_elastic_tensor(elastic_tensor)
+        suffix = f"_{method}" if len(methods) == 2 else ""
+        print(f"\n========== {method}-strain method ==========")
 
-    # Mechanical stability check
-    stable = check_stability(elastic_tensor, poscar["lattice_matrix"], area_vector, area)
-    if stable:
-        print("This material is mechanically stable.\n")
-    else:
-        print("This material is mechanically unstable!!\n")
-        exit(0)
+        constants = collect_fitting_coef(method, crystal_system, outcars, STRAIN_RANGE, area, thickness)
 
-    # Angular mechanical properties
-    properties = compute_mechanical_properties(elastic_tensor)
-    write_mechanical_properties(properties)
-    print("Mechanical properties written to Young.dat, Poisson.dat, Shear.dat.\n")
+        if method == 'energy':
+            elastic_tensor = obtain_elastic_tensor(constants, crystal_system)
+        else:
+            elastic_tensor = obtain_elastic_tensor_stress(constants, crystal_system)
+
+        if elastic_tensor is None:
+            print(f"ERROR! Elastic tensor could not be assembled for {method}-strain.")
+            continue
+
+        write_elastic_tensor(elastic_tensor, crystal_system, method, suffix)
+        tensors[method] = elastic_tensor
+
+        # Mechanical stability check
+        stable = check_stability(elastic_tensor, poscar["lattice_matrix"], area_vector, area)
+        if stable:
+            print("This material is mechanically stable.\n")
+        else:
+            print("This material is mechanically unstable!!\n")
+            continue
+
+        # Angular mechanical properties
+        properties = compute_mechanical_properties(elastic_tensor)
+        write_mechanical_properties(properties, suffix)
+        print(f"Mechanical properties written to Young{suffix}.dat, Poisson{suffix}.dat, Shear{suffix}.dat.\n")
+
+    if len(tensors) == 2:
+        compare_methods(tensors, crystal_system)
 
 
 def main():
-    """Parse command-line arguments and dispatch to the appropriate mode.
-
-    Usage:
-        ElasticTensor2D.py pre  <structure_file>
-        ElasticTensor2D.py post
-        ElasticTensor2D.py -h | --help
-    """
+    """Parse command-line arguments and dispatch to the appropriate mode."""
 
     if '-h' in argv or '--help' in argv or len(argv) < 2:
         usage()
