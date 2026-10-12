@@ -444,7 +444,8 @@ Enter expansion matrix (separate by space):"""
 
     if detect:
         with open("TRANSMAT.in", 'r') as f:
-            initial_expansion = [line.split() for line in f.readlines()[1:] if line.strip()]
+            rows = [line.split('#')[0].split() for line in f.readlines()[1:]]
+        initial_expansion = [row for row in rows if row]
         if len(initial_expansion) != 3 or any(len(row) != 3 for row in initial_expansion):
             print("Invalid TRANSMAT.in: must contain 9 components (3 per row).")
         else:
