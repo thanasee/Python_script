@@ -1009,25 +1009,25 @@ def main():
         # --full-pp
         ave_pp         = read_kappa(f, "ave_pp")
         # --wigner --br or --wigner --lbte
-        kappa_C        = read_kappa(f, "kappa_C",        threshold=1e-12)
-        mode_kappa_C   = read_kappa(f, "mode_kappa_C",   threshold=1e-12, abs_value=True)
+        # kappa_C        = read_kappa(f, "kappa_C",        threshold=1e-12)
+        # mode_kappa_C   = read_kappa(f, "mode_kappa_C",   threshold=1e-12, abs_value=True)
         # --wigner --br
-        kappa_P_RTA      = read_kappa(f, "kappa_P_RTA",      threshold=1e-12)
-        mode_kappa_P_RTA = read_kappa(f, "mode_kappa_P_RTA", threshold=1e-12, abs_value=True)
-        kappa_TOT_RTA    = read_kappa(f, "kappa_TOT_RTA",    threshold=1e-12)
+        # kappa_P_RTA      = read_kappa(f, "kappa_P_RTA",      threshold=1e-12)
+        # mode_kappa_P_RTA = read_kappa(f, "mode_kappa_P_RTA", threshold=1e-12, abs_value=True)
+        # kappa_TOT_RTA    = read_kappa(f, "kappa_TOT_RTA",    threshold=1e-12)
         # --wigner --lbte
-        kappa_P_exact      = read_kappa(f, "kappa_P_exact",      threshold=1e-12)
-        mode_kappa_P_exact = read_kappa(f, "mode_kappa_P_exact", threshold=1e-12, abs_value=True)
-        kappa_TOT_exact    = read_kappa(f, "kappa_TOT_exact",    threshold=1e-12)
+        # kappa_P_exact      = read_kappa(f, "kappa_P_exact",      threshold=1e-12)
+        # mode_kappa_P_exact = read_kappa(f, "mode_kappa_P_exact", threshold=1e-12, abs_value=True)
+        # kappa_TOT_exact    = read_kappa(f, "kappa_TOT_exact",    threshold=1e-12)
 
-    has_bte = kappa is not None and mode_kappa is not None
-    has_wigner = all(x is not None for x in (kappa_C, mode_kappa_C, kappa_P_RTA, mode_kappa_P_RTA, kappa_TOT_RTA))
+    # has_bte = kappa is not None and mode_kappa is not None
+    # has_wigner = all(x is not None for x in (kappa_C, mode_kappa_C, kappa_P_RTA, mode_kappa_P_RTA, kappa_TOT_RTA))
 
-    if has_bte or has_wigner:
-        pass
-    else:
-        print("Error! Essential variables are not exist.")
-        exit(0)
+    # if has_bte or has_wigner:
+    #     pass
+    # else:
+    #     print("Error! Essential variables are not exist.")
+    #     exit(0)
     
     # ── Dimensionality: optional 2D renormalization ───────────────────────────
     renorm_factor, renorm_info = ask_dimensionality()
@@ -1044,14 +1044,14 @@ def main():
         mode_kappa         = _renorm(mode_kappa)
         kappa_RTA          = _renorm(kappa_RTA)
         mode_kappa_RTA     = _renorm(mode_kappa_RTA)
-        kappa_C            = _renorm(kappa_C)
-        mode_kappa_C       = _renorm(mode_kappa_C)
-        kappa_P_RTA        = _renorm(kappa_P_RTA)
-        mode_kappa_P_RTA   = _renorm(mode_kappa_P_RTA)
-        kappa_TOT_RTA      = _renorm(kappa_TOT_RTA)
-        kappa_P_exact      = _renorm(kappa_P_exact)
-        mode_kappa_P_exact = _renorm(mode_kappa_P_exact)
-        kappa_TOT_exact    = _renorm(kappa_TOT_exact)
+        # kappa_C            = _renorm(kappa_C)
+        # mode_kappa_C       = _renorm(mode_kappa_C)
+        # kappa_P_RTA        = _renorm(kappa_P_RTA)
+        # mode_kappa_P_RTA   = _renorm(mode_kappa_P_RTA)
+        # kappa_TOT_RTA      = _renorm(kappa_TOT_RTA)
+        # kappa_P_exact      = _renorm(kappa_P_exact)
+        # mode_kappa_P_exact = _renorm(mode_kappa_P_exact)
+        # kappa_TOT_exact    = _renorm(kappa_TOT_exact)
     
 
     # ── Grüneisen parameter ───────────────────────────────────────────────────
@@ -1104,28 +1104,28 @@ def main():
             mode_kappa_RTA, weight, temperature, frequency, mean_freepath, kappa_RTA)
 
     # --wigner coherence term
-    if kappa_C is not None and mode_kappa_C is not None:
-        (mode_kappa_C_weight, kappa_C_branch,
-         cumulative_kappa_C_frequency, derivative_kappa_C_frequency,
-         cumulative_kappa_C_mfp, derivative_kappa_C_mfp,
-         _, _) = compute_kappa_variant(
-            mode_kappa_C, weight, temperature, frequency, mean_freepath, kappa_C)
+    # if kappa_C is not None and mode_kappa_C is not None:
+    #     (mode_kappa_C_weight, kappa_C_branch,
+    #      cumulative_kappa_C_frequency, derivative_kappa_C_frequency,
+    #      cumulative_kappa_C_mfp, derivative_kappa_C_mfp,
+    #      _, _) = compute_kappa_variant(
+    #         mode_kappa_C, weight, temperature, frequency, mean_freepath, kappa_C)
 
     # --wigner --br particle term
-    if kappa_P_RTA is not None and mode_kappa_P_RTA is not None:
-        (mode_kappa_P_RTA_weight, kappa_P_RTA_branch,
-         cumulative_kappa_P_RTA_frequency, derivative_kappa_P_RTA_frequency,
-         cumulative_kappa_P_RTA_mfp, derivative_kappa_P_RTA_mfp,
-         _, _) = compute_kappa_variant(
-            mode_kappa_P_RTA, weight, temperature, frequency, mean_freepath, kappa_P_RTA)
+    # if kappa_P_RTA is not None and mode_kappa_P_RTA is not None:
+    #     (mode_kappa_P_RTA_weight, kappa_P_RTA_branch,
+    #      cumulative_kappa_P_RTA_frequency, derivative_kappa_P_RTA_frequency,
+    #      cumulative_kappa_P_RTA_mfp, derivative_kappa_P_RTA_mfp,
+    #      _, _) = compute_kappa_variant(
+    #         mode_kappa_P_RTA, weight, temperature, frequency, mean_freepath, kappa_P_RTA)
 
     # --wigner --lbte particle term
-    if kappa_P_exact is not None and mode_kappa_P_exact is not None:
-        (mode_kappa_P_exact_weight, kappa_P_exact_branch,
-         cumulative_kappa_P_exact_frequency, derivative_kappa_P_exact_frequency,
-         cumulative_kappa_P_exact_mfp, derivative_kappa_P_exact_mfp,
-         _, _) = compute_kappa_variant(
-            mode_kappa_P_exact, weight, temperature, frequency, mean_freepath, kappa_P_exact)
+    # if kappa_P_exact is not None and mode_kappa_P_exact is not None:
+    #     (mode_kappa_P_exact_weight, kappa_P_exact_branch,
+    #      cumulative_kappa_P_exact_frequency, derivative_kappa_P_exact_frequency,
+    #      cumulative_kappa_P_exact_mfp, derivative_kappa_P_exact_mfp,
+    #      _, _) = compute_kappa_variant(
+    #         mode_kappa_P_exact, weight, temperature, frequency, mean_freepath, kappa_P_exact)
 
     # Constant RTA lifetime: tau_CRTA = kappa / sum_qj(C_qj * v_qj ⊗ v_qj)
     kappa_per_tau = (
@@ -1138,10 +1138,10 @@ def main():
         with np.errstate(divide='ignore', invalid='ignore'):
             tau_CRTA = np.where(kappa_per_tau > 0.0,
                                 kappa_RTA / kappa_per_tau, 0.0)
-    elif kappa_P_RTA is not None:
-        with np.errstate(divide='ignore', invalid='ignore'):
-            tau_CRTA = np.where(kappa_per_tau > 0.0,
-                                kappa_P_RTA / kappa_per_tau, 0.0)
+    # elif kappa_P_RTA is not None:
+    #     with np.errstate(divide='ignore', invalid='ignore'):
+    #         tau_CRTA = np.where(kappa_per_tau > 0.0,
+    #                             kappa_P_RTA / kappa_per_tau, 0.0)
     else:
         with np.errstate(divide='ignore', invalid='ignore'):
             tau_CRTA = np.where(kappa_per_tau > 0.0,
@@ -1226,39 +1226,39 @@ def main():
             kappa_RTA_branch, temperature)
 
     # ── Optional variant: --wigner kappa_C ───────────────────────────────────
-    if kappa_C is not None and mode_kappa_C is not None:
-        write_tensor_vs_temperature(
-            outpath(kappa_input_file, 'Kappa_CVsT'),
-            kappa_C, temperature)
-        write_band_tensor_vs_temperature(
-            outpath(kappa_input_file, 'Kappa_C_bandVsT'),
-            kappa_C_branch, temperature)
+    # if kappa_C is not None and mode_kappa_C is not None:
+    #     write_tensor_vs_temperature(
+    #         outpath(kappa_input_file, 'Kappa_CVsT'),
+    #         kappa_C, temperature)
+    #     write_band_tensor_vs_temperature(
+    #         outpath(kappa_input_file, 'Kappa_C_bandVsT'),
+    #         kappa_C_branch, temperature)
 
     # ── Optional variant: --wigner --br kappa_P_RTA ──────────────────────────
-    if kappa_P_RTA is not None and mode_kappa_P_RTA is not None:
-        write_tensor_vs_temperature(
-            outpath(kappa_input_file, 'Kappa_P_RTAVsT'),
-            kappa_P_RTA, temperature)
-        write_band_tensor_vs_temperature(
-            outpath(kappa_input_file, 'Kappa_P_RTA_bandVsT'),
-            kappa_P_RTA_branch, temperature)
-    if kappa_TOT_RTA is not None:
-        write_tensor_vs_temperature(
-            outpath(kappa_input_file, 'Kappa_TOT_RTAVsT'),
-            kappa_TOT_RTA, temperature)
+    # if kappa_P_RTA is not None and mode_kappa_P_RTA is not None:
+    #     write_tensor_vs_temperature(
+    #         outpath(kappa_input_file, 'Kappa_P_RTAVsT'),
+    #         kappa_P_RTA, temperature)
+    #     write_band_tensor_vs_temperature(
+    #         outpath(kappa_input_file, 'Kappa_P_RTA_bandVsT'),
+    #         kappa_P_RTA_branch, temperature)
+    # if kappa_TOT_RTA is not None:
+    #     write_tensor_vs_temperature(
+    #         outpath(kappa_input_file, 'Kappa_TOT_RTAVsT'),
+    #         kappa_TOT_RTA, temperature)
 
     # ── Optional variant: --wigner --lbte kappa_P_exact ──────────────────────
-    if kappa_P_exact is not None and mode_kappa_P_exact is not None:
-        write_tensor_vs_temperature(
-            outpath(kappa_input_file, 'Kappa_P_exactVsT'),
-            kappa_P_exact, temperature)
-        write_band_tensor_vs_temperature(
-            outpath(kappa_input_file, 'Kappa_P_exact_bandVsT'),
-            kappa_P_exact_branch, temperature)
-    if kappa_TOT_exact is not None:
-        write_tensor_vs_temperature(
-            outpath(kappa_input_file, 'Kappa_TOT_exactVsT'),
-            kappa_TOT_exact, temperature)
+    # if kappa_P_exact is not None and mode_kappa_P_exact is not None:
+    #     write_tensor_vs_temperature(
+    #         outpath(kappa_input_file, 'Kappa_P_exactVsT'),
+    #         kappa_P_exact, temperature)
+    #     write_band_tensor_vs_temperature(
+    #         outpath(kappa_input_file, 'Kappa_P_exact_bandVsT'),
+    #         kappa_P_exact_branch, temperature)
+    # if kappa_TOT_exact is not None:
+    #     write_tensor_vs_temperature(
+    #         outpath(kappa_input_file, 'Kappa_TOT_exactVsT'),
+    #         kappa_TOT_exact, temperature)
 
     # ── isotope scattering ───────────────────────────────────────────────────
     if gamma_isotope is not None:
@@ -1307,28 +1307,28 @@ def main():
                 cumulative_kappa_RTA_mfp, derivative_kappa_RTA_mfp, sorted_frequency, sorted_mean_freepath, temp_index)
             
         # ── kappa_C ──────────────────────────────────────────────────────────
-        if kappa_C is not None and mode_kappa_C is not None:
-            write_variant_per_temperature(
-                temp_dir, kappa_input_file, 'Kappa_CVsFrequency', 'Kappa_CVsMfp', 'cumulative_Kappa_CVsFrequency',
-                'derivative_Kappa_CVsFrequency', 'cumulative_Kappa_CVsMfp', 'derivative_Kappa_CVsMfp',frequency,
-                mean_freepath, mode_kappa_C_weight, cumulative_kappa_C_frequency, derivative_kappa_C_frequency,
-                cumulative_kappa_C_mfp, derivative_kappa_C_mfp, sorted_frequency, sorted_mean_freepath, temp_index)
+        # if kappa_C is not None and mode_kappa_C is not None:
+        #     write_variant_per_temperature(
+        #         temp_dir, kappa_input_file, 'Kappa_CVsFrequency', 'Kappa_CVsMfp', 'cumulative_Kappa_CVsFrequency',
+        #         'derivative_Kappa_CVsFrequency', 'cumulative_Kappa_CVsMfp', 'derivative_Kappa_CVsMfp',frequency,
+        #         mean_freepath, mode_kappa_C_weight, cumulative_kappa_C_frequency, derivative_kappa_C_frequency,
+        #         cumulative_kappa_C_mfp, derivative_kappa_C_mfp, sorted_frequency, sorted_mean_freepath, temp_index)
            
         # ── kappa_P_RTA ──────────────────────────────────────────────────────
-        if kappa_P_RTA is not None and mode_kappa_P_RTA is not None:
-            write_variant_per_temperature(
-                temp_dir, kappa_input_file, 'Kappa_P_RTAVsFrequency', 'Kappa_P_RTAVsMfp', 'cumulative_Kappa_P_RTAVsFrequency',
-                'derivative_Kappa_P_RTAVsFrequency', 'cumulative_Kappa_P_RTAVsMfp', 'derivative_Kappa_P_RTAVsMfp',frequency,
-                mean_freepath, mode_kappa_P_RTA_weight, cumulative_kappa_P_RTA_frequency, derivative_kappa_P_RTA_frequency,
-                cumulative_kappa_P_RTA_mfp, derivative_kappa_P_RTA_mfp, sorted_frequency, sorted_mean_freepath, temp_index)
+        # if kappa_P_RTA is not None and mode_kappa_P_RTA is not None:
+        #     write_variant_per_temperature(
+        #         temp_dir, kappa_input_file, 'Kappa_P_RTAVsFrequency', 'Kappa_P_RTAVsMfp', 'cumulative_Kappa_P_RTAVsFrequency',
+        #         'derivative_Kappa_P_RTAVsFrequency', 'cumulative_Kappa_P_RTAVsMfp', 'derivative_Kappa_P_RTAVsMfp',frequency,
+        #         mean_freepath, mode_kappa_P_RTA_weight, cumulative_kappa_P_RTA_frequency, derivative_kappa_P_RTA_frequency,
+        #         cumulative_kappa_P_RTA_mfp, derivative_kappa_P_RTA_mfp, sorted_frequency, sorted_mean_freepath, temp_index)
 
         # ── kappa_P_exact ────────────────────────────────────────────────────
-        if kappa_P_exact is not None and mode_kappa_P_exact is not None:
-            write_variant_per_temperature(
-                temp_dir, kappa_input_file, 'Kappa_P_exactVsFrequency', 'Kappa_P_exactVsMfp', 'cumulative_Kappa_P_exactVsFrequency',
-                'derivative_Kappa_P_exactVsFrequency', 'cumulative_Kappa_P_exactVsMfp', 'derivative_Kappa_P_exactVsMfp',frequency,
-                mean_freepath, mode_kappa_P_exact_weight, cumulative_kappa_P_exact_frequency, derivative_kappa_P_exact_frequency,
-                cumulative_kappa_P_exact_mfp, derivative_kappa_P_exact_mfp, sorted_frequency, sorted_mean_freepath, temp_index)
+        # if kappa_P_exact is not None and mode_kappa_P_exact is not None:
+        #     write_variant_per_temperature(
+        #         temp_dir, kappa_input_file, 'Kappa_P_exactVsFrequency', 'Kappa_P_exactVsMfp', 'cumulative_Kappa_P_exactVsFrequency',
+        #         'derivative_Kappa_P_exactVsFrequency', 'cumulative_Kappa_P_exactVsMfp', 'derivative_Kappa_P_exactVsMfp',frequency,
+        #         mean_freepath, mode_kappa_P_exact_weight, cumulative_kappa_P_exact_frequency, derivative_kappa_P_exact_frequency,
+        #         cumulative_kappa_P_exact_mfp, derivative_kappa_P_exact_mfp, sorted_frequency, sorted_mean_freepath, temp_index)
             
         # ── Normal / Umklapp processes ───────────────────────────────────────
         if gamma_N is not None and gamma_U is not None:
