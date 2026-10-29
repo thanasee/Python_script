@@ -11,7 +11,7 @@ import h5py as h5
 def usage():
     """Print usage information and exit."""
     print("""
-Usage: analyzePhono3py.py <kappa input> [gruneisen input]
+Usage: analyzePhono3py.py <kappa input> <gruneisen input (optional)>
 
 This script obtain thermal properties form HDF5 files
 some kind of thermal properties obtain at specified temperature
@@ -1020,10 +1020,12 @@ def main():
         mode_kappa_P_exact = read_kappa(f, "mode_kappa_P_exact", threshold=1e-12, abs_value=True)
         kappa_TOT_exact    = read_kappa(f, "kappa_TOT_exact",    threshold=1e-12)
 
-    if not (kappa is not None and mode_kappa is not None) and \
-       not (kappa_C is not None and mode_kappa_C is not None and
-            kappa_P_RTA is not None and mode_kappa_P_RTA is not None and
-            kappa_TOT_RTA is not None):
+    has_bte = kappa is not None and mode_kappa is not None
+    has_wigner = all(x is not None for x in (kappa_C, mode_kappa_C, kappa_P_RTA, mode_kappa_P_RTA, kappa_TOT_RTA))
+
+    if has_bte or has_wigner:
+        pass
+    else:
         print("Error! Essential variables are not exist.")
         exit(0)
     
