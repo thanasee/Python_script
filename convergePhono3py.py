@@ -41,7 +41,7 @@ def find_kappa_files():
     files = [f for f in os.listdir() if f.startswith("kappa-m") and f.endswith(".hdf5")]
     if not files:
         print("ERROR! kappa hdf5 files are not found.")
-        exit(0)
+        exit(1)
     return sorted(files, key=mesh_number)
 
 
@@ -56,14 +56,14 @@ def load(f, key):
     if key not in f:
         return None
     arr = np.array(f[key])
-    return np.where(arr < 1e-12, 0.0, arr)
+    return np.where(np.abs(arr) < 1e-12, 0.0, arr)
 
 
 def read_HDF5(filepath):
     """Read thermal conductivity data from a phono3py HDF5 output file.
 
     Loads the q-mesh, temperature grid, and all available kappa arrays from the file.
-    Values below 1e-12 are set to zero to suppress numerical noise.
+    Values with magnitude below 1e-12 are set to zero to suppress numerical noise.
     Keys not present in the file are returned as None.
 
     Supported phono3py calculation modes and their corresponding keys:
@@ -128,7 +128,7 @@ def validate(data, filepath):
     kTR = data['kappa_TOT_RTA']
     if k is None and (kC is None or kPR is None or kTR is None):
         print(f"ERROR! Essential variables are not found in {filepath}.")
-        exit(0)
+        exit(1)
 
 
 def choose_temperature(temperature, filepath, last_temperature, current_temp):
@@ -166,8 +166,9 @@ def choose_temperature(temperature, filepath, last_temperature, current_temp):
                     target_temp = float(input("Select target temperature (K): "))
                     break
                 except ValueError:
-                    print("Invalid input! Please enter a number. Using the first temperature in the list.")
+                    print("Invalid input! Please enter a number.")
             return target_temp
+    return current_temp
 
 
 def get_temp_index(temperature, target_temp, filepath):
@@ -194,21 +195,21 @@ def get_temp_index(temperature, target_temp, filepath):
     index = np.where(temperature == target_temp)[0]
     if len(index) == 0:
         print(f"ERROR! Temperature {target_temp} not found in {filepath}.")
-        exit(0)
+        exit(1)
     return index[0]
 
 
 def extract_row(mesh, kappa_arr, temp_index, renorm_factor=1.0):
     """Extract one data row for a given temperature from a kappa array.
- 
+
     Builds a tuple containing the three q-mesh dimensions followed by the
     six independent components of the thermal conductivity tensor at the
     specified temperature index, scaled by renorm_factor.
- 
+
     For 3D materials renorm_factor = 1.0 (no change).
     For 2D materials renorm_factor = (c · n̂) / t_eff, converting the
     phono3py periodic-cell kappa to the true 2D sheet conductivity.
- 
+
     Parameters
     ----------
     mesh : numpy.ndarray
@@ -221,7 +222,7 @@ def extract_row(mesh, kappa_arr, temp_index, renorm_factor=1.0):
     renorm_factor : float, optional
         Multiplicative renormalization factor applied to all 6 kappa components.
         Default is 1.0 (3D, no renormalization).
- 
+
     Returns
     -------
     tuple of float
@@ -416,23 +417,23 @@ VDW_RADIUS = {
 
 def compute_2d_thickness(poscar):
     """Compute the effective 2D layer thickness using Alvarez vdW radii.
- 
+
     Atomic positions are projected onto the unit normal of the ab-plane to
     correctly handle non-orthogonal cells where the c vector is tilted.
     The renormalization factor accounts for this tilt.
- 
+
     Thickness formula:
         t_eff = z_range + r_vdW_top + r_vdW_bottom
- 
+
     Renormalization factor:
         factor_2d = (c · n̂) / t_eff
         where n̂ = (a × b) / |a × b|  (unit normal to the ab-plane)
- 
+
     Parameters
     ----------
     poscar : dict
         Dictionary returned by read_POSCAR().
- 
+
     Returns
     -------
     factor_2d   : float
@@ -449,39 +450,39 @@ def compute_2d_thickness(poscar):
     lattice_matrix      = poscar["lattice_matrix"]
     species             = poscar["species"]
     positions_cartesian = poscar["positions_cartesian"]
- 
+
     # Unit normal to the ab-plane
     area_vector = np.cross(lattice_matrix[0], lattice_matrix[1])
     vector_n    = area_vector / np.linalg.norm(area_vector)
- 
+
     # Projection of c onto the normal (scalar thickness of the periodic cell)
     c_proj = np.abs(lattice_matrix[2] @ vector_n)
- 
+
     # Project all atomic positions onto the normal
     projected = positions_cartesian @ vector_n
- 
+
     # Identify outermost atoms
     idx_top = np.argmax(projected)
     idx_bot = np.argmin(projected)
     z_range = projected[idx_top] - projected[idx_bot]
- 
+
     # vdW radii; fall back to 2.00 Å if element not in table
     r_top = VDW_RADIUS.get(species[idx_top], 2.00)
     r_bot = VDW_RADIUS.get(species[idx_bot], 2.00)
- 
+
     t_eff     = z_range + r_top + r_bot
     factor_2d = c_proj / t_eff
- 
+
     return factor_2d, t_eff, c_proj, z_range, projected
- 
- 
+
+
 def ask_dimensionality():
     """Interactively ask the user for the material dimensionality.
- 
+
     For 2D materials, reads POSCAR, computes the effective layer thickness,
     and returns the renormalization factor kappa_2D = kappa_phono3py * factor_2d
     where factor_2d = (c · n̂) / t_eff.
- 
+
     Returns
     -------
     renorm_factor : float
@@ -494,46 +495,46 @@ def ask_dimensionality():
     print("\nMaterial dimensionality:")
     print("  [1] 3D — no renormalization")
     print("  [2] 2D — renormalize kappa by effective layer thickness")
- 
+
     while True:
         choice = input("Select (1 or 2): ").strip()
         if choice in ('1', '2'):
             break
         print("  Please enter 1 or 2.")
- 
+
     if choice == '1':
         return 1.0, None
- 
+
     # 2D: locate POSCAR
     poscar_path = 'POSCAR'
     if not os.path.exists('POSCAR'):
         print(f"ERROR! POSCAR file does not exist. Using 3D (no renormalization).")
         return 1.0, None
- 
+
     poscar = read_POSCAR(poscar_path)
     factor_2d, t_eff, c_proj, z_range, _ = compute_2d_thickness(poscar)
- 
+
     print("\n  2D renormalization summary:")
     print(f"    c projection onto ab-normal : {c_proj:.5f} Å")
     print(f"    z range (atom-atom)         : {z_range:.5f} Å")
     print(f"    Effective thickness         : {t_eff:.5f} Å  (z_range + r_vdW_top + r_vdW_bottom)")
     print(f"    Renormalization factor      : {factor_2d:.6f}")
     print(f"    kappa_2D = kappa_phono3py × {factor_2d:.6f}")
- 
+
     renorm_info = (f"2D renormalization: c_proj = {c_proj:.5f} A, "
                    f"t_eff = {t_eff:.5f} A (z_range = {z_range:.5f} A), "
                    f"factor = {factor_2d:.6f}")
- 
+
     return factor_2d, renorm_info
 
 
 def write_dat(filename, rows, display=False, renorm_info=None):
     """Write kappa-vs-mesh data to a .dat file and optionally print to stdout.
- 
+
     Each row contains the q-mesh dimensions (Q_x, Q_y, Q_z) and the six
     thermal conductivity tensor components (xx, yy, zz, yz, xz, xy) in W/m-K.
     For 2D materials, values are already renormalized before being passed in.
- 
+
     Parameters
     ----------
     filename : str
@@ -552,7 +553,7 @@ def write_dat(filename, rows, display=False, renorm_info=None):
     header2 = "#  Q_x   Q_y   Q_z        xx          yy          zz          yz          xz          xy"
     row_fmt = (" {0:>5.0f} {1:>5.0f} {2:>5.0f}"
                "  {3:>10.3f}  {4:>10.3f}  {5:>10.3f}  {6:>10.3f}  {7:>10.3f}  {8:>10.3f}")
- 
+
     with open(filename, 'w') as o:
         o.write(header1 + "\n")
         if renorm_info is not None:
@@ -561,7 +562,7 @@ def write_dat(filename, rows, display=False, renorm_info=None):
         for item in rows:
             o.write(row_fmt.format(*item) + "\n")
         o.write("\n")
- 
+
     if display:
         print(filename)
         print(header1)
@@ -573,11 +574,11 @@ def write_dat(filename, rows, display=False, renorm_info=None):
 
 def main():
     """Parses arguments, sort kappa HDF5 files, and write outputs."""
-    if '-h' in argv or len(argv) != 1:
+    if '-h' in argv or '--help' in argv or len(argv) != 1:
         usage()
 
     files = find_kappa_files()
-    
+
     # Ask dimensionality once before processing any file
     renorm_factor, renorm_info = ask_dimensionality()
 
