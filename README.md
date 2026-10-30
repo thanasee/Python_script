@@ -144,6 +144,8 @@ Automatically scans for all `kappa-m*.hdf5` files, sorts them by mesh number, an
 **Output files** (columns: Q_x, Q_y, Q_z, xx, yy, zz, yz, xz, xy):
 - `KappaVsMesh.dat` — κL vs. q-mesh
 - `Kappa_RTAVsMesh.dat` — RTA κL vs. q-mesh (--lbte only)
+-  `Kappa_intraVsMesh.dat` / `Kappa_interVsMesh.dat` — intra-band and inter-band κL vs. q-mesh (--br --tt njc23/ibdb19/smm19 only)
+- `Kappa_intra_exactVsMesh.dat` / `Kappa_intra_RTAVsMesh.dat` / `Kappa_interVsMesh.dat` — intra-band (exact and RTA) and inter-band κL vs. q-mesh (--lbte --tt njc23/ibdb19/smm19 only); `KappaVsMesh.dat` holds the total (intra exact + inter) and `Kappa_RTAVsMesh.dat` is not written
 
 ---
 
