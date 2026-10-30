@@ -349,35 +349,31 @@ def validate_POSCARs(initial, final):
     return dynamic_cell
 
 
-def mic_displacement(position_cartesian_i, position_cartesian_f, lattice_matrix):
-    """Compute minimum-image-convention (MIC) displacement vectors.
+def mic_displacement(positions_direct_i, positions_direct_f):
+    """Compute minimum-image-convention (MIC) displacements in fractional coordinates.
 
-    Converts the displacement to fractional coordinates, wraps each component
-    to the range (-0.5, 0.5], then converts back to Cartesian. This ensures
-    that the interpolation always takes the shortest path across any periodic
-    boundary.
+    Each component is wrapped to (-0.5, 0.5], so every atom takes the shortest
+    path across any periodic boundary. Working in fractional coordinates keeps
+    the endpoints exact when the cell also changes (dynamic cell).
 
     Parameters
     ----------
-    position_cartesian_i : np.ndarray (N, 3) — Cartesian positions of initial image in Å
-    position_cartesian_f : np.ndarray (N, 3) — Cartesian positions of final image in Å
-    lattice_matrix : np.ndarray (3, 3) — lattice row vectors in Å
+    positions_direct_i : np.ndarray (N, 3) — fractional positions of the initial image
+    positions_direct_f : np.ndarray (N, 3) — fractional positions of the final image
 
     Returns
     -------
-    displacement_cartesian : np.ndarray (N, 3) — MIC Cartesian displacement vectors in Å
+    displacement_direct : np.ndarray (N, 3) — MIC fractional displacement vectors
     """
 
-    displacement_cartesian_raw = position_cartesian_f - position_cartesian_i
-    displacement_direct = displacement_cartesian_raw @ np.linalg.inv(lattice_matrix)
+    displacement_direct = positions_direct_f - positions_direct_i
     displacement_direct -= np.round(displacement_direct)   # MIC wrap per atom independently
-    displacement_cartesian = displacement_direct @ lattice_matrix
 
-    return displacement_cartesian
+    return displacement_direct
 
 
 def interpolate_linear(initial, final, n_images, dynamic_cell):
-    """Generate NEB images by linear interpolation in Cartesian space with MIC.
+    """Generate NEB images by linear interpolation in fractional coordinates with MIC.
 
     For fixed-cell structures, all images share the initial lattice matrix.
     For dynamic cell structures, the lattice matrix is also linearly
@@ -386,8 +382,8 @@ def interpolate_linear(initial, final, n_images, dynamic_cell):
     Parameters
     ----------
     initial      : dict — read_POSCAR output for the initial image
-    final      : dict — read_POSCAR output for the final image
-    n_images : int  — number of intermediate images (excluding endpoints)
+    final        : dict — read_POSCAR output for the final image
+    n_images     : int  — number of intermediate images (excluding endpoints)
     dynamic_cell : bool — whether to interpolate the lattice matrix
 
     Returns
@@ -400,16 +396,15 @@ def interpolate_linear(initial, final, n_images, dynamic_cell):
     total_frames = n_images + 2
     lattice_matrix_initial = initial["lattice_matrix"]
     lattice_matrix_final = final["lattice_matrix"]
-    positions_initial = initial["positions_cartesian"]
+    positions_initial = initial["positions_direct"]
 
-    displacement_cartesian = mic_displacement(positions_initial, final["positions_cartesian"], lattice_matrix_initial)
+    displacement_direct = mic_displacement(positions_initial, final["positions_direct"])
 
     images = []
     for k in range(total_frames):
         t = k / (total_frames - 1)
         lattice_k = lattice_matrix_initial + t * (lattice_matrix_final - lattice_matrix_initial) if dynamic_cell else lattice_matrix_initial.copy()
-        positions_cartesian_k = positions_initial + t * displacement_cartesian
-        positions_direct_k = cartesian_to_direct(lattice_k, positions_cartesian_k)
+        positions_direct_k = (positions_initial + t * displacement_direct) % 1.0
         images.append({"lattice_matrix": lattice_k,
                        "positions_direct": positions_direct_k})
 
@@ -422,6 +417,8 @@ def interpolate_idpp(initial, final, n_images, dynamic_cell):
     IDPP minimises a cost function based on pairwise inter-atomic distances
     so that the initial path better resembles the true reaction pathway.
     This reduces the number of NEB iterations required in practice.
+    All pair distances use the minimum-image convention, and the cost is
+    minimised image by image with its analytic gradient.
 
     Reference: Smidstrup et al., J. Chem. Phys. 140, 214106 (2014).
                https://doi.org/10.1063/1.4878664
@@ -432,8 +429,8 @@ def interpolate_idpp(initial, final, n_images, dynamic_cell):
     Parameters
     ----------
     initial      : dict — read_POSCAR output for the initial image
-    final      : dict — read_POSCAR output for the final image
-    n_images : int  — number of intermediate images (excluding endpoints)
+    final        : dict — read_POSCAR output for the final image
+    n_images     : int  — number of intermediate images (excluding endpoints)
     dynamic_cell : bool — whether to interpolate the lattice matrix
 
     Returns
@@ -452,62 +449,59 @@ def interpolate_idpp(initial, final, n_images, dynamic_cell):
     total_frames = n_images + 2
     lattice_matrix_initial = initial["lattice_matrix"]
     lattice_matrix_final = final["lattice_matrix"]
-    positions_initial = initial["positions_cartesian"]
-    positions_final = final["positions_cartesian"]
+    positions_initial = initial["positions_direct"]
     n_atoms = initial["total_atoms"]
 
-    # Precompute linearly interpolated lattices for each frame
+    # Linearly interpolated lattices and MIC-continuous linear path (seed)
+    displacement_direct = mic_displacement(positions_initial, final["positions_direct"])
     lattices = []
+    linear_cartesian = []
     for k in range(total_frames):
         t = k / (total_frames - 1)
         lattice_matrix_k = lattice_matrix_initial + t * (lattice_matrix_final - lattice_matrix_initial) if dynamic_cell else lattice_matrix_initial.copy()
         lattices.append(lattice_matrix_k)
+        linear_cartesian.append((positions_initial + t * displacement_direct) @ lattice_matrix_k)
 
-    # Seed with linear interpolation (MIC-aware)
-    displacement_cartesian = mic_displacement(positions_initial, positions_final, lattice_matrix_initial)
-    linear_cartesian = np.array([positions_initial + (k / (total_frames - 1)) * displacement_cartesian
-                             for k in range(total_frames)])   # (F, N, 3)
+    def pair_vectors(cart, lattice_matrix):
+        """Return MIC pair vectors r_i - r_j, shape (N, N, 3), in Å."""
+        diff_direct = (cart[:, np.newaxis, :] - cart[np.newaxis, :, :]) @ np.linalg.inv(lattice_matrix)
+        diff_direct -= np.round(diff_direct)
+        return diff_direct @ lattice_matrix
 
-    # Target pairwise distances: linear interpolation of endpoint distances
-    def pairwise_distances(cart):
-        """Return upper-triangle inter-atomic distances for one frame."""
-        diff = cart[:, np.newaxis, :] - cart[np.newaxis, :, :]  # (N, N, 3)
-        return np.sqrt(np.sum(diff ** 2, axis=-1))
+    def pair_distances(cart, lattice_matrix):
+        """Return MIC pair distances, shape (N, N), with 1.0 on the diagonal."""
+        d = np.sqrt(np.sum(pair_vectors(cart, lattice_matrix) ** 2, axis=-1))
+        np.fill_diagonal(d, 1.0)
+        return d
 
-    d_ini = pairwise_distances(positions_initial)
-    d_fin = pairwise_distances(positions_final)
+    # Target distances: linear interpolation of endpoint MIC distances
+    d_ini = pair_distances(linear_cartesian[0], lattices[0])
+    d_fin = pair_distances(linear_cartesian[-1], lattices[-1])
 
-    # IDPP cost function: sum over images and atom pairs of (d - d_target)^2 / d_target^4
-    def idpp_cost(x_flat):
-        x = x_flat.reshape(n_images, n_atoms, 3)
-        cost = 0.0
-        frames_mid = [linear_cartesian[0]] + [x[k] for k in range(n_images)] + [linear_cartesian[-1]]
-        for k, cart_k in enumerate(frames_mid):
-            t = k / (total_frames - 1)
-            d_target = d_ini + t * (d_fin - d_ini)
-            d_target = np.where(d_target < 1e-10, 1e-10, d_target)
-            diff = cart_k[:, np.newaxis, :] - cart_k[np.newaxis, :, :]
-            d_k = np.sqrt(np.sum(diff ** 2, axis=-1))
-            mask = np.triu(np.ones((n_atoms, n_atoms), dtype=bool), k=1)
-            residual = (d_k[mask] - d_target[mask]) ** 2 / d_target[mask] ** 4
-            cost += residual.sum()
-        return cost
-
-    x0 = linear_cartesian[1:-1].flatten()
-    result = minimize(idpp_cost, x0, method='L-BFGS-B',
-                      options={'maxiter': 1000, 'ftol': 1e-10, 'gtol': 1e-6})
-
-    optimized_cartesian = result.x.reshape(n_images, n_atoms, 3)
+    # IDPP cost: sum over atom pairs of (d - d_target)^2 / d_target^4, with analytic gradient
+    def idpp_cost(x_flat, d_target, weight, lattice_matrix):
+        cart = x_flat.reshape(n_atoms, 3)
+        vectors = pair_vectors(cart, lattice_matrix)
+        d = np.sqrt(np.sum(vectors ** 2, axis=-1))
+        np.fill_diagonal(d, 1.0)
+        residual = d - d_target
+        cost = 0.5 * np.sum(weight * residual ** 2)
+        gradient = 2.0 * np.sum((weight * residual / d)[:, :, np.newaxis] * vectors, axis=1)
+        return cost, gradient.flatten()
 
     images = []
     for k in range(total_frames):
         lattice_matrix_k = lattices[k]
-        if k == 0:
-            cartesian_k = positions_initial
-        elif k == total_frames - 1:
-            cartesian_k = positions_final
-        else:
-            cartesian_k = optimized_cartesian[k - 1]
+        cartesian_k = linear_cartesian[k]
+        if 0 < k < total_frames - 1:
+            t = k / (total_frames - 1)
+            d_target = np.maximum(d_ini + t * (d_fin - d_ini), 1e-10)
+            weight = 1.0 / d_target ** 4
+            np.fill_diagonal(weight, 0.0)
+            result = minimize(idpp_cost, cartesian_k.flatten(), args=(d_target, weight, lattice_matrix_k),
+                              jac=True, method='L-BFGS-B',
+                              options={'maxiter': 1000, 'ftol': 1e-10, 'gtol': 1e-6})
+            cartesian_k = result.x.reshape(n_atoms, 3)
         positions_direct_k = cartesian_to_direct(lattice_matrix_k, cartesian_k)
         images.append({"lattice_matrix": lattice_matrix_k,
                        "positions_direct": positions_direct_k})
@@ -530,8 +524,7 @@ def define_dir(total_frames):
     dir_names : list[str] — list of directory names for all images including endpoints
     """
 
-    digits = len(str(total_frames)) + 1
-    dir_names = [f"{str(k).zfill(digits)}" for k in range(total_frames)]
+    dir_names = [f"{str(k).zfill(2)}" for k in range(total_frames)]
 
     return dir_names
 
@@ -553,6 +546,10 @@ def main():
 
     if n_images < 1:
         print("ERROR! N_images must be at least 1.")
+        exit(1)
+
+    if n_images > 98:
+        print("ERROR! N_images must not exceed 98 (directories 00-99).")
         exit(1)
 
     total_frames = n_images + 2
@@ -585,7 +582,8 @@ def main():
         if not os.path.isdir(dir_name):
             os.mkdir(dir_name)
         write_POSCAR(os.path.join(dir_name, "POSCAR"), image["lattice_matrix"], initial["elements"], initial["atom_counts"],
-                     image["positions_cartesian"], image["positions_direct"], initial["selective_dynamics"],
+                     direct_to_cartesian(image["lattice_matrix"], image["positions_direct"]), image["positions_direct"],
+                     initial["selective_dynamics"],
                      initial["flags"], labels)
 
     print("\nOK, all set up here.")
