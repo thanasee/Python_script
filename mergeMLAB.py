@@ -43,11 +43,7 @@ _CONFIGURATION_FMT_STR = """**************************************************
      Atom types and atom numbers
 --------------------------------------------------
 {}
-==================================================
-     CTIFOR
---------------------------------------------------
-   {}
-==================================================
+{}==================================================
      Primitive lattice vectors (ang.)
 --------------------------------------------------
 {}
@@ -193,8 +189,9 @@ def parse_basis_sections(header_lines):
     """
     Parse all 'Basis set for <element>' sections from the file header.
 
-    Each basis set entry is a pair of integers (n1, n2) representing
-    the radial and angular quantum number indices of the basis function.
+    Each basis set entry is a pair of integers (n1, n2): the configuration
+    number and the atom number within that configuration chosen as a local
+    reference configuration.
 
     Parameters
     ----------
@@ -477,12 +474,11 @@ def write_MLAB(output_file, merged_version, global_types, ref_energy_map, mass_m
     mass_map : OrderedDict
         Element -> atomic mass (amu).
     basis_map : OrderedDict
-        Element -> list of (n1, n2) basis function index tuples.
+        Element -> list of (configuration number, atom number) tuples.
     configs : list of dict
         All parsed configuration dictionaries (from parse_config_block).
     """
 
-    max_atom_types_per_system = max(len(config['atom_counts']) for config in configs)
     max_atoms_per_system = max(sum(config['atom_counts'].values()) for config in configs)
     max_per_type = max(
         config['atom_counts'].get(element, 0)
@@ -522,13 +518,13 @@ def write_MLAB(output_file, merged_version, global_types, ref_energy_map, mass_m
         _CONFIGURATION_FMT_STR.format(
             i,
             config['system_name'].strip(),
-            len([e for e in global_types if config['atom_counts'].get(e, 0) > 0]),
+            len(config['atom_counts']),
             sum(config['atom_counts'].values()),
-            "\n".join(
-                f"     {e:<2s}{config['atom_counts'][e]:>7d}"
-                for e in global_types if config['atom_counts'].get(e, 0) > 0
-            ),
-            config['ctifor'].strip(),
+            "\n".join(f"     {e:<2s}{n:>7d}" for e, n in config['atom_counts'].items()),
+            "==================================================\n"
+            "     CTIFOR\n"
+            "--------------------------------------------------\n"
+            f"   {config['ctifor'].strip()}\n" if config['ctifor'].strip() else "",
             "\n".join(line.rstrip() for line in config['lattice']),
             "\n".join(line.rstrip() for line in config['positions']),
             config['energy'].strip(),
@@ -543,7 +539,7 @@ def write_MLAB(output_file, merged_version, global_types, ref_energy_map, mass_m
         f.write(_ML_AB_FMT_STR.format(
             merged_version.strip(),
             len(configs),
-            max_atom_types_per_system,
+            len(global_types),
             atom_types_str,
             max_atoms_per_system,
             max_per_type,
@@ -562,25 +558,25 @@ def main():
 
     input_files = argv[1:-1]
     output_file = argv[-1]
-    
+
     parsed_files = [read_MLAB(filename) for filename in input_files]
-    
+
     version = parsed_files[0]['version']
     for parsed in parsed_files[1:]:
         if parsed['version'] != version:
             print("Warning! Input versions are different. The first file version will be used.")
             break
-    
+
     all_types = []
     for parsed in parsed_files:
         all_types.extend(list(parsed['ref_energy_map'].keys()))
     global_types = unique_preserve_order(all_types)
-    
+
     ref_energy_map = OrderedDict()
     mass_map = OrderedDict()
     basis_map = OrderedDict((element, []) for element in global_types)
     configs = []
-    
+
     for element in global_types:
         for parsed in parsed_files:
             if element in parsed['ref_energy_map']:
@@ -593,17 +589,35 @@ def main():
                     mass_map[element] = parsed['mass_map'][element]
                 elif mass_map[element] != parsed['mass_map'][element]:
                     print(f"Warning! Atomic mass mismatch for '{element}'. First-file value will be used.")
-    
-    for element in global_types:
-        basis_rows = []
-        for parsed in parsed_files:
-            if element in parsed['basis_map']:
-                basis_rows.extend(parsed['basis_map'][element])
-        basis_map[element] = unique_preserve_order(basis_rows)
-    
+
     for parsed in parsed_files:
+        offset = len(configs)
+        for element, rows in parsed['basis_map'].items():
+            basis_map[element].extend((n_config + offset, n_atom) for n_config, n_atom in rows)
         configs.extend(parsed['configs'])
-    
+
+    has_ctifor = [bool(config['ctifor'].strip()) for config in configs]
+    if any(has_ctifor) and not all(has_ctifor):
+        print("Warning! CTIFOR is missing in some configurations. CTIFOR is omitted from all configurations.")
+        for config in configs:
+            config['ctifor'] = ''
+
+    basis_valid = True
+    for element in global_types:
+        for n_config, n_atom in basis_map[element]:
+            species = None
+            if 0 < n_config <= len(configs):
+                count = 0
+                for e, n in configs[n_config - 1]['atom_counts'].items():
+                    count += n
+                    if n_atom <= count:
+                        species = e
+                        break
+            if species != element:
+                basis_valid = False
+    if not basis_valid:
+        print("Warning! Basis sets do not match the merged configurations. Use ML_MODE = select.")
+
     write_MLAB(output_file, version, global_types, ref_energy_map, mass_map, basis_map, configs)
     print(f"\nMerged {len(input_files)} files into {output_file}")
     print(f"Total configurations: {len(configs)}")
