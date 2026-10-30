@@ -618,8 +618,10 @@ Usage: mlError.py <ML_LOGFILE>
 Evaluates MLFF accuracy against DFT reference data from the VASP `ML_REG` file, computing RMSE, MAE, and R-square for energies (meV/atom), forces (eV/Å), and stresses (kbar).
 
 ```
-Usage: mlRegression.py <ML_REG>
+Usage: mlRegression.py <ML_REG> [ML_ABN]
 ```
+
+`ML_ABN` (optional) must be the one written together with `ML_REG`; it gives the number of atoms of each structure for per-atom energies. Without it, all structures are assumed to have the same number of atoms.
 
 **Output:** `Energy.dat`, `Force.dat`, `Stress.dat`, `ERROR.dat`
 
