@@ -340,7 +340,11 @@ Extracts the piezoelectric stress tensor (e, C/m2) and elastic stiffness tensor 
 Usage: vaspPiezoelectric.py <POSCAR> <OUTCAR>
 ```
 
-Supports both 2D materials (with vacuum-layer thickness correction) and 3D bulk materials. The piezoelectric stress tensor is relaxed-ion (electronic + ionic) when OUTCAR contains the ionic contribution, otherwise clamped-ion (electronic only); the type is written in the output headers. The elastic tensor is taken from OUTCAR (last TOTAL ELASTIC MODULI block) → Elastic.dat → manual input; a 6×6 tensor in GPa is converted to N/m for 2D materials, and Elastic.dat is not overwritten when it is used as input.
+Supports both 2D materials (with vacuum-layer thickness correction) and 3D bulk materials.
+
+**Piezoelectric stress tensor:** The electronic part (`PIEZOELECTRIC TENSOR (including local field effects)`) is always read. If the ionic part (`PIEZOELECTRIC TENSOR IONIC CONTR`) is also present, the script asks whether to include it: electronic + ionic (relaxed-ion) or electronic only (clamped-ion). Without the ionic part, e is clamped-ion. The choice is written in the output file headers.
+
+**Elastic tensor:** Fallback chain OUTCAR (last `TOTAL ELASTIC MODULI` block, relaxed-ion when the ionic contribution is present) → `Elastic.dat` → manual input. A 6×6 tensor (GPa) is converted to N/m for 2D materials. `Elastic.dat` is not overwritten when it is used as input. A warning is printed if e and C are not both clamped-ion or both relaxed-ion.
 
 **Output:** `Piezoelectric_Stress.dat`, `Piezoelectric_Strain.dat`, `Elastic.dat`
 
