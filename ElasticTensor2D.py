@@ -267,7 +267,7 @@ def check_elements(elements):
         while True:
             sort_elements = input("Enter the desired element order (separate by space): ").split()
             if len(sort_elements) == 0:
-                print("Warning! Empty input — using default unique element order.")
+                print("WARNING! Empty input — using default unique element order.")
                 return unique_elements.copy()
             if (len(sort_elements) == len(unique_elements) and
                     set(sort_elements) == set(unique_elements)):
@@ -575,7 +575,7 @@ def read_OUTCAR(filepath):
     outcar = {"energy": None, "stress": None, "converged": False}
 
     if not os.path.exists(filepath):
-        print(f"ERROR! File not found: {filepath}")
+        print(f"ERROR!\nFile: {filepath} does not exist.")
         return outcar
 
     with open(filepath, 'r') as f:
