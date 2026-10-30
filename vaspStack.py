@@ -64,7 +64,7 @@ def get_vdw_radius(element):
     Parameters
     ----------
     element : str — element symbol
- 
+
     Returns
     -------
     float — van der Waals radius in Angstrom, or 3.0 if not found
@@ -490,8 +490,10 @@ def write_POSCAR(filepath, lattice_matrix, elements, atom_counts, positions_cart
 def build_second_layer(species, positions_cartesian):
     """Build the second layer by shifting a copy of the monolayer upward in z.
 
-    The vertical shift is set to the monolayer thickness plus a 3.5 Å interlayer
-    gap, placing the second layer directly above the first in Cartesian space.
+    The vertical shift is set to the monolayer thickness plus an interlayer
+    gap equal to the sum of the van der Waals radii of the facing atoms
+    (see compute_interlayer_gap), placing the second layer directly above
+    the first in Cartesian space.
 
     Parameters
     ----------
@@ -510,10 +512,10 @@ def build_second_layer(species, positions_cartesian):
     thickness = np.max(positions_cartesian[:, 2]) - np.min(positions_cartesian[:, 2])
 
     shift = thickness + interlayer_gap
-    
+
     second_positions_cartesion = positions_cartesian.copy()
     second_positions_cartesion[:, 2] += shift
-    
+
     return thickness, second_positions_cartesion
 
 
@@ -563,7 +565,7 @@ def flip_sheet(positions_cartesian, flip_mode):
     elif flip_mode == 'xy':
         new_positions_cartesian[:, 0] = 2.0 * centroid[0] - positions_cartesian[:, 0]
         new_positions_cartesian[:, 1] = 2.0 * centroid[1] - positions_cartesian[:, 1]
-    
+
     return new_positions_cartesian
 
 
@@ -619,11 +621,11 @@ def unwrap(positions_direct):
     reference : np.ndarray (3,)   — fractional coordinate of atom[0]
     unwrapped : np.ndarray (N, 3) — unwrapped fractional coordinates
     """
-    
+
     reference = np.copy(positions_direct[0])
     delta = positions_direct - reference
     delta -= np.round(delta)
-    
+
     return reference, reference + delta
 
 
@@ -643,7 +645,7 @@ def center_sheet(positions_direct):
     -------
     np.ndarray (N, 3) — shifted fractional coordinates in [0, 1)
     """
-    
+
     reference, unwrapped = unwrap(positions_direct)
     center = np.mean(unwrapped, axis=0)
     vacuum = 2
@@ -651,7 +653,7 @@ def center_sheet(positions_direct):
     new = np.copy(unwrapped)
     new[:, periodic] = unwrapped[:, periodic] - reference[periodic]
     new[:, vacuum]   = unwrapped[:, vacuum] - center[vacuum] + 0.5
-    
+
     return new % 1.0
 
 
@@ -827,12 +829,12 @@ def shift_sheet(positions_direct, shift_a, shift_b):
     -------
     new : np.ndarray, shape (N, 3) — shifted fractional coordinates in [0, 1)
     """
-    
+
     new = positions_direct.copy()
     new[:, 0] += shift_a
     new[:, 1] += shift_b
     new %= 1.0
-    
+
     return new
 
 
@@ -860,23 +862,23 @@ def build_bilayer(atom_counts, first_positions_direct, second_positions_direct, 
         species          : list[str]           — doubled per-atom species list
         flags            : np.ndarray or None  — doubled T/F flags, or None
     """
-    
+
     new_atom_counts = atom_counts + atom_counts
     new_positions_direct = np.vstack((first_positions_direct, second_positions_direct))
     center_positions_direct = center_sheet(new_positions_direct)
     new_species = list(species) + list(species)
-    
+
     new_flags = None
     if selective_dynamics:
         new_flags = np.vstack((flags, flags))
-    
+
     return {"atom_counts": new_atom_counts,
             "positions_direct": center_positions_direct,
             "species": new_species,
             "flags": new_flags if selective_dynamics else None}
 
 
-def write_stack_list(filepath, flips, rotations, shifts, working_dir):
+def write_stack_list(filepath, flips, rotations, shifts, working_dir, place):
     """Write a summary file listing all generated stacking configurations.
 
     Records the index, directory path, and the flip, rotation, and shift
@@ -889,6 +891,8 @@ def write_stack_list(filepath, flips, rotations, shifts, working_dir):
     flips       : list[tuple[str, str]]          — (flip_mode, label) entries
     rotations   : list[tuple[float, str]]        — (angle_deg, label) entries
     shifts      : list[tuple[float, float, str]] — (shift_a, shift_b, label) entries
+    working_dir : str                            — directory holding the output folders
+    place       : int                            — zero-padding width of the index
     """
 
     with open(filepath, 'w') as o:
@@ -901,7 +905,7 @@ def write_stack_list(filepath, flips, rotations, shifts, working_dir):
             for _, rot_label in rotations:
                 for shift_a, shift_b, stack_label in shifts:
                     output_dir = os.path.join(working_dir,
-                                              f"{i}_{flip_label}_{rot_label}_{stack_label}")
+                                              f"{str(i).zfill(place)}_{flip_label}_{rot_label}_{stack_label}")
                     o.write(f"{i:<6}  {flip_label:<6}  {rot_label:<10}  "
                             f"{stack_label:<10}  {shift_a:>10.6f}  {shift_b:>10.6f}  "
                             f"{output_dir}\n")
@@ -910,14 +914,14 @@ def write_stack_list(filepath, flips, rotations, shifts, working_dir):
 
 def main():
     """Parse argument, build second layer, stack both layers, and write output files"""
-    
+
     if '-h' in argv or '--help' in argv or len(argv) != 2:
         usage()
 
     working_dir = os.getcwd()
     monolayer = read_POSCAR(argv[1])
-    _, second_positions_cartesion = build_second_layer(monolayer["positions_cartesian"])
-    
+    _, second_positions_cartesion = build_second_layer(monolayer["species"], monolayer["positions_cartesian"])
+
     bilayer_elements = monolayer["elements"] + monolayer["elements"]
     sort_elements = check_elements(bilayer_elements)
     lattice_type = get_2d_lattice_type(monolayer["lattice_matrix"])
@@ -926,9 +930,9 @@ def main():
     rotations = get_rotation_grid(lattice_type)
     flips     = get_flip_grid(lattice_type)
     total = len(flips) * len(rotations) * len(shifts)
-    
+
     place = len(str(total))
-    
+
     i = 1
     for flip_mode, flip_label in flips:
         flipped_positions_cartesian = flip_sheet(second_positions_cartesion, flip_mode)
@@ -957,12 +961,12 @@ def main():
                              mapping["flags"], labels)
                 i += 1
 
-    
+
     print(f"Written {total} POSCARs Finished!\n")
-    
+
     stack_list = "STACK_LIST.dat"
     stack_list_path = os.path.join(working_dir, stack_list)
-    write_stack_list(stack_list_path, flips, rotations, shifts, working_dir)
+    write_stack_list(stack_list_path, flips, rotations, shifts, working_dir, place)
     print(f"Stack list written to: {stack_list}\n")
 
 
