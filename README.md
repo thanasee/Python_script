@@ -303,7 +303,7 @@ Usage: vaspMechanics.py <POSCAR> <OUTCAR>
 **2D mode** (N/m units):
 - Detects lattice type: hexagonal, square, rectangular, or oblique
 - Computes angle-dependent Young's modulus E(θ), Poisson's ratio ν(θ), and shear modulus G(θ) using compliance tensor rotation
-- **Output:** `Elastic.dat`, `Young.dat`, `Poisson.dat`, `Shear.dat`
+- **Output:** `Elastic.dat`, `Young.dat`, `Poisson.dat`, `Shear.dat`, `Extreme.dat` (max/min E, ν, G and their angles)
 
 **3D mode** (GPa units):
 - Identifies crystal system from spacegroup number via ASE
@@ -311,7 +311,7 @@ Usage: vaspMechanics.py <POSCAR> <OUTCAR>
 - Derives Young's modulus, Poisson's ratio, P-wave modulus, Lamé parameter, Pugh's ratio
 - Computes sound velocities (transverse, longitudinal, mean) and Debye temperature
 - Computes anisotropy indices: universal (AU), bulk (AB), shear (AG), and planar (A1, A2, A3)
-- **Output:** `Elastic.dat`, `Mechanics.dat`, `Anisotropy.dat`
+- **Output:** `Elastic.dat`, `Mechanics.dat` (includes v_t, v_l, v_m and θ_D), `Anisotropy.dat`
 
 ---
 
