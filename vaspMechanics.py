@@ -40,7 +40,7 @@ def read_structure(poscar_file):
 
     if not os.path.exists(poscar_file):
         print(f"ERROR!\nFile: {poscar_file} does not exist.")
-        exit(0)
+        exit(1)
 
     return read(poscar_file)
 
@@ -48,9 +48,11 @@ def read_structure(poscar_file):
 def read_elastic_tensor(outcar_file):
     """Read and parse the elastic tensor from a VASP OUTCAR file.
 
-    Extracts the 'TOTAL ELASTIC MODULI (kBar)' section, converts units
+    Extracts the last 'TOTAL ELASTIC MODULI (kBar)' section, converts units
     from kBar to GPa, and reorders indices from VASP convention
     (xx, yy, zz, xy, yz, xz) to Voigt notation (1, 2, 3, 4, 5, 6).
+    With IBRION=6 and ISIF>=3, VASP prints this section twice: rigid-ion
+    first, then the total including ionic relaxation; the last one is used.
 
     Parameters
     ----------
@@ -65,20 +67,22 @@ def read_elastic_tensor(outcar_file):
 
     if not os.path.exists(outcar_file):
         print(f"ERROR!\nFile: {outcar_file} does not exist.")
-        exit(0)
+        exit(1)
 
     with open(outcar_file, 'r') as f:
         outcar_lines = f.readlines()
 
-    moduli_index = None
-    for i, line in enumerate(outcar_lines):
-        if 'TOTAL ELASTIC MODULI (kBar)' in line:
-            moduli_index = i
-            break
+    moduli_indices = [i for i, line in enumerate(outcar_lines)
+                      if 'TOTAL ELASTIC MODULI (kBar)' in line]
 
-    if moduli_index is None:
-        print("The 'TOTAL ELASTIC MODULI (kBar)' section was not found in the OUTCAR file.")
-        exit(0)
+    if not moduli_indices:
+        print("ERROR! The 'TOTAL ELASTIC MODULI (kBar)' section was not found in the OUTCAR file.")
+        exit(1)
+
+    if len(moduli_indices) > 1:
+        print(f"Found {len(moduli_indices)} 'TOTAL ELASTIC MODULI (kBar)' sections; using the last one (relaxed-ion).")
+
+    moduli_index = moduli_indices[-1]
 
     moduli_lines = outcar_lines[moduli_index + 3:moduli_index + 9]
     elastic_vasp = np.array([[float(x) for x in line.split()[1:]]
@@ -543,7 +547,7 @@ def compute_mechanical_properties_3d(elastic_3d, structure):
         Dictionary containing all computed mechanical properties:
         bulk_voigt, bulk_reuss, shear_voigt, shear_reuss,
         bulk_modulus, shear_modulus, young_modulus, poisson_ratio,
-        pwave_modulus, lame_parameter, pugh_ratio, v_m,
+        pwave_modulus, lame_parameter, pugh_ratio, v_t, v_l, v_m,
         debye_temperature, universal_anisotropy, bulk_anisotropy,
         shear_anisotropy, anisotropy_1, anisotropy_2, anisotropy_3.
     """
@@ -604,7 +608,8 @@ def compute_mechanical_properties_3d(elastic_3d, structure):
         'bulk_modulus': bulk_modulus, 'shear_modulus': shear_modulus,
         'young_modulus': young_modulus, 'poisson_ratio': poisson_ratio,
         'pwave_modulus': pwave_modulus, 'lame_parameter': lame_parameter,
-        'pugh_ratio': pugh_ratio, 'v_m': v_m, 'debye_temperature': debye_temperature,
+        'pugh_ratio': pugh_ratio, 'v_t': v_t, 'v_l': v_l, 'v_m': v_m,
+        'debye_temperature': debye_temperature,
         'universal_anisotropy': universal_anisotropy,
         'bulk_anisotropy': bulk_anisotropy, 'shear_anisotropy': shear_anisotropy,
         'anisotropy_1': anisotropy_1, 'anisotropy_2': anisotropy_2, 'anisotropy_3': anisotropy_3,
@@ -631,6 +636,7 @@ def print_and_write_mechanical_properties_3d(props):
     E   = props['young_modulus']       ; v   = props['poisson_ratio']
     M   = props['pwave_modulus']       ; L   = props['lame_parameter']
     P   = props['pugh_ratio']          ; vm  = props['v_m']
+    vt  = props['v_t']                 ; vl  = props['v_l']
     tD  = props['debye_temperature']
     A_B = props['bulk_anisotropy']     ; A_G = props['shear_anisotropy']
     A_U = props['universal_anisotropy']
@@ -649,7 +655,9 @@ def print_and_write_mechanical_properties_3d(props):
         f"P-wave Modulus                (M)  : {M:>10.4f} GPa\n"
         f"Lam\u00e9's first parameter        (L)  : {L:>10.4f} GPa\n"
         f"Pugh's Ratio                  (P)  : {P:>10.4f}\n"
-        f"Sound velocity                (v_m): {vm:>10.4f} m/s\n"
+        f"Transverse sound velocity     (v_t): {vt:>10.4f} m/s\n"
+        f"Longitudinal sound velocity   (v_l): {vl:>10.4f} m/s\n"
+        f"Mean sound velocity           (v_m): {vm:>10.4f} m/s\n"
         f"Debye temperature             (\u03B8_D): {tD:>10.4f} K\n"
     )
 
@@ -678,7 +686,9 @@ def print_and_write_mechanical_properties_3d(props):
         o.write(f"P-wave Modulus                (M)  : {M:>10.4f} GPa\n")
         o.write(f"Lam\u00e9's first parameter        (L)  : {L:>10.4f} GPa\n")
         o.write(f"Pugh's Ratio                  (P)  : {P:>10.4f}\n")
-        o.write(f"Sound velocity                (v_m): {vm:>10.4f} m/s\n")
+        o.write(f"Transverse sound velocity     (v_t): {vt:>10.4f} m/s\n")
+        o.write(f"Longitudinal sound velocity   (v_l): {vl:>10.4f} m/s\n")
+        o.write(f"Mean sound velocity           (v_m): {vm:>10.4f} m/s\n")
         o.write(f"Debye temperature             (\u03B8_D): {tD:>10.4f} K\n")
 
     with open('Anisotropy.dat', 'w') as o:
@@ -721,7 +731,7 @@ def run_3d(structure, elastic_coef):
 def main():
     """Parse arguments, read inputs, and dispatch to 2D or 3D analysis."""
 
-    if '-h' in argv or len(argv) != 3:
+    if '-h' in argv or '--help' in argv or len(argv) != 3:
         usage()
 
     structure    = read_structure(argv[1])
