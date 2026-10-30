@@ -16,6 +16,9 @@ Usage: analyzePhono3py.py <kappa input> <gruneisen input (optional)>
 This script obtain thermal properties form HDF5 files
 some kind of thermal properties obtain at specified temperature
 
+When no Gruneisen file is given (or it does not exist), the script asks
+whether to run 'phono3py --mesh <mesh> --gruneisen' in the current directory.
+
 This script was developed by Thanasee Thanasarnsurapong.
 """)
     exit(0)
@@ -50,6 +53,7 @@ def read_kappa(file, key, threshold=None, abs_value=False):
         return np.where(condition, 0.0, values)
     return values
 
+
 # ── Column headers (preserved exactly from original script) ───────────────────
 TENSOR_HEADER     = "#  T(K)        xx          yy          zz          yz          xz          xy"
 FREQ_HEADER       = "#  Frequency(THz) xx            yy             zz           yz            xz            xy"
@@ -69,11 +73,14 @@ def outpath(kappa_input_file, tag):
     """Build an output .dat filename from the kappa HDF5 input filename.
 
     Replaces the 'kappa' token in the filename with the given tag and
-    changes the '.hdf5' extension to '.dat'.
+    changes the '.hdf5' extension to '.dat'. Only the file name is used, so
+    output files are always written to the current directory (the same place
+    as the per-temperature T*K folders), even if the input is given with a path.
 
     Example
     -------
     outpath('kappa-m111111.hdf5', 'KappaVsT') → 'KappaVsT-m111111.dat'
+    outpath('run1/kappa-m111111.hdf5', 'KappaVsT') → 'KappaVsT-m111111.dat'
 
     Parameters
     ----------
@@ -87,7 +94,8 @@ def outpath(kappa_input_file, tag):
     str
         Output filename with the tag substituted and extension changed to .dat.
     """
-    return kappa_input_file.replace('kappa', tag).replace('hdf5', 'dat')
+    stem = os.path.splitext(os.path.basename(kappa_input_file))[0]
+    return stem.replace('kappa', tag, 1) + '.dat'
 
 
 def compute_kappa_variant(mode_kappa, weight, temperature, frequency, mean_freepath, kappa_ref):
@@ -510,7 +518,7 @@ def write_heat_capacity_vs_temperature(filepath, temperature, heat_capacity_tota
 def write_gruneisen_vs_frequency(filepath, frequency, gruneisen):
     """Write Grüneisen parameter vs frequency.
 
-    Temperature-independent quantity computed separately via phono3py-load.
+    Temperature-independent quantity computed separately via phono3py --gruneisen.
 
     Parameters
     ----------
@@ -972,6 +980,53 @@ def ask_dimensionality():
     return factor_2d, renorm_info
 
 
+def ask_gruneisen_run(mesh):
+    """Interactively ask whether to calculate Grüneisen parameters with phono3py.
+
+    Parameters
+    ----------
+    mesh : ndarray, shape (3,)
+        q-point mesh of the kappa file, used for the phono3py --mesh option.
+
+    Returns
+    -------
+    bool
+        True to run 'phono3py --mesh <mesh> --gruneisen', False to skip.
+    """
+    mesh_str = " ".join(map(str, mesh))
+    print("\nGruneisen parameter:")
+    print(f"  [y] Calculate with 'phono3py --mesh {mesh_str} --gruneisen'")
+    print("  [n] Skip (no GruneisenVsFrequency output)")
+
+    while True:
+        choice = input("Select (y or n): ").strip().lower()
+        if choice in ('y', 'yes', 'n', 'no'):
+            break
+        print("  Please enter y or n.")
+
+    return choice in ('y', 'yes')
+
+
+def write_renorm_info(filepath, renorm_info):
+    """Write the 2D renormalization summary.
+
+    Parameters
+    ----------
+    filepath    : str
+        Output file path.
+    renorm_info : str
+        Description of the renormalization from ask_dimensionality().
+    """
+    with open(filepath, 'w') as o:
+        o.write("# 2D thermal conductivity renormalization\n")
+        o.write(f"# {renorm_info}\n")
+        o.write("# All kappa values in this run have been multiplied by (c / t_eff).\n")
+        o.write("# Formula: k_2D = k_phono3py * c_length / t_eff\n")
+        o.write("#   c_length = length of c lattice vector (Angstrom)\n")
+        o.write("#   t_eff    = z_range + r_vdW_top + r_vdW_bottom (Angstrom)\n")
+        o.write("#   r_vdW    = Alvarez (2013) van der Waals radii\n")
+
+
 def main():
     """Read HDF5 inputs, compute derived quantities, and write all output files."""
     if '-h' in argv or len(argv) < 2 or len(argv) > 3:
@@ -981,7 +1036,11 @@ def main():
 
     if not os.path.exists(kappa_input_file):
         print(f"ERROR!\nFile: {kappa_input_file} does not exist.")
-        exit(0)
+        exit(1)
+
+    if not h5.is_hdf5(kappa_input_file):
+        print(f"ERROR!\nFile: {kappa_input_file} is not an HDF5 file.")
+        exit(1)
 
     # ── Read kappa HDF5 ───────────────────────────────────────────────────────
     with h5.File(kappa_input_file, 'r') as f:
@@ -1001,6 +1060,8 @@ def main():
         mode_kappa     = read_kappa(f, "mode_kappa",     threshold=1e-12, abs_value=True)
         kappa_RTA      = read_kappa(f, "kappa_RTA",      threshold=1e-12)
         mode_kappa_RTA = read_kappa(f, "mode_kappa_RTA", threshold=1e-12, abs_value=True)
+        # --br --tt njc23/ibdb19/smm19: kappa = kappa_intra + kappa_inter
+        kappa_intra    = read_kappa(f, "kappa_intra",    threshold=1e-12)
         # --isotope
         gamma_isotope  = read_kappa(f, "gamma_isotope")
         # --nu
@@ -1020,15 +1081,46 @@ def main():
         # mode_kappa_P_exact = read_kappa(f, "mode_kappa_P_exact", threshold=1e-12, abs_value=True)
         # kappa_TOT_exact    = read_kappa(f, "kappa_TOT_exact",    threshold=1e-12)
 
-    # has_bte = kappa is not None and mode_kappa is not None
-    # has_wigner = all(x is not None for x in (kappa_C, mode_kappa_C, kappa_P_RTA, mode_kappa_P_RTA, kappa_TOT_RTA))
+    # ── Check which datasets are available ───────────────────────────────────
+    # Datasets depend on the run mode (e.g. --lbte files may have no mode_kappa
+    # or gv_by_gv, --tt files no mode-resolved kappa). Outputs that need
+    # missing data are skipped.
+    if kappa is None:
+        print("ERROR! 'kappa' does not exist in the kappa file.")
+        exit(1)
 
-    # if has_bte or has_wigner:
-    #     pass
-    # else:
-    #     print("Error! Essential variables are not exist.")
-    #     exit(0)
-    
+    # --lbte --reducible-colmat writes frequency and mode_kappa_RTA on all grid
+    # points, but gamma, group_velocity, heat_capacity and weight on irreducible
+    # q-points only. The arrays cannot be paired mode by mode, so only the
+    # kappa tensors are written for such files.
+    is_reducible = frequency.shape[0] != weight.shape[0]
+
+    # Outputs that need mode_kappa / mode_kappa_RTA are written only when the
+    # dataset exists. Tensor-vs-T files (KappaVsT, Kappa_RTAVsT) need only
+    # kappa / kappa_RTA and are always written when those exist.
+    has_mode_kappa = mode_kappa is not None
+    has_mode_kappa_RTA = mode_kappa_RTA is not None
+
+    if is_reducible:
+        print("WARNING! 'frequency' and 'weight' have different numbers of q-points "
+              f"({frequency.shape[0]} vs {weight.shape[0]}),")
+        print("         as in kappa files from --lbte --reducible-colmat.")
+        print("         Only KappaVsT and Kappa_RTAVsT are written.")
+    else:
+        if not has_mode_kappa:
+            print("WARNING! 'mode_kappa' does not exist in the kappa file.")
+            print("         Skipped: Kappa_bandVsT, ContributeKappaVsT and in each T*K folder")
+            print("         KappaVs{Frequency,Mfp}, {cumulative,derivative}_KappaVs{Frequency,Mfp}.")
+
+        if kappa_RTA is not None and not has_mode_kappa_RTA:
+            print("WARNING! 'mode_kappa_RTA' does not exist in the kappa file.")
+            print("         Skipped: Kappa_RTA_bandVsT and in each T*K folder")
+            print("         Kappa_RTAVs{Frequency,Mfp}, {cumulative,derivative}_Kappa_RTAVs{Frequency,Mfp}.")
+
+        if gv_by_gv is None:
+            print("WARNING! 'gv_by_gv' does not exist in the kappa file.")
+            print("         Skipped: Tau_CRTAVsT")
+
     # ── Dimensionality: optional 2D renormalization ───────────────────────────
     renorm_factor, renorm_info = ask_dimensionality()
  
@@ -1044,6 +1136,7 @@ def main():
         mode_kappa         = _renorm(mode_kappa)
         kappa_RTA          = _renorm(kappa_RTA)
         mode_kappa_RTA     = _renorm(mode_kappa_RTA)
+        kappa_intra        = _renorm(kappa_intra)
         # kappa_C            = _renorm(kappa_C)
         # mode_kappa_C       = _renorm(mode_kappa_C)
         # kappa_P_RTA        = _renorm(kappa_P_RTA)
@@ -1052,26 +1145,55 @@ def main():
         # kappa_P_exact      = _renorm(kappa_P_exact)
         # mode_kappa_P_exact = _renorm(mode_kappa_P_exact)
         # kappa_TOT_exact    = _renorm(kappa_TOT_exact)
-    
+
+
+    # ── Reducible collision matrix: kappa tensors only ────────────────────────
+    if is_reducible:
+        if renorm_info is not None:
+            write_renorm_info(outpath(kappa_input_file, 'Renorm2D_info'), renorm_info)
+        write_tensor_vs_temperature(
+            outpath(kappa_input_file, 'KappaVsT'),
+            kappa, temperature)
+        if kappa_RTA is not None:
+            write_tensor_vs_temperature(
+                outpath(kappa_input_file, 'Kappa_RTAVsT'),
+                kappa_RTA, temperature)
+        print("\nConvert HDF5 file to DAT files ... Finished!")
+        return
 
     # ── Grüneisen parameter ───────────────────────────────────────────────────
-    gruneisen_run = False
-    if len(argv) == 3:
+    # An existing Grüneisen file given as the 2nd argument is used directly.
+    # Otherwise the user is asked whether to run phono3py --gruneisen.
+    gruneisen_input_file = None
+    if len(argv) == 3 and os.path.exists(argv[2]):
         gruneisen_input_file = argv[2]
-        if not os.path.exists(gruneisen_input_file):
-            gruneisen_run = True
     else:
-        gruneisen_run = True
+        if len(argv) == 3:
+            print(f"\nGruneisen file '{argv[2]}' does not exist.")
+        if ask_gruneisen_run(mesh):
+            result = subprocess.run(
+                "phono3py --mesh " + " ".join(map(str, mesh)) + " --gruneisen",
+                shell=True)
+            gruneisen_output_file = 'gruneisen-m' + ''.join(map(str, mesh)) + '.hdf5'
+            if result.returncode == 0 and os.path.exists('gruneisen.hdf5'):
+                os.rename('gruneisen.hdf5', gruneisen_output_file)
+                gruneisen_input_file = gruneisen_output_file
+            else:
+                print("WARNING! Gruneisen calculation by phono3py failed. "
+                      "GruneisenVsFrequency output is skipped.")
+        else:
+            print("Gruneisen calculation is skipped. GruneisenVsFrequency output is skipped.")
 
-    if gruneisen_run:
-        subprocess.run(
-            "phono3py-load --mesh " + " ".join(map(str, mesh)) + " --gruneisen",
-            shell=True)
-        gruneisen_input_file = 'gruneisen-m' + ''.join(map(str, mesh)) + '.hdf5'
-        os.rename('gruneisen.hdf5', gruneisen_input_file)
-
-    with h5.File(gruneisen_input_file, 'r') as g:
-        gruneisen = g["gruneisen"][()]
+    gruneisen = None
+    if gruneisen_input_file is not None:
+        with h5.File(gruneisen_input_file, 'r') as g:
+            gruneisen = g["gruneisen"][()]
+        # The Grüneisen file must be on the same q-point mesh as the kappa file
+        if gruneisen.shape != frequency.shape:
+            print(f"WARNING! Gruneisen data shape {gruneisen.shape} does not match "
+                  f"frequency shape {frequency.shape} (different mesh?). "
+                  "GruneisenVsFrequency output is skipped.")
+            gruneisen = None
 
     # ── Derived quantities ────────────────────────────────────────────────────
     sorted_frequency = frequency.flatten()[np.argsort(frequency.flatten())]
@@ -1089,19 +1211,37 @@ def main():
     heat_capacity_total = heat_capacity.sum(axis=(1, 2))
 
     # Base variant (--lbte or --br)
-    (mode_kappa_weight, kappa_branch,
-     cumulative_kappa_frequency, derivative_kappa_frequency,
-     cumulative_kappa_mfp, derivative_kappa_mfp,
-     contribute_kappa_all, _) = compute_kappa_variant(
-        mode_kappa, weight, temperature, frequency, mean_freepath, kappa)
+    if has_mode_kappa:
+        # mode_kappa normally adds up to kappa. In phono3py-wte (--br --tt wte)
+        # files, kappa = kappa_P + kappa_C while mode_kappa holds only the
+        # P term, so the percentages are taken relative to the sum of mode_kappa.
+        kappa_base_ref = kappa
+        kappa_mode_sum = mode_kappa.sum(axis=(1, 2)) / weight.sum()
+        kappa_scale = max(np.abs(kappa).max(), 1e-12)
+        if np.abs(kappa_mode_sum - kappa).max() > 1e-8 * kappa_scale:
+            kappa_base_ref = kappa_mode_sum
+            print("WARNING! mode_kappa does not add up to kappa "
+                  "(e.g. phono3py-wte --br file, where kappa = kappa_P + kappa_C).")
+            print("         ContributeKappaVsT and Tau_CRTA use the sum of mode_kappa; "
+                  "KappaVsT still writes kappa.")
+
+        (mode_kappa_weight, kappa_branch,
+         cumulative_kappa_frequency, derivative_kappa_frequency,
+         cumulative_kappa_mfp, derivative_kappa_mfp,
+         contribute_kappa_all, _) = compute_kappa_variant(
+            mode_kappa, weight, temperature, frequency, mean_freepath, kappa_base_ref)
 
     # --lbte: RTA companion
-    if kappa_RTA is not None and mode_kappa_RTA is not None:
+    if has_mode_kappa_RTA:
+        # kappa_RTA is only the reference for the percentage contribution,
+        # which is not written for the RTA variant.
+        kappa_RTA_ref = (kappa_RTA if kappa_RTA is not None
+                         else mode_kappa_RTA.sum(axis=(1, 2)) / weight.sum())
         (mode_kappa_RTA_weight, kappa_RTA_branch,
          cumulative_kappa_RTA_frequency, derivative_kappa_RTA_frequency,
          cumulative_kappa_RTA_mfp, derivative_kappa_RTA_mfp,
          _, _) = compute_kappa_variant(
-            mode_kappa_RTA, weight, temperature, frequency, mean_freepath, kappa_RTA)
+            mode_kappa_RTA, weight, temperature, frequency, mean_freepath, kappa_RTA_ref)
 
     # --wigner coherence term
     # if kappa_C is not None and mode_kappa_C is not None:
@@ -1128,24 +1268,30 @@ def main():
     #         mode_kappa_P_exact, weight, temperature, frequency, mean_freepath, kappa_P_exact)
 
     # Constant RTA lifetime: tau_CRTA = kappa / sum_qj(C_qj * v_qj ⊗ v_qj)
-    kappa_per_tau = (
-        kappa_unit_conversion * (2 * np.pi) *
-        heat_capacity[:, :, :, np.newaxis] *
-        gv_by_gv[np.newaxis, :, :, :]
-    ).sum(axis=1).sum(axis=1) / weight.sum()
+    tau_CRTA = None
+    if gv_by_gv is not None:
+        kappa_per_tau = (
+            kappa_unit_conversion * (2 * np.pi) *
+            heat_capacity[:, :, :, np.newaxis] *
+            gv_by_gv[np.newaxis, :, :, :]
+        ).sum(axis=1).sum(axis=1) / weight.sum()
 
-    if kappa_RTA is not None:
+        # tau_CRTA needs the particle-like RTA kappa, so pick it in this order:
+        #   kappa_RTA                   (--lbte, with or without --tt)
+        #   sum of mode_kappa           (--br; equals kappa_P_RTA for phono3py-wte)
+        #   kappa_intra                 (--br --tt njc23/ibdb19/smm19)
+        #   kappa                       (anything else)
+        if kappa_RTA is not None:
+            kappa_tau_ref = kappa_RTA
+        elif has_mode_kappa:
+            kappa_tau_ref = kappa_base_ref
+        elif kappa_intra is not None:
+            kappa_tau_ref = kappa_intra
+        else:
+            kappa_tau_ref = kappa
         with np.errstate(divide='ignore', invalid='ignore'):
             tau_CRTA = np.where(kappa_per_tau > 0.0,
-                                kappa_RTA / kappa_per_tau, 0.0)
-    # elif kappa_P_RTA is not None:
-    #     with np.errstate(divide='ignore', invalid='ignore'):
-    #         tau_CRTA = np.where(kappa_per_tau > 0.0,
-    #                             kappa_P_RTA / kappa_per_tau, 0.0)
-    else:
-        with np.errstate(divide='ignore', invalid='ignore'):
-            tau_CRTA = np.where(kappa_per_tau > 0.0,
-                                kappa / kappa_per_tau, 0.0)
+                                kappa_tau_ref / kappa_per_tau, 0.0)
 
     # Average lifetime over all q-points and bands
     tau_avg = tau.sum(axis=1).sum(axis=1) / weight.sum()
@@ -1170,27 +1316,20 @@ def main():
 
     # Write renormalization summary if 2D
     if renorm_info is not None:
-        renorm_file = outpath(kappa_input_file, 'Renorm2D_info')
-        with open(renorm_file, 'w') as o:
-            o.write("# 2D thermal conductivity renormalization\n")
-            o.write(f"# {renorm_info}\n")
-            o.write("# All kappa values in this run have been multiplied by (c / t_eff).\n")
-            o.write("# Formula: k_2D = k_phono3py * c_length / t_eff\n")
-            o.write("#   c_length = length of c lattice vector (Angstrom)\n")
-            o.write("#   t_eff    = z_range + r_vdW_top + r_vdW_bottom (Angstrom)\n")
-            o.write("#   r_vdW    = Alvarez (2013) van der Waals radii\n")
+        write_renorm_info(outpath(kappa_input_file, 'Renorm2D_info'), renorm_info)
 
     write_tensor_vs_temperature(
         outpath(kappa_input_file, 'KappaVsT'),
         kappa, temperature)
 
-    write_band_tensor_vs_temperature(
-        outpath(kappa_input_file, 'Kappa_bandVsT'),
-        kappa_branch, temperature)
+    if has_mode_kappa:
+        write_band_tensor_vs_temperature(
+            outpath(kappa_input_file, 'Kappa_bandVsT'),
+            kappa_branch, temperature)
 
-    write_contribution_vs_temperature(
-        outpath(kappa_input_file, 'ContributeKappaVsT'),
-        contribute_kappa_all, temperature)
+        write_contribution_vs_temperature(
+            outpath(kappa_input_file, 'ContributeKappaVsT'),
+            contribute_kappa_all, temperature)
 
     write_group_velocity(
         outpath(kappa_input_file, 'GvVsFrequency'),
@@ -1204,23 +1343,26 @@ def main():
         outpath(kappa_input_file, 'CvVsT'),
         temperature, heat_capacity_total)
 
-    write_gruneisen_vs_frequency(
-        outpath(kappa_input_file, 'GruneisenVsFrequency'),
-        frequency, gruneisen)
+    if gruneisen is not None:
+        write_gruneisen_vs_frequency(
+            outpath(kappa_input_file, 'GruneisenVsFrequency'),
+            frequency, gruneisen)
 
-    write_tau_CRTA_vs_temperature(
-        outpath(kappa_input_file, 'Tau_CRTAVsT'),
-        temperature, tau_CRTA)
+    if tau_CRTA is not None:
+        write_tau_CRTA_vs_temperature(
+            outpath(kappa_input_file, 'Tau_CRTAVsT'),
+            temperature, tau_CRTA)
 
     write_tau_avg_vs_temperature(
         outpath(kappa_input_file, 'Tau_AvgVsT'),
         temperature, tau_avg)
 
     # ── Optional variant: --lbte kappa_RTA ───────────────────────────────────
-    if kappa_RTA is not None and mode_kappa_RTA is not None:
+    if kappa_RTA is not None:
         write_tensor_vs_temperature(
             outpath(kappa_input_file, 'Kappa_RTAVsT'),
             kappa_RTA, temperature)
+    if has_mode_kappa_RTA:
         write_band_tensor_vs_temperature(
             outpath(kappa_input_file, 'Kappa_RTA_bandVsT'),
             kappa_RTA_branch, temperature)
@@ -1284,11 +1426,12 @@ def main():
         os.makedirs(temp_dir, exist_ok=True)
 
         # ── base kappa ───────────────────────────────────────────────────────
-        write_variant_per_temperature(
-            temp_dir, kappa_input_file, 'KappaVsFrequency', 'KappaVsMfp', 'cumulative_KappaVsFrequency',
-            'derivative_KappaVsFrequency', 'cumulative_KappaVsMfp', 'derivative_KappaVsMfp',frequency,
-            mean_freepath, mode_kappa_weight, cumulative_kappa_frequency, derivative_kappa_frequency,
-            cumulative_kappa_mfp, derivative_kappa_mfp, sorted_frequency, sorted_mean_freepath, temp_index)
+        if has_mode_kappa:
+            write_variant_per_temperature(
+                temp_dir, kappa_input_file, 'KappaVsFrequency', 'KappaVsMfp', 'cumulative_KappaVsFrequency',
+                'derivative_KappaVsFrequency', 'cumulative_KappaVsMfp', 'derivative_KappaVsMfp',frequency,
+                mean_freepath, mode_kappa_weight, cumulative_kappa_frequency, derivative_kappa_frequency,
+                cumulative_kappa_mfp, derivative_kappa_mfp, sorted_frequency, sorted_mean_freepath, temp_index)
 
         # ── gamma and tau ────────────────────────────────────────────────────
         write_scattering_rate_vs_frequency(
@@ -1299,7 +1442,7 @@ def main():
             frequency, tau, temp_index)
 
         # ── kappa_RTA ────────────────────────────────────────────────────────
-        if kappa_RTA is not None and mode_kappa_RTA is not None:
+        if has_mode_kappa_RTA:
             write_variant_per_temperature(
                 temp_dir, kappa_input_file, 'Kappa_RTAVsFrequency', 'Kappa_RTAVsMfp', 'cumulative_Kappa_RTAVsFrequency',
                 'derivative_Kappa_RTAVsFrequency', 'cumulative_Kappa_RTAVsMfp', 'derivative_Kappa_RTAVsMfp',frequency,
