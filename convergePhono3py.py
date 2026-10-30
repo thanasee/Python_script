@@ -67,8 +67,14 @@ def read_HDF5(filepath):
     Keys not present in the file are returned as None.
 
     Supported phono3py calculation modes and their corresponding keys:
-        --br / --lbte : 'kappa'
-        --lbte        : 'kappa_RTA'
+        --br / --lbte                   : 'kappa'
+        --lbte                          : 'kappa_RTA'
+        --br --tt njc23/ibdb19/smm19    : 'kappa_intra', 'kappa_inter'
+        --lbte --tt njc23/ibdb19/smm19  : 'kappa_inter', 'kappa_intra_exact', 'kappa_intra_RTA'
+
+    With --lbte --tt, phono3py writes only the intra-band terms to 'kappa' and
+    'kappa_RTA', so 'kappa' is rebuilt as kappa_intra_exact + kappa_inter and
+    the duplicate 'kappa_RTA' (= kappa_intra_RTA) is dropped.
 
     Parameters
     ----------
@@ -78,16 +84,23 @@ def read_HDF5(filepath):
     Returns
     -------
     dict
-        Dictionary with keys: 'mesh', 'temperature', 'kappa', 'kappa_RTA'.
+        Dictionary with keys: 'mesh', 'temperature', 'kappa', 'kappa_RTA',
+        'kappa_intra', 'kappa_inter', 'kappa_intra_exact', 'kappa_intra_RTA'.
         Each value is a numpy array or None if not present in the file.
     """
 
     with h5.File(filepath, 'r') as f:
-        data = {'mesh'           : np.array(f["mesh"])        if 'mesh'        in f else None,
-                'temperature'    : np.array(f["temperature"]) if 'temperature' in f else None,
+        data = {'mesh'             : np.array(f["mesh"])        if 'mesh'        in f else None,
+                'temperature'      : np.array(f["temperature"]) if 'temperature' in f else None,
                 # --br and --lbte
-                'kappa'          : load(f, 'kappa'),
-                'kappa_RTA'      : load(f, 'kappa_RTA')}
+                'kappa'            : load(f, 'kappa'),
+                'kappa_RTA'        : load(f, 'kappa_RTA'),
+                # --br --tt njc23/ibdb19/smm19: kappa = kappa_intra + kappa_inter
+                'kappa_intra'      : load(f, 'kappa_intra'),
+                'kappa_inter'      : load(f, 'kappa_inter'),
+                # --lbte --tt njc23/ibdb19/smm19: kappa = kappa_intra_exact only
+                'kappa_intra_exact': load(f, 'kappa_intra_exact'),
+                'kappa_intra_RTA'  : load(f, 'kappa_intra_RTA')}
                 # --wigner --br or --wigner --lbte
                 # 'kappa_C'        : load(f, 'kappa_C'),
                 # --wigner --br
@@ -96,6 +109,11 @@ def read_HDF5(filepath):
                 # --wigner --lbte
                 # 'kappa_P_exact'  : load(f, 'kappa_P_exact'),
                 # 'kappa_TOT_exact': load(f, 'kappa_TOT_exact')}
+
+    # --lbte --tt: total kappa = kappa_intra_exact + kappa_inter
+    if data['kappa_intra_exact'] is not None and data['kappa_inter'] is not None:
+        data['kappa']     = data['kappa_intra_exact'] + data['kappa_inter']
+        data['kappa_RTA'] = None
 
     return data
 
@@ -495,22 +513,24 @@ def ask_dimensionality():
 
     # 2D: locate POSCAR
     poscar_path = 'POSCAR'
-    if not os.path.exists('POSCAR'):
-        print(f"ERROR! POSCAR file does not exist. Using 3D (no renormalization).")
-        return 1.0, None
+    if not os.path.exists(poscar_path):
+        poscar_path = input("POSCAR not found in current directory. Enter path to POSCAR: ").strip()
+        if not os.path.exists(poscar_path):
+            print(f"ERROR! POSCAR file '{poscar_path}' does not exist. Using 3D (no renormalization).")
+            return 1.0, None
 
-    poscar = read_POSCAR(poscar_path)
+    poscar                              = read_POSCAR(poscar_path)
     factor_2d, t_eff, c_proj, z_range, _ = compute_2d_thickness(poscar)
 
     print("\n  2D renormalization summary:")
-    print(f"    c projection onto ab-normal : {c_proj:.5f} Å")
-    print(f"    z range (atom-atom)         : {z_range:.5f} Å")
-    print(f"    Effective thickness         : {t_eff:.5f} Å  (z_range + r_vdW_top + r_vdW_bottom)")
+    print(f"    c projection onto ab-normal : {c_proj:.4f} Å")
+    print(f"    z range (atom-atom)         : {z_range:.4f} Å")
+    print(f"    Effective thickness         : {t_eff:.4f} Å  (z_range + r_vdW_top + r_vdW_bottom)")
     print(f"    Renormalization factor      : {factor_2d:.6f}")
     print(f"    kappa_2D = kappa_phono3py × {factor_2d:.6f}")
 
-    renorm_info = (f"2D renormalization: c_proj = {c_proj:.5f} A, "
-                   f"t_eff = {t_eff:.5f} A (z_range = {z_range:.5f} A), "
+    renorm_info = (f"2D renormalization: c_proj = {c_proj:.4f} A, "
+                   f"t_eff = {t_eff:.4f} A (z_range = {z_range:.4f} A), "
                    f"factor = {factor_2d:.6f}")
 
     return factor_2d, renorm_info
@@ -545,7 +565,7 @@ def write_dat(filename, rows, display=False, renorm_info=None):
     with open(filename, 'w') as o:
         o.write(header1 + "\n")
         if renorm_info is not None:
-            o.write(renorm_info + "\n")
+            o.write(f"# {renorm_info}\n")
         o.write(header2 + "\n")
         for item in rows:
             o.write(row_fmt.format(*item) + "\n")
@@ -571,8 +591,12 @@ def main():
     renorm_factor, renorm_info = ask_dimensionality()
 
     # Accumulators: one list of row-tuples per kappa type
-    collected = {'kappa'          : [],
-                 'kappa_RTA'      : []}
+    collected = {'kappa'            : [],
+                 'kappa_RTA'        : [],
+                 'kappa_intra'      : [],
+                 'kappa_inter'      : [],
+                 'kappa_intra_exact': [],
+                 'kappa_intra_RTA'  : []}
                  # 'kappa_C'        : [],
                  # 'kappa_P_RTA'    : [],
                  # 'kappa_TOT_RTA'  : [],
@@ -597,8 +621,12 @@ def main():
                 collected[key].append(extract_row(mesh, data[key], temp_index, renorm_factor))
 
     # Output configuration: filename and whether to display to stdout
-    output_map = {'kappa'          : ('KappaVsMesh.dat',           True),
-                  'kappa_RTA'      : ('Kappa_RTAVsMesh.dat',       False)}
+    output_map = {'kappa'            : ('KappaVsMesh.dat',             True),
+                  'kappa_RTA'        : ('Kappa_RTAVsMesh.dat',         False),
+                  'kappa_intra'      : ('Kappa_intraVsMesh.dat',       False),
+                  'kappa_inter'      : ('Kappa_interVsMesh.dat',       False),
+                  'kappa_intra_exact': ('Kappa_intra_exactVsMesh.dat', False),
+                  'kappa_intra_RTA'  : ('Kappa_intra_RTAVsMesh.dat',   False)}
                   # 'kappa_C'        : ('Kappa_CVsMesh.dat',         False),
                   # 'kappa_P_RTA'    : ('Kappa_P_RTAVsMesh.dat',     True),
                   # 'kappa_TOT_RTA'  : ('Kappa_TOT_RTAVsMesh.dat',   False),
