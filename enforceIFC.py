@@ -14,7 +14,7 @@ from hiphive.utilities import extract_parameters
 def usage():
     """Print usage information and exit."""
     print("""
-Usage: enforceIFC.py <input FORCE_CONSTANTS> [output FORCE_CONSTANTS]
+Usage: enforceIFC.py <input FORCE_CONSTANTS> <output FORCE_CONSTANTS>
 
 This script enforces the rotational sum rules on the second-order interatomic force constants (IFC2) of a supercell structure.
 It reads the primitive and supercell structures, extracts the IFC2 from a specified file, applies the rotational sum rules, and writes the modified IFC2 back to a file.
@@ -167,27 +167,39 @@ def main():
     """Parse arguments, read structures and force constants, apply sum rules, and write modified force constants."""
     if '-h' in argv or '--help' in argv or len(argv) > 3:
         usage()
-    
+
     primitive_file = "POSCAR"
     if not os.path.isfile(primitive_file):
-        print(f"Error: Primitive structure file '{primitive_file}' not found.")
+        print(f"ERROR! Primitive structure file '{primitive_file}' not found.")
         exit(1)
 
     supercell_file = "SPOSCAR"
     if not os.path.isfile(supercell_file):
-        print(f"Error: Supercell structure file '{supercell_file}' not found.")
+        print(f"ERROR! Supercell structure file '{supercell_file}' not found.")
         exit(1)
 
-    input_fc_file = argv[1] if len(argv) > 1 else "FORCE_CONSTANTS"
-    if not os.path.isfile(input_fc_file):
-        if not os.path.isfile("phonopy_params.yaml"):
-            vasprun_files = sorted(f for f in glob("vasprun.xml-*") if f != "vasprun.xml-sposcar")
-            subcommand = f"phonopy --fz vasprun.xml-sposcar {' '.join(vasprun_files)} --sp"
-            subprocess.run(subcommand, shell=True, check=True)
-    
-        command = "phonopy-load phonopy_params.yaml --writefc --full-fc"
-        subprocess.run(command, shell=True, check=True)
+    if len(argv) > 1:
+        input_fc_file = argv[1]
+        if not os.path.isfile(input_fc_file):
+            print(f"ERROR! Input force constants file '{input_fc_file}' not found.")
+            exit(1)
+    else:
         input_fc_file = "FORCE_CONSTANTS"
+        if not os.path.isfile(input_fc_file):
+            if not os.path.isfile("phonopy_params.yaml"):
+                if not os.path.isfile("vaspout-sposcar.h5"):
+                    print("ERROR! 'vaspout-sposcar.h5' not found; cannot generate 'phonopy_params.yaml'.")
+                    exit(1)
+                vaspout_files = sorted(f for f in glob("vaspout-*.h5") if f != "vaspout-sposcar.h5")
+                if not vaspout_files:
+                    print("ERROR! No displacement 'vaspout-*.h5' files found; cannot generate 'phonopy_params.yaml'.")
+                    exit(1)
+                subprocess.run(["phonopy-init", "--fz", "vaspout-sposcar.h5", *vaspout_files, "--sp"], check=True)
+
+            subprocess.run(["phonopy", "phonopy_params.yaml", "--writefc", "--full-fc"], check=True)
+            if not os.path.isfile(input_fc_file):
+                print(f"ERROR! Phonopy did not write '{input_fc_file}'.")
+                exit(1)
     input_format = "hdf5" if input_fc_file.endswith(".hdf5") else "text"
 
     output_fc_file = argv[2] if len(argv) > 2 else (
