@@ -145,7 +145,7 @@ Automatically scans for all `kappa-m*.hdf5` files, sorts them by mesh number, an
 
 #### `analyzePhono3py.py`
 
-Extracts mode-resolved thermal transport properties from a single Phono3py `kappa-mXXX.hdf5` file and writes output files suitable for plotting in xmgrace or matplotlib. Supports all Phono3py calculation modes (`--br`, `--lbte`, `--wigner`). If a Grüneisen HDF5 file is provided, Grüneisen parameters and group velocities are also extracted.
+Extracts mode-resolved thermal transport properties from a single Phono3py (4.x) `kappa-mXXX.hdf5` file and writes output files suitable for plotting in xmgrace or matplotlib. Supports `--br` and `--lbte` kappa files. Group velocities are read from the kappa file.
 
 ```
 Usage: analyzePhono3py.py <kappa HDF5 file> <gruneisen HDF5 file (optional)>
@@ -153,27 +153,36 @@ Usage: analyzePhono3py.py <kappa HDF5 file> <gruneisen HDF5 file (optional)>
 
 Output filenames follow the pattern `<tag>-mXXXXXX.dat`, where the mesh token is preserved from the input filename (e.g., `kappa-m111111.hdf5` → `KappaVsT-m111111.dat`). All κL tensor components are written in Voigt notation (xx, yy, zz, yz, xz, xy) in W/(m·K).
 
-**2D renormalization:** After loading the HDF5 file, the script interactively prompts for dimensionality (1 = 3D, 2 = 2D). For 2D materials, the vacuum direction is assumed to be c. A dimensionless renormalization factor derived from the c-axis length is applied to all κL arrays before any output is written, correcting Phono3py's bulk-convention κL to the 2D-referenced value. Units remain W/(m·K) throughout. The renormalization applies to all output file groups below.
+**Grüneisen parameter:** If no Grüneisen file is given (or it does not exist), the script asks whether to run `phono3py --mesh <mesh> --gruneisen` in the current directory, using the mesh of the kappa file. The resulting `gruneisen.hdf5` is renamed to `gruneisen-m<mesh>.hdf5`. A Grüneisen file on a different mesh from the kappa file is skipped with a warning.
+
+**2D renormalization:** After loading the HDF5 file, the script interactively prompts for dimensionality (1 = 3D, 2 = 2D). For 2D materials, `POSCAR` is read from the working directory (a path is asked for if it is missing) and all κL arrays are multiplied by c_proj / t_eff before any output is written, where c_proj is the projection of c onto the ab-plane normal and t_eff is the atomic span along that normal plus the Alvarez vdW radii of the two outermost atoms. Units remain W/(m·K) throughout. The factor is recorded in `Renorm2D_info.dat`.
 
 **Temperature-dependent files** (one value per temperature row, written to the working directory):
 - `KappaVsT.dat` / `Kappa_bandVsT.dat` — total κL tensor and band decomposition (3 acoustic + 1 summed optical) vs. temperature
 - `ContributeKappaVsT.dat` — per-mode percentage contribution to total κL vs. temperature
-- `CvVsT.dat` — total heat capacity Cv (eV/K) vs. temperature
-- `Tau_CRTAVsT.dat` / `Tau_AvgVsT.dat` — CRTA and average phonon lifetime τ (ps) vs. temperature
+- `CvVsT.dat` — heat capacity Cv per unit cell (eV/K) vs. temperature
+- `Tau_CRTAVsT.dat` / `Tau_AvgVsT.dat` — CRTA lifetime tensor and mode-averaged phonon lifetime τ (ps) vs. temperature
 - `Kappa_RTAVsT.dat` / `Kappa_RTA_bandVsT.dat` — RTA κL tensor and band decomposition vs. temperature (--lbte only)
-- `Kappa_C*VsT.dat` — wave-like (coherence) Wigner κL tensor and band decomposition vs. temperature (--wigner only)
-- `Kappa_P_RTA*VsT.dat` / `Kappa_TOT_RTA*VsT.dat` — particle-like and total Wigner κL (RTA) vs. temperature (--wigner --br only)
-- `Kappa_P_exact*VsT.dat` / `Kappa_TOT_exact*VsT.dat` — particle-like and total Wigner κL (exact) vs. temperature (--wigner --lbte only)
 
 **Temperature-independent files** (written to the working directory):
-- `GvVsFrequency.dat` / `Gv_amplitudeVsFrequency.dat` — group velocity vector (vx, vy, vz) and amplitude |v| vs. frequency (THz)
-- `GruneisenVsFrequency.dat` — Grüneisen parameter vs. frequency (THz) (if Grüneisen HDF5 provided)
-- `Gamma_isotopeVsFrequency.dat` — isotope scattering rate vs. frequency (if available)
+- `GvVsFrequency.dat` / `Gv_amplitudeVsFrequency.dat` — group velocity vector (vx, vy, vz) and amplitude |v| in km/s vs. frequency (THz)
+- `GruneisenVsFrequency.dat` — Grüneisen parameter vs. frequency (THz) (if a Grüneisen file is given or calculated)
+- `Gamma_isotopeVsFrequency.dat` / `Tau_isotopeVsFrequency.dat` — isotope scattering rate and lifetime vs. frequency (--isotope)
+- `PqjVsFrequency.dat` — averaged phonon-phonon interaction strength (eV2) vs. frequency (--full-pp)
+- `Renorm2D_info.dat` — 2D renormalization factor and thickness (2D only)
 
 **Per-temperature spectral files** (one file per temperature, written to subdirectories `T<value>K/`):
+- `GammaVsFrequency.dat` / `TauVsFrequency.dat` — scattering rate Γ (ps−1) and lifetime τ (ps) vs. frequency
 - `KappaVsFrequency.dat` / `KappaVsMfp.dat` — mode κL vs. phonon frequency (THz) and vs. mean free path (Å)
 - `cumulative_KappaVsFrequency.dat` / `cumulative_KappaVsMfp.dat` — cumulative κL sorted by ascending frequency and MFP
 - `derivative_KappaVsFrequency.dat` / `derivative_KappaVsMfp.dat` — spectral κL density d(κL)/d(frequency) and d(κL)/d(MFP)
+- `Kappa_RTA*.dat` — the same six spectral files for the RTA solution (--lbte only)
+- `Gamma_NVsFrequency.dat` / `Tau_NVsFrequency.dat` and `Gamma_UVsFrequency.dat` / `Tau_UVsFrequency.dat` — Normal and Umklapp Γ and τ vs. frequency (--nu)
+
+**Special cases:**
+- `--lbte --reducible-colmat` files store frequencies on all grid points but other quantities on irreducible q-points only, so just `KappaVsT.dat` and `Kappa_RTAVsT.dat` are written (with a warning).
+- If `mode_kappa` does not add up to `kappa` (e.g. phono3py-wte `--br` files), a warning is printed and `ContributeKappaVsT.dat` and `Tau_CRTAVsT.dat` use the sum of `mode_kappa`; `KappaVsT.dat` still writes `kappa`.
+- Outputs that need a missing dataset (`mode_kappa`, `mode_kappa_RTA`, `gv_by_gv`) are skipped with a warning.
 
 ---
 
