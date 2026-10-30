@@ -14,8 +14,8 @@ Usage: vaspPiezoelectric.py <POSCAR input> <OUTCAR input>
 
 This script gets piezoelectric stress tensor from OUTCAR file
 and calculates piezoelectric strain tensor by getting elastic coefficients.
-Piezoelectric stress tensor = electronic + ionic (relaxed-ion) if the ionic part is found,
-otherwise electronic only (clamped-ion).
+If the ionic part is found, you choose electronic + ionic (relaxed-ion) or electronic only (clamped-ion);
+otherwise electronic only (clamped-ion) is used.
 Elastic tensor is read from OUTCAR (last TOTAL ELASTIC MODULI block) -> Elastic.dat -> manual input.
 
 This script was developed by Thanasee Thanasarnsurapong.
@@ -48,8 +48,9 @@ def read_piezo_stress(outcar_file):
     """Read the piezoelectric stress tensor from a VASP OUTCAR file.
 
     Reads the electronic part 'PIEZOELECTRIC TENSOR (including local field
-    effects)' and, when present, adds the ionic part 'PIEZOELECTRIC TENSOR
-    IONIC CONTR' to give the relaxed-ion tensor. Columns are reordered from
+    effects)'. When the ionic part 'PIEZOELECTRIC TENSOR IONIC CONTR' is
+    present, the user chooses whether to add it (relaxed-ion) or not
+    (clamped-ion). Columns are reordered from
     VASP convention (xx, yy, zz, xy, yz, xz) to Voigt notation (1, 2, 3, 4, 5, 6).
 
     Parameters
@@ -98,10 +99,26 @@ def read_piezo_stress(outcar_file):
             exit(1)
         print(f"The '{name}' section was found in the OUTCAR file.")
         piezostress_vasp += np.array([[float(x) for x in row[1:]] for row in rows])
+        if index == electronic_index:
+            piezostress_electronic = piezostress_vasp.copy()
 
     if ionic_index is not None:
-        piezo_label = 'relaxed-ion'
-        print("Piezoelectric stress tensor = electronic + ionic (relaxed-ion).")
+        print("""Include the ionic contribution?
+1) Yes, electronic + ionic (relaxed-ion)
+2) No, electronic only (clamped-ion)""")
+        while True:
+            input_ionic = input("Enter choice: ")
+            if input_ionic in ('1', '2'):
+                break
+            print("Warning! Wrong input")
+
+        if input_ionic == '1':
+            piezo_label = 'relaxed-ion'
+            print("Piezoelectric stress tensor = electronic + ionic (relaxed-ion).")
+        else:
+            piezostress_vasp = piezostress_electronic
+            piezo_label = 'clamped-ion'
+            print("Piezoelectric stress tensor = electronic only (clamped-ion).")
     else:
         piezo_label = 'clamped-ion'
         print("Warning! The 'PIEZOELECTRIC TENSOR IONIC CONTR' section was not found.\n"
