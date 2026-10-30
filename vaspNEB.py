@@ -478,15 +478,18 @@ def interpolate_idpp(initial, final, n_images, dynamic_cell):
     d_ini = pair_distances(linear_cartesian[0], lattices[0])
     d_fin = pair_distances(linear_cartesian[-1], lattices[-1])
 
-    # IDPP cost: sum over atom pairs of (d - d_target)^2 / d_target^4, with analytic gradient
-    def idpp_cost(x_flat, d_target, weight, lattice_matrix):
+    # IDPP cost (Smidstrup et al.): sum over atom pairs of (d - d_target)^2 / d^4, with analytic gradient
+    off_diagonal = ~np.eye(n_atoms, dtype=bool)
+
+    def idpp_cost(x_flat, d_target, lattice_matrix):
         cart = x_flat.reshape(n_atoms, 3)
         vectors = pair_vectors(cart, lattice_matrix)
         d = np.sqrt(np.sum(vectors ** 2, axis=-1))
         np.fill_diagonal(d, 1.0)
-        residual = d - d_target
-        cost = 0.5 * np.sum(weight * residual ** 2)
-        gradient = 2.0 * np.sum((weight * residual / d)[:, :, np.newaxis] * vectors, axis=1)
+        residual = np.where(off_diagonal, d - d_target, 0.0)
+        cost = 0.5 * np.sum(residual ** 2 / d ** 4)
+        d_cost = residual / d ** 4 - 2.0 * residual ** 2 / d ** 5   # derivative of each pair term w.r.t. d
+        gradient = 2.0 * np.sum((d_cost / d)[:, :, np.newaxis] * vectors, axis=1)
         return cost, gradient.flatten()
 
     images = []
@@ -495,10 +498,8 @@ def interpolate_idpp(initial, final, n_images, dynamic_cell):
         cartesian_k = linear_cartesian[k]
         if 0 < k < total_frames - 1:
             t = k / (total_frames - 1)
-            d_target = np.maximum(d_ini + t * (d_fin - d_ini), 1e-10)
-            weight = 1.0 / d_target ** 4
-            np.fill_diagonal(weight, 0.0)
-            result = minimize(idpp_cost, cartesian_k.flatten(), args=(d_target, weight, lattice_matrix_k),
+            d_target = d_ini + t * (d_fin - d_ini)
+            result = minimize(idpp_cost, cartesian_k.flatten(), args=(d_target, lattice_matrix_k),
                               jac=True, method='L-BFGS-B',
                               options={'maxiter': 1000, 'ftol': 1e-10, 'gtol': 1e-6})
             cartesian_k = result.x.reshape(n_atoms, 3)
