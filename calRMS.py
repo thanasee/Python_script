@@ -201,7 +201,7 @@ def direct_to_cartesian(lattice_matrix, positions_direct):
 
     positions = positions_direct % 1.0
     positions_cartesian = positions @ lattice_matrix
-    
+
     return positions_cartesian
 
 
@@ -219,154 +219,8 @@ def cartesian_to_direct(lattice_matrix, positions_cartesian):
     """
 
     positions_direct = (positions_cartesian @ np.linalg.inv(lattice_matrix)) % 1.0
-    
+
     return positions_direct
-
-
-def check_elements(elements):
-    """Check for duplicate element symbols and prompt the user for a canonical order.
-
-    If duplicate symbols are found (e.g. ['Mo', 'S', 'Mo']), the user is asked
-    to specify the desired ordering of the unique species. An empty input accepts
-    the default order (first-occurrence order).
-
-    Parameters
-    ----------
-    elements : list[str] — element symbols as parsed from the POSCAR
-
-    Returns
-    -------
-    list[str] or None
-        The user-specified element order if duplicates were found, else None.
-    """
-
-    unique_elements = list(dict.fromkeys(elements))
-
-    if len(elements) != len(unique_elements):
-        print("\nFound duplicated elements in POSCAR!")
-        print("Unique elements: [" + " ".join(unique_elements) + "]")
-        while True:
-            sort_elements = input("Enter the desired element order (separate by space): ").split()
-            if len(sort_elements) == 0:
-                print("Warning! Empty input — using default unique element order.")
-                return unique_elements.copy()
-            if (len(sort_elements) == len(unique_elements) and
-                    set(sort_elements) == set(unique_elements)):
-                return sort_elements
-            print("ERROR! The species do not match the unique elements. Try again.")
-    else:
-        return None
-
-
-def mapping_elements(elements, atom_counts, positions_cartesian, positions_direct,
-                     species, selective_dynamics, flags, sort_elements=None):
-    """Re-order atoms so that each element block is contiguous and sorted canonically.
-
-    Groups atomic positions by element symbol, resolves any duplicate element
-    entries via check_elements(), and returns arrays sorted according to the
-    specified (or user-supplied) element order. This is required because some
-    POSCARs interleave atoms of the same species across multiple blocks.
-
-    Parameters
-    ----------
-    elements            : list[str]            — element symbols from POSCAR
-    atom_counts         : list[int]            — atoms per element block
-    positions_cartesian : np.ndarray (N, 3)    — Cartesian coordinates in Å
-    positions_direct    : np.ndarray (N, 3)    — fractional coordinates
-    species             : list[str]            — per-atom element labels
-    selective_dynamics  : bool                 — whether Selective Dynamics is used
-    flags               : np.ndarray or None   — per-atom T/F flags
-    sort_elements       : list[str] or None    — explicit element order (optional)
-
-    Returns
-    -------
-    dict with keys:
-        elements            : list[str]
-        atom_counts         : list[int]
-        positions_cartesian : np.ndarray (N, 3)
-        positions_direct    : np.ndarray (N, 3)
-        species             : list[str]
-        flags               : np.ndarray or None
-    """
-
-    new_elements = elements.copy()
-    new_atom_counts = atom_counts.copy()
-    new_positions_cartesian = positions_cartesian.copy()
-    new_positions_direct = positions_direct.copy()
-    new_species = species.copy()
-    new_flags = flags.copy() if selective_dynamics else None
-
-    # Group positions and flags by element symbol
-    elements_positions_cartesian = {}
-    elements_positions_direct = {}
-    elements_species = {}
-    elements_flags = {} if selective_dynamics else None
-    for idx in range(len(new_species)):
-        element = new_species[idx]
-        elements_positions_cartesian.setdefault(element, []).append(
-            new_positions_cartesian[idx])
-        elements_positions_direct.setdefault(element, []).append(
-            new_positions_direct[idx])
-        elements_species.setdefault(element, []).append(new_species[idx])
-        if selective_dynamics and new_flags is not None:
-            elements_flags.setdefault(element, []).append(new_flags[idx])
-
-    # Resolve canonical element order (prompts user if duplicates exist)
-    if sort_elements is None:
-        sort_elements = check_elements(elements)
-
-    # Rebuild arrays in the resolved order
-    if sort_elements is not None:
-        sort_positions_cartesian = []
-        sort_positions_direct = []
-        sort_species = []
-        sort_flags = [] if selective_dynamics else None
-        sort_atom_counts = []
-        for element in sort_elements:
-            sort_positions_cartesian.extend(elements_positions_cartesian[element])
-            sort_positions_direct.extend(elements_positions_direct[element])
-            sort_species.extend(elements_species[element])
-            if selective_dynamics:
-                sort_flags.extend(elements_flags[element])
-            sort_atom_counts.append(len(elements_positions_direct[element]))
-
-        new_positions_cartesian = np.array(sort_positions_cartesian, dtype=float)
-        new_positions_direct = np.array(sort_positions_direct, dtype=float)
-        new_species = list(sort_species)
-        if selective_dynamics:
-            new_flags = np.array(sort_flags)
-        new_atom_counts = sort_atom_counts
-        new_elements = sort_elements
-
-    return {"elements":           new_elements,
-            "atom_counts":        new_atom_counts,
-            "positions_cartesian": new_positions_cartesian,
-            "positions_direct":   new_positions_direct,
-            "species":            new_species,
-            "flags":              new_flags if selective_dynamics else None}
-
-
-def define_labels(elements, atom_counts):
-    """Generate atom labels in the form 'Fe001', 'Fe002', ..., 'C001', etc.
-
-    The numeric suffix is zero-padded to the width of the largest atom count
-    plus one (e.g. if max count is 96, suffix width is 3: '001' to '096').
-
-    Parameters
-    ----------
-    elements    : list of str, element symbols
-    atom_counts : list of int, number of atoms per element
-
-    Returns
-    -------
-    labels : list of str, one label per atom in POSCAR order
-    """
-
-    digits = len(str(max(atom_counts))) + 1
-    labels = [f"{symbol}{str(counter).zfill(digits)}" for symbol, number in zip(elements, atom_counts)
-              for counter in range(1, number + 1)]
-    
-    return labels
 
 
 def read_FORCE_CONSTANTS(filepath, total_atoms):
@@ -438,12 +292,12 @@ def compute_image_offsets(lattice_matrix):
     klm = np.array([[k, l, m] for k in range(-1, 2)
                                for l in range(-1, 2)
                                for m in range(-1, 2)])   # (27, 3)
-    
+
     return klm @ lattice_matrix
 
 
 def calculate_distance_rms(lattice_matrix, total_atoms, positions_cartesian, image_offsets,
-                           pair_list, rms, labels):
+                           pair_list, rms, species):
     """Calculate minimum image distances and pair them with IFC RMS values.
 
     For each symmetry-inequivalent atom (select atom), computes the minimum
@@ -458,11 +312,12 @@ def calculate_distance_rms(lattice_matrix, total_atoms, positions_cartesian, ima
     image_offsets       : np.ndarray, shape (27, 3), PBC image offset vectors in Angstrom
     pair_list           : list of list of str, atom pair indices from FORCE_CONSTANTS
     rms                 : list of float, RMS of each 3x3 IFC block in eV/Angstrom^2
-    labels              : list of str, atom labels in the same order as positions
+    species             : list of str, element symbol per atom in POSCAR order
+                          (the same order as the FORCE_CONSTANTS indices)
 
     Returns
     -------
-    distance_rms : list of tuple (label_i, label_j, distance, rms),
+    distance_rms : list of tuple (species_i, species_j, distance, rms),
                    sorted by distance in Angstrom
     """
 
@@ -474,7 +329,7 @@ def calculate_distance_rms(lattice_matrix, total_atoms, positions_cartesian, ima
         # Mask out the selected atom
         mask = np.arange(total_atoms) != select
         other_positions_cartesian = positions_cartesian[mask]           # (N-1, 3)
-        other_labels = [labels[i] for i in range(total_atoms) if i != select]
+        other_species = [species[i] for i in range(total_atoms) if i != select]
         other_rms = [rms[i + index * total_atoms] for i in range(total_atoms) if i != select]
 
         # Displacement vectors: (N-1, 3)
@@ -486,8 +341,8 @@ def calculate_distance_rms(lattice_matrix, total_atoms, positions_cartesian, ima
         # Minimum image distances: (N-1,)
         min_distances = np.linalg.norm(diff_images, axis=2).min(axis=1)
 
-        for label, distance, r in zip(other_labels, min_distances, other_rms):
-            distance_rms.append((labels[select], label, distance, r))
+        for symbol, distance, r in zip(other_species, min_distances, other_rms):
+            distance_rms.append((species[select], symbol, distance, r))
 
     # Sort by distance
     distance_rms.sort(key=lambda x: x[2])
@@ -505,7 +360,7 @@ def write_output(elements, distance_rms):
     Parameters
     ----------
     elements     : list of str, unique element symbols in the structure
-    distance_rms : list of tuple (label_i, label_j, distance, rms),
+    distance_rms : list of tuple (species_i, species_j, distance, rms),
                    sorted by distance
     """
 
@@ -519,27 +374,24 @@ def write_output(elements, distance_rms):
             o.write("# Distance vs RMS of 2nd IFCs\n")
             o.write("#   Distance      RMS\n")
             for item in distance_rms:
-                if ((pair[0] in item[0] and pair[1] in item[1]) or
-                        (pair[1] in item[0] and pair[0] in item[1])):
+                if ((item[0] == pair[0] and item[1] == pair[1]) or
+                        (item[0] == pair[1] and item[1] == pair[0])):
                     o.write(f"  {item[2]:>12.8f}  {item[3]:>12.8f}\n")
 
 
 def main():
     """Parse arguments, calculate distance and IFC RMS, and write outputs."""
 
-    if '-h' in argv or len(argv) != 3:
+    if '-h' in argv or '--help' in argv or len(argv) != 3:
         usage()
-    
+
+    # Keep the original POSCAR order: FORCE_CONSTANTS indices refer to it
     poscar = read_POSCAR(argv[1])
-    mapping = mapping_elements(poscar["elements"], poscar["atom_counts"], poscar["positions_cartesian"],
-                               poscar["positions_direct"], poscar["species"],
-                               poscar["selective_dynamics"], poscar["flags"])
     force_constants = read_FORCE_CONSTANTS(argv[2], poscar["total_atoms"])
-    labels = define_labels(mapping["elements"], mapping["atom_counts"])
     image_offsets = compute_image_offsets(poscar["lattice_matrix"])
-    distance_rms = calculate_distance_rms(poscar["lattice_matrix"], poscar["total_atoms"], mapping["positions_cartesian"],
-                                          image_offsets, force_constants["pair_list"], force_constants["rms"], labels)
-    write_output(mapping["elements"], distance_rms)
+    distance_rms = calculate_distance_rms(poscar["lattice_matrix"], poscar["total_atoms"], poscar["positions_cartesian"],
+                                          image_offsets, force_constants["pair_list"], force_constants["rms"], poscar["species"])
+    write_output(list(dict.fromkeys(poscar["elements"])), distance_rms)
 
 
 if __name__ == "__main__":
