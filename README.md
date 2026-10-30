@@ -317,18 +317,31 @@ Usage: vaspMechanics.py <POSCAR> <OUTCAR>
 
 #### `ElasticTensor2D.py`
 
-Calculates the 2D elastic tensor from VASP DFT calculations using the strain-energy method, with two operating modes.
+Calculates the 2D elastic tensor from VASP DFT calculations by the energy-strain method, the stress-strain method, or both, with two operating modes.
 
 ```
 Usage: ElasticTensor2D.py pre  <structure file>   # Generate strained POSCARs
-       ElasticTensor2D.py post                    # Fit energies and extract constants
+       ElasticTensor2D.py post                    # Fit energies/stresses and extract constants
 ```
 
-**`pre` mode:** Applies a set of strain tensors to the input structure and writes strained POSCAR files to individual directories. Detects crystal system (oblique vs. non-oblique) and applies the appropriate strain set.
+**Methods** (chosen interactively in `pre` and saved to a `METHOD` file, which `post` re-reads; `post` prompts again if `METHOD` is missing or invalid):
+1. `energy` — energy-strain: energy per area vs. strain is fitted to a quadratic for each strain set
+2. `stress` — stress-strain: 2D stress vs. strain is fitted linearly; each strain set gives one column of the elastic tensor (requires a converged ENCUT, ~1.3×ENMAX)
+3. `both` — runs both methods and compares them
 
-**`post` mode:** Reads total energies from each strain directory's `OUTCAR`, fits energy vs. strain to a quadratic, extracts elastic constants (C11, C22, C12, C66, and C16/C26 for oblique), checks mechanical stability via eigenvalue positivity, and computes angle-dependent mechanical properties.
+**`pre` mode:** Detects the 2D lattice type (square, rectangular, hexagonal, oblique) and writes the reference structure to `unstrain/POSCAR` plus one POSCAR per strain set and strain value to `<strain set>/strain<±δ>/POSCAR` — 9 strains from −2% to +2% in 0.5% steps (`strain-0.020` ... `strain+0.020`). Strain is applied as F = I + ε to the lattice; fractional coordinates are kept.
+- Energy method: `C11`, `C22`, `C11_C22_2C12`, `C66`; oblique cells add `C11_C66_2C16` and `C22_C66_2C26`
+- Stress method: `C11`, `C22`, `C66` for every lattice type
+- Both: the union of the two sets
 
-**Output:** `Elastic.dat`, `Young.dat`, `Poisson.dat`, `Shear.dat`
+**`post` mode:** Reads the final energy and stress from each `OUTCAR`. A strain set is skipped if any of its OUTCARs is missing or has not reached required accuracy; a method left with an incomplete tensor is reported and skipped without stopping the other method. For each method, the elastic tensor (C11, C22, C12, C66, plus C16/C26 for oblique) is written, mechanical stability is checked via eigenvalue positivity, and angle-dependent Young's modulus, Poisson's ratio, and shear modulus are computed for stable materials. In the stress method, the raw tensor is symmetrized (asymmetry printed) and C16/C26 are set to zero for non-oblique cells.
+
+**Output:**
+- `StrainVsEnergy_<strain set>.dat` — strain vs. energy per area (eV/Å2) (energy method)
+- `StrainVsStress_<strain set>.dat` — strain vs. 2D stress σxx, σyy, σxy (N/m) (stress method)
+- `Elastic.dat`, `Young.dat`, `Poisson.dat`, `Shear.dat` — when one method is selected
+- `Elastic_<method>.dat`, `Young_<method>.dat`, `Poisson_<method>.dat`, `Shear_<method>.dat` (`<method>` = `energy` or `stress`) — when both methods are selected
+- `Elastic_compare.dat` — constants from both methods side by side with the relative difference (%) (both methods selected and both tensors assembled)
 
 ---
 
