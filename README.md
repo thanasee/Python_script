@@ -90,7 +90,9 @@ Compares interatomic force constants (IFCs) between DFT and MLFF calculations by
 Usage: compareIFCs.py <DFT's force constants HDF5 input> <MLFF's force constants HDF5 input>
 ```
 
-**Output files:**
+Both files must contain the same IFC order with identical array shapes. Only one file is written per run; if a file contains both `force_constants` and `fc3`, the 2nd IFCs take precedence. The RMSE and maximum |residual| are printed to stdout.
+
+**Output files** (columns: DFT value, MLFF − DFT residual):
 - `2ndIFCs.dat` — 2nd IFC comparison in eV/Å2
 - `3rdIFCs.dat` — 3rd IFC comparison in eV/Å3
 
