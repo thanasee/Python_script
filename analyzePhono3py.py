@@ -13,7 +13,7 @@ def usage():
     print("""
 Usage: analyzePhono3py.py <kappa input> <gruneisen input (optional)>
 
-This script obtain thermal properties form HDF5 files
+This script obtain thermal properties from HDF5 files
 some kind of thermal properties obtain at specified temperature
 
 When no Gruneisen file is given (or it does not exist), the script asks
@@ -407,7 +407,7 @@ def write_group_velocity(filepath, frequency, group_velocity):
     frequency      : ndarray, shape (nQpt, nBand)
         Phonon frequencies in THz.
     group_velocity : ndarray, shape (nQpt, nBand, 3)
-        Group velocity Cartesian components in THz·Å.
+        Group velocity Cartesian components in km/s.
     """
     with open(filepath, 'w') as o:
         o.write("# Group Velocity(km/s) vs Frequency\n")
@@ -432,7 +432,7 @@ def write_group_velocity_amplitude(filepath, frequency, group_velocity_amp):
     frequency          : ndarray, shape (nQpt, nBand)
         Phonon frequencies in THz.
     group_velocity_amp : ndarray, shape (nQpt, nBand)
-        Group velocity amplitude |v| = norm(vx, vy, vz) in THz·Å.
+        Group velocity amplitude |v| = norm(vx, vy, vz) in km/s.
     """
     with open(filepath, 'w') as o:
         o.write("# Group Velocity amplitude(km/s) vs Frequency\n")
@@ -505,13 +505,13 @@ def write_heat_capacity_vs_temperature(filepath, temperature, heat_capacity_tota
     temperature         : ndarray, shape (nT,)
         Temperature values in K.
     heat_capacity_total : ndarray, shape (nT,)
-        Total heat capacity summed over all q-points and bands (eV/K).
+        Heat capacity per unit cell, sum_qj(w_q * C_qj) / sum_q(w_q) (eV/K).
     """
     with open(filepath, 'w') as o:
         o.write("# Heat capacity vs Temperature\n")
         o.write(CV_HEADER + "\n")
         for temp, cv in zip(temperature, heat_capacity_total):
-            o.write(f"  {temp:>7.1f}   {cv:>8.3f}\n")
+            o.write(f"  {temp:>7.1f}   {cv:>12.4e}\n")
         o.write("\n")
 
 
@@ -565,7 +565,7 @@ def write_tau_CRTA_vs_temperature(filepath, temperature, tau_CRTA):
 def write_tau_avg_vs_temperature(filepath, temperature, tau_avg):
     """Write average phonon lifetime vs temperature.
 
-    tau_avg = sum_qj(tau_qj) / total_weight, averaged over all q-points and bands.
+    tau_avg = sum_qj(w_q * tau_qj) / (sum_q(w_q) * nBand), averaged over all modes.
 
     Parameters
     ----------
@@ -867,23 +867,23 @@ VDW_RADIUS = {
 
 def compute_2d_thickness(poscar):
     """Compute the effective 2D layer thickness using Alvarez vdW radii.
- 
+
     Atomic positions are projected onto the unit normal of the ab-plane to
     correctly handle non-orthogonal cells where the c vector is tilted.
     The renormalization factor accounts for this tilt.
- 
+
     Thickness formula:
         t_eff = z_range + r_vdW_top + r_vdW_bottom
- 
+
     Renormalization factor:
         factor_2d = (c · n̂) / t_eff
         where n̂ = (a × b) / |a × b|  (unit normal to the ab-plane)
- 
+
     Parameters
     ----------
     poscar : dict
         Dictionary returned by read_POSCAR().
- 
+
     Returns
     -------
     factor_2d   : float
@@ -900,39 +900,39 @@ def compute_2d_thickness(poscar):
     lattice_matrix      = poscar["lattice_matrix"]
     species             = poscar["species"]
     positions_cartesian = poscar["positions_cartesian"]
- 
+
     # Unit normal to the ab-plane
     area_vector = np.cross(lattice_matrix[0], lattice_matrix[1])
     vector_n    = area_vector / np.linalg.norm(area_vector)
- 
+
     # Projection of c onto the normal (scalar thickness of the periodic cell)
     c_proj = np.abs(lattice_matrix[2] @ vector_n)
- 
+
     # Project all atomic positions onto the normal
     projected = positions_cartesian @ vector_n
- 
+
     # Identify outermost atoms
     idx_top = np.argmax(projected)
     idx_bot = np.argmin(projected)
     z_range = projected[idx_top] - projected[idx_bot]
- 
+
     # vdW radii; fall back to 2.00 Å if element not in table
     r_top = VDW_RADIUS.get(species[idx_top], 2.00)
     r_bot = VDW_RADIUS.get(species[idx_bot], 2.00)
- 
+
     t_eff     = z_range + r_top + r_bot
     factor_2d = c_proj / t_eff
- 
+
     return factor_2d, t_eff, c_proj, z_range, projected
- 
- 
+
+
 def ask_dimensionality():
     """Interactively ask the user for the material dimensionality.
- 
+
     For 2D materials, reads POSCAR, computes the effective layer thickness,
     and returns the renormalization factor kappa_2D = kappa_phono3py * factor_2d
     where factor_2d = (c · n̂) / t_eff.
- 
+
     Returns
     -------
     renorm_factor : float
@@ -945,16 +945,16 @@ def ask_dimensionality():
     print("\nMaterial dimensionality:")
     print("  [1] 3D — no renormalization")
     print("  [2] 2D — renormalize kappa by effective layer thickness")
- 
+
     while True:
         choice = input("Select (1 or 2): ").strip()
         if choice in ('1', '2'):
             break
         print("  Please enter 1 or 2.")
- 
+
     if choice == '1':
         return 1.0, None
- 
+
     # 2D: locate POSCAR
     poscar_path = 'POSCAR'
     if not os.path.exists(poscar_path):
@@ -962,21 +962,21 @@ def ask_dimensionality():
         if not os.path.exists(poscar_path):
             print(f"ERROR! POSCAR file '{poscar_path}' does not exist. Using 3D (no renormalization).")
             return 1.0, None
- 
+
     poscar                              = read_POSCAR(poscar_path)
     factor_2d, t_eff, c_proj, z_range, _ = compute_2d_thickness(poscar)
- 
+
     print("\n  2D renormalization summary:")
     print(f"    c projection onto ab-normal : {c_proj:.4f} Å")
     print(f"    z range (atom-atom)         : {z_range:.4f} Å")
     print(f"    Effective thickness         : {t_eff:.4f} Å  (z_range + r_vdW_top + r_vdW_bottom)")
     print(f"    Renormalization factor      : {factor_2d:.6f}")
     print(f"    kappa_2D = kappa_phono3py × {factor_2d:.6f}")
- 
+
     renorm_info = (f"2D renormalization: c_proj = {c_proj:.4f} A, "
                    f"t_eff = {t_eff:.4f} A (z_range = {z_range:.4f} A), "
                    f"factor = {factor_2d:.6f}")
- 
+
     return factor_2d, renorm_info
 
 
@@ -1020,16 +1020,16 @@ def write_renorm_info(filepath, renorm_info):
     with open(filepath, 'w') as o:
         o.write("# 2D thermal conductivity renormalization\n")
         o.write(f"# {renorm_info}\n")
-        o.write("# All kappa values in this run have been multiplied by (c / t_eff).\n")
-        o.write("# Formula: k_2D = k_phono3py * c_length / t_eff\n")
-        o.write("#   c_length = length of c lattice vector (Angstrom)\n")
+        o.write("# All kappa values in this run have been multiplied by (c_proj / t_eff).\n")
+        o.write("# Formula: k_2D = k_phono3py * c_proj / t_eff\n")
+        o.write("#   c_proj   = projection of c onto the ab-plane normal (Angstrom)\n")
         o.write("#   t_eff    = z_range + r_vdW_top + r_vdW_bottom (Angstrom)\n")
         o.write("#   r_vdW    = Alvarez (2013) van der Waals radii\n")
 
 
 def main():
     """Read HDF5 inputs, compute derived quantities, and write all output files."""
-    if '-h' in argv or len(argv) < 2 or len(argv) > 3:
+    if '-h' in argv or '--help' in argv or len(argv) < 2 or len(argv) > 3:
         usage()
 
     kappa_input_file = argv[1]
@@ -1046,7 +1046,7 @@ def main():
     with h5.File(kappa_input_file, 'r') as f:
         frequency             = read_kappa(f, "frequency")
         gamma                 = read_kappa(f, "gamma")
-        group_velocity        = read_kappa(f, "group_velocity") * 1e-1 # THz * Å -> THz * nm
+        group_velocity        = read_kappa(f, "group_velocity")  # THz * Å = Å/ps
         gv_by_gv              = read_kappa(f, "gv_by_gv")
         heat_capacity         = read_kappa(f, "heat_capacity")
         mesh                  = read_kappa(f, "mesh")
@@ -1056,12 +1056,12 @@ def main():
         kappa_unit_conversion = read_kappa(f, "kappa_unit_conversion")
 
         # --br and --lbte
-        kappa          = read_kappa(f, "kappa",          threshold=1e-12)
+        kappa          = read_kappa(f, "kappa",          threshold=1e-12, abs_value=True)
         mode_kappa     = read_kappa(f, "mode_kappa",     threshold=1e-12, abs_value=True)
-        kappa_RTA      = read_kappa(f, "kappa_RTA",      threshold=1e-12)
+        kappa_RTA      = read_kappa(f, "kappa_RTA",      threshold=1e-12, abs_value=True)
         mode_kappa_RTA = read_kappa(f, "mode_kappa_RTA", threshold=1e-12, abs_value=True)
         # --br --tt njc23/ibdb19/smm19: kappa = kappa_intra + kappa_inter
-        kappa_intra    = read_kappa(f, "kappa_intra",    threshold=1e-12)
+        kappa_intra    = read_kappa(f, "kappa_intra",    threshold=1e-12, abs_value=True)
         # --isotope
         gamma_isotope  = read_kappa(f, "gamma_isotope")
         # --nu
@@ -1095,6 +1095,10 @@ def main():
     # kappa tensors are written for such files.
     is_reducible = frequency.shape[0] != weight.shape[0]
 
+    if group_velocity is None and not is_reducible:
+        print("ERROR! 'group_velocity' does not exist in the kappa file.")
+        exit(1)
+
     # Outputs that need mode_kappa / mode_kappa_RTA are written only when the
     # dataset exists. Tensor-vs-T files (KappaVsT, Kappa_RTAVsT) need only
     # kappa / kappa_RTA and are always written when those exist.
@@ -1123,7 +1127,7 @@ def main():
 
     # ── Dimensionality: optional 2D renormalization ───────────────────────────
     renorm_factor, renorm_info = ask_dimensionality()
- 
+
     if renorm_factor != 1.0:
         # Renormalize all kappa arrays: k_2D = k_phono3py * (c / t_eff)
         # Only in-plane components (xx=0, yy=1, xy=5) are physically meaningful
@@ -1131,7 +1135,7 @@ def main():
         # phono3py output convention.
         def _renorm(arr):
             return arr * renorm_factor if arr is not None else None
- 
+
         kappa              = _renorm(kappa)
         mode_kappa         = _renorm(mode_kappa)
         kappa_RTA          = _renorm(kappa_RTA)
@@ -1201,14 +1205,17 @@ def main():
     with np.errstate(divide='ignore'):
         tau = np.where(gamma > 0.0, 1.0 / (2.0 * 2.0 * np.pi * gamma), 0.0)
 
+    # MFP (Å) = |v| (Å/ps) * tau (ps); velocities are then written in km/s
+    mean_freepath = np.linalg.norm(group_velocity, axis=-1) * tau
+    group_velocity = group_velocity * 1e-1  # Å/ps -> km/s
     group_velocity_amp = np.linalg.norm(group_velocity, axis=-1)
-    mean_freepath = group_velocity_amp * tau
     sorted_mean_freepath = np.take_along_axis(
         mean_freepath.reshape(len(temperature), -1),
         np.argsort(mean_freepath.reshape(len(temperature), -1), axis=1),
         axis=1)
 
-    heat_capacity_total = heat_capacity.sum(axis=(1, 2))
+    # Heat capacity per unit cell: sum_qj(w_q * C_qj) / sum_q(w_q)
+    heat_capacity_total = (heat_capacity * weight[np.newaxis, :, np.newaxis]).sum(axis=(1, 2)) / weight.sum()
 
     # Base variant (--lbte or --br)
     if has_mode_kappa:
@@ -1293,8 +1300,8 @@ def main():
             tau_CRTA = np.where(kappa_per_tau > 0.0,
                                 kappa_tau_ref / kappa_per_tau, 0.0)
 
-    # Average lifetime over all q-points and bands
-    tau_avg = tau.sum(axis=1).sum(axis=1) / weight.sum()
+    # Average lifetime over all modes: sum_qj(w_q * tau_qj) / (sum_q(w_q) * nBand)
+    tau_avg = (tau * weight[np.newaxis, :, np.newaxis]).sum(axis=(1, 2)) / (weight.sum() * tau.shape[2])
 
     # Isotope scattering lifetime (temperature-independent)
     if gamma_isotope is not None:
@@ -1448,7 +1455,7 @@ def main():
                 'derivative_Kappa_RTAVsFrequency', 'cumulative_Kappa_RTAVsMfp', 'derivative_Kappa_RTAVsMfp',frequency,
                 mean_freepath, mode_kappa_RTA_weight, cumulative_kappa_RTA_frequency, derivative_kappa_RTA_frequency,
                 cumulative_kappa_RTA_mfp, derivative_kappa_RTA_mfp, sorted_frequency, sorted_mean_freepath, temp_index)
-            
+
         # ── kappa_C ──────────────────────────────────────────────────────────
         # if kappa_C is not None and mode_kappa_C is not None:
         #     write_variant_per_temperature(
@@ -1456,7 +1463,7 @@ def main():
         #         'derivative_Kappa_CVsFrequency', 'cumulative_Kappa_CVsMfp', 'derivative_Kappa_CVsMfp',frequency,
         #         mean_freepath, mode_kappa_C_weight, cumulative_kappa_C_frequency, derivative_kappa_C_frequency,
         #         cumulative_kappa_C_mfp, derivative_kappa_C_mfp, sorted_frequency, sorted_mean_freepath, temp_index)
-           
+
         # ── kappa_P_RTA ──────────────────────────────────────────────────────
         # if kappa_P_RTA is not None and mode_kappa_P_RTA is not None:
         #     write_variant_per_temperature(
@@ -1472,7 +1479,7 @@ def main():
         #         'derivative_Kappa_P_exactVsFrequency', 'cumulative_Kappa_P_exactVsMfp', 'derivative_Kappa_P_exactVsMfp',frequency,
         #         mean_freepath, mode_kappa_P_exact_weight, cumulative_kappa_P_exact_frequency, derivative_kappa_P_exact_frequency,
         #         cumulative_kappa_P_exact_mfp, derivative_kappa_P_exact_mfp, sorted_frequency, sorted_mean_freepath, temp_index)
-            
+
         # ── Normal / Umklapp processes ───────────────────────────────────────
         if gamma_N is not None and gamma_U is not None:
             write_scattering_rate_vs_frequency(
