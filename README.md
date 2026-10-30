@@ -139,7 +139,7 @@ Usage: convergePhono3py.py
 
 Automatically scans for all `kappa-m*.hdf5` files, sorts them by mesh number, and writes convergence data. Supports the Phono3py `--br` and `--lbte` calculation modes. The target temperature is prompted once and reused for every file with the same temperature grid.
 
-**2D renormalization:** Before the HDF5 files are read, the script interactively prompts for dimensionality (1 = 3D, 2 = 2D). For 2D materials, all κL values are multiplied by c_proj / t_eff, where c_proj is the projection of c onto the ab-plane normal and t_eff is the atomic span along that normal plus the Alvarez vdW radii of the outermost atoms. Requires `POSCAR` in the working directory (falls back to 3D if missing). Units remain W/(m·K) throughout.
+**2D renormalization:** Before the HDF5 files are read, the script interactively prompts for dimensionality (1 = 3D, 2 = 2D). For 2D materials, all κL values are multiplied by c_proj / t_eff, where c_proj is the projection of c onto the ab-plane normal and t_eff is the atomic span along that normal plus the Alvarez vdW radii of the outermost atoms. Reads `POSCAR` from the working directory, or asks for a path if it is missing (falls back to 3D if the path does not exist). Units remain W/(m·K) throughout.
 
 **Output files** (columns: Q_x, Q_y, Q_z, xx, yy, zz, yz, xz, xy):
 - `KappaVsMesh.dat` — κL vs. q-mesh
