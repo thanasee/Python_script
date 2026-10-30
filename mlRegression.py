@@ -8,10 +8,14 @@ import numpy as np
 def usage():
     """Print usage information and exit."""
     print("""
-Usage: mlRegression.py <ML_REG input>
+Usage: mlRegression.py <ML_REG input> [ML_ABN input]
 
 This script extract energies, forces, and stress from ML_REG file.
 Output files can plot by xmgrace.
+
+ML_ABN (optional) must be the one written together with ML_REG.
+It gives the number of atoms of each structure for energies per atom.
+Without ML_ABN, all structures are assumed to have the same number of atoms.
 
 This script was developed by Thanasee Thanasarnsurapong.
 """)
@@ -108,7 +112,7 @@ def extract_arrays(lines, energy_index, force_index, stress_index):
     -------
     energy : ndarray, shape (N_frames, 2)
         Total energies (eV) — DFT and MLFF columns.
-    force : ndarray, shape (N_frames * N_atoms * 3, 2)
+    force : ndarray, shape (3 * sum(N_atoms), 2)
         Forces (eV/Å) — DFT and MLFF columns.
     stress : ndarray, shape (N_frames * 6, 2)
         Stress tensor components (kbar) — DFT and MLFF columns.
@@ -120,26 +124,26 @@ def extract_arrays(lines, energy_index, force_index, stress_index):
     return energy, force, stress
 
 
-def validate_dimensions(energy_count, force_count, stress_count):
-    """Verify that force and stress counts are consistent with energy count.
+def validate_dimensions(atom_counts, force_count, stress_count):
+    """Verify that force and stress counts are consistent with the structures.
 
-    Force rows must equal 3 * N_atoms * N_frames, and stress rows must
+    Force rows must equal 3 * sum(N_atoms), and stress rows must
     equal 6 * N_frames. Exits with an error message if either check fails.
 
     Parameters
     ----------
-    energy_count : int
-        Number of frames (rows in the energy array).
+    atom_counts : ndarray, shape (N_frames,)
+        Number of atoms of each structure.
     force_count : int
-        Total number of force rows (N_frames * N_atoms * 3).
+        Total number of force rows.
     stress_count : int
-        Total number of stress rows (N_frames * 6).
+        Total number of stress rows.
     """
-    if force_count % (3 * energy_count) != 0:
-        print("ERROR! Force count is not divisible by 3 * energy_count. Check ML_REG structure.")
+    if force_count != 3 * atom_counts.sum():
+        print(f"ERROR! Force count ({force_count}) does not match 3 * total atoms ({3 * atom_counts.sum()}). Check ML_REG structure.")
         exit(1)
-    if stress_count % (6 * energy_count) != 0:
-        print("ERROR! Stress count does not match 6 * energy_count. Check ML_REG structure.")
+    if stress_count != 6 * len(atom_counts):
+        print(f"ERROR! Stress count ({stress_count}) does not match 6 * energy_count ({6 * len(atom_counts)}). Check ML_REG structure.")
         exit(1)
 
 
@@ -213,7 +217,7 @@ def compute_metrics(energy_per_atom, force, stress):
     ----------
     energy_per_atom : ndarray, shape (N_frames, 2)
         Per-atom energies (eV/atom) — DFT and MLFF columns.
-    force : ndarray, shape (N_frames * N_atoms * 3, 2)
+    force : ndarray, shape (3 * sum(N_atoms), 2)
         Forces (eV/Å) — DFT and MLFF columns.
     stress : ndarray, shape (N_frames * 6, 2)
         Stress components (kbar) — DFT and MLFF columns.
@@ -267,7 +271,7 @@ def write_force(force_reshape, filename='Force.dat'):
 
     Parameters
     ----------
-    force_reshape : ndarray, shape (N_frames * N_atoms, 3, 2)
+    force_reshape : ndarray, shape (sum(N_atoms), 3, 2)
         Reshaped force array with axes [atom-frame, direction, DFT/MLFF].
     filename : str, optional
         Output filename (default: 'Force.dat').
@@ -339,7 +343,7 @@ def write_errors(metrics, filename='ERROR.dat'):
 
 def main():
     """Parse arguments, collect data types, compute statistic variables, and write all outputs."""
-    if '-h' in argv or len(argv) != 2:
+    if '-h' in argv or '--help' in argv or len(argv) not in (2, 3):
         usage()
 
     input_file = argv[1]
@@ -353,13 +357,23 @@ def main():
     energy_count = len(energy)
     force_count  = len(force)
     stress_count = len(stress)
-    atom_count   = force_count // (3 * energy_count)
+
+    # Number of atoms per structure: from ML_ABN if given, else assumed uniform
+    if len(argv) == 3:
+        mlab_lines  = read_files(argv[2])
+        atom_counts = np.array([int(mlab_lines[i + 2].split()[0])
+                                for i, line in enumerate(mlab_lines) if 'The number of atoms' in line])
+        if len(atom_counts) != energy_count:
+            print(f"ERROR! {argv[2]} has {len(atom_counts)} configurations but {input_file} has {energy_count}.")
+            exit(1)
+    else:
+        atom_counts = np.full(energy_count, force_count // (3 * energy_count))
 
     # Validate
-    validate_dimensions(energy_count, force_count, stress_count)
+    validate_dimensions(atom_counts, force_count, stress_count)
 
     # Transform
-    energy_per_atom = energy / atom_count
+    energy_per_atom = energy / atom_counts[:, None]
     force_reshape   = force.reshape((force_count // 3, 3, 2))
     stress_reshape  = stress.reshape((energy_count, 6, 2))
 
