@@ -545,14 +545,14 @@ Usage: vaspTwist.py <POSCAR1> [POSCAR2]
 Providing one POSCAR builds a homobilayer (both layers identical); providing two builds a heterobilayer. Homobilayer/heterobilayer is auto-detected by comparing in-plane lattice vectors and composition.
 
 **Search method (closed-form, no angle grid):**
-- **Homobilayer:** Exact coincidence-site-lattice (CSL) angles are computed in closed form for hexagonal and square lattices. Strain is zero by construction. Falls back to the heterostrain search below for rectangular or oblique lattices.
-- **Heterobilayer:** Closed-form vector matching finds integer-indexed lattice vector pairs whose rotation and stretch align within `MAX_STRAIN`, then combines them via polar decomposition into full 2D supercell candidates. No angle-step parameter is needed.
+- **Homobilayer:** Exact coincidence-site-lattice (CSL) angles are computed in closed form for hexagonal and square lattices. Strain is zero by construction. Every cell is reduced to its primitive coincidence cell, so θ and 60° − θ (90° − θ for square) appear as separate candidates. Falls back to the heterostrain search below for rectangular or oblique lattices, with a warning that prints a, b and γ.
+- **Heterobilayer:** Closed-form vector matching finds integer-indexed lattice vector pairs whose rotation and stretch align within `MAX_STRAIN`, then combines pairs whose angles lie within the window allowed by `MAX_STRAIN` into full 2D supercell candidates via polar decomposition. For each twist angle (0.01°), the smallest supercell is kept, plus any larger supercell with lower strain. No angle-step parameter is needed.
 
 **Candidate filtering:** `MAX_ATOMS = 500` (hard cap on total supercell atoms); `MAX_STRAIN = 0.05` (5%, heterobilayer only); search range `THETA_MIN`/`THETA_MAX = 0°`/`180°`.
 
 **`TWIST_LIST.dat` reuse:** After a search, results are written to `TWIST_LIST.dat` along with a structure snapshot (`original.vasp` for homobilayer; `bottom.vasp` + `top.vasp` for heterobilayer). On a later run with the same input file(s), the snapshot is compared against the provided POSCAR(s) (tolerance 10−6 Å); if they match, the saved candidate list is reused directly — skipping the search — and the script goes straight to candidate selection. If they don't match, a fresh search runs automatically with a warning.
 
-**Candidate selection and generation:** The candidate table is displayed interactively; selection accepts individual indices, `'all'`, or `'none'`. For each selected candidate, one POSCAR is written per high-symmetry stacking configuration (lattice-type-dependent shift grid: hexagonal, square, rectangular, or oblique), to `<index>_<theta>_<atoms>/<shift_no>_<stacking_label>/POSCAR`.
+**Candidate selection and generation:** The candidate table is displayed interactively; selection accepts individual indices, `'all'`, or `'none'`. For each selected candidate, one POSCAR is written per high-symmetry stacking configuration (lattice-type-dependent shift grid: hexagonal, square, rectangular, or oblique), to `<index>_<theta>_<atoms>/<shift_no>_<stacking_label>/POSCAR`, where `<index>` is the candidate number in the table and `TWIST_LIST.dat` (zero-padded).
 
 **Interlayer gap:** Computed from the sum of van der Waals radii of the two atoms facing each other across the interface (highest-z atom of the bottom layer, lowest-z atom of the top layer); falls back to 3.5 Å with a warning if either element's radius is unknown.
 
