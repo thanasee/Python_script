@@ -502,13 +502,21 @@ Uses an integer-exact (adjugate-matrix-based) grid point generation to avoid flo
 
 #### `vaspStack.py`
 
-Generates a set of bilayer POSCAR files from a single input monolayer POSCAR by stacking two copies along the c-axis with systematically varied interlayer shifts and orientations.
+Generates a set of bilayer POSCAR files from a single input monolayer POSCAR by stacking two copies along the c-axis with systematically varied interlayer shifts, rotations, and flips of the top layer.
 
 ```
 Usage: vaspStack.py <POSCAR>
 ```
 
-The script detects the 2D Bravais lattice type (hexagonal, square, rectangular, oblique) and generates a grid of high-symmetry stacking configurations appropriate for that lattice. Each configuration applies a fractional interlayer shift to the top layer, optionally with a mirror-flip. A summary `STACK_LIST.txt` is written listing all generated POSCAR filenames and their corresponding shift vectors.
+The script detects the 2D Bravais lattice type (hexagonal, square, rectangular, oblique) from the in-plane lattice vectors and generates every flip × rotation × shift combination appropriate for that lattice:
+
+- **Shifts:** hexagonal AA/AB/AB_prime; square AA/AB/AC; rectangular and oblique AA/AB_x/AB_y/AC
+- **Rotations** (in-plane, about the layer centroid): hexagonal R0/R60/R120/R180; square R0/R90/R180; rectangular and oblique R0/R180
+- **Flips:** hexagonal and oblique F0/Fz; square F0/Fz/Fx/Fxy; rectangular F0/Fz/Fx/Fy/Fxy
+
+**Interlayer gap:** Computed from the sum of van der Waals radii of the two atoms facing each other across the interface (highest-z atom of the bottom layer, lowest-z atom of the top layer). The bilayer is centered at 0.5 along c. The element order of the combined bilayer is prompted once (empty input keeps the input order).
+
+**Output:** One POSCAR per configuration in `<i>_<flip>_<rot>_<stack>/POSCAR` (index zero-padded, e.g. `01_F0_R0_AA`), plus `STACK_LIST.dat` listing each configuration's index, flip, rotation, stacking label, fractional shift, and directory path.
 
 ---
 
