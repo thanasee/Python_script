@@ -47,7 +47,7 @@ Scripts in this category post-process force constants and read HDF5 output files
 
 #### `enforceIFC.py`
 
-Enforces rotational sum rules (Huang and Born-Huang) on second-order interatomic force constants (IFC2) using [hiPhive](https://hiphive.materialsmodeling.org/), and writes the corrected IFC2 in Phonopy-compatible format. Reads `POSCAR` (primitive cell) and `SPOSCAR` (supercell) from the working directory. If no input IFC file is found, the script auto-generates one by calling Phonopy on any `vasprun.xml-*` displacement files present in the working directory.
+Enforces rotational sum rules (Huang and Born-Huang) on second-order interatomic force constants (IFC2) using [hiPhive](https://hiphive.materialsmodeling.org/), and writes the corrected IFC2 in Phonopy-compatible format. Reads `POSCAR` (primitive cell) and `SPOSCAR` (supercell) from the working directory. If no input IFC file is given and `FORCE_CONSTANTS` is not present, the script auto-generates one by calling Phonopy on the `vaspout-*.h5` displacement files in the working directory. An input IFC file that is given explicitly but does not exist is an error.
 
 ```
 Usage: enforceIFC.py <input FORCE_CONSTANTS> <output FORCE_CONSTANTS>
@@ -59,7 +59,7 @@ File format is auto-detected from the extension: `.hdf5` → HDF5; any other ext
 - `input FORCE_CONSTANTS` — `FORCE_CONSTANTS` (Phonopy text format)
 - `output FORCE_CONSTANTS` — `<input_basename>_rot` (same format as input; e.g., `FORCE_CONSTANTS_rot` or `FORCE_CONSTANTS_rot.hdf5`)
 
-**Auto-generation of IFC file (when `input FORCE_CONSTANTS` is absent):**
+**Auto-generation of IFC file (when `input FORCE_CONSTANTS` is omitted and `FORCE_CONSTANTS` is absent; Phonopy 4.x CLI):**
 1. If `phonopy_params.yaml` is not present, runs `phonopy-init --fz vaspout-sposcar.h5 $(printf "%s\n" vaspout-*.h5 | grep -v '^vaspout-sposcar.h5$') --sp` to generate it
 2. Runs `phonopy phonopy_params.yaml --writefc --full-fc` to write `FORCE_CONSTANTS`
 
