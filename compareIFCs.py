@@ -11,7 +11,7 @@ def usage():
     print("""
 Usage: compareIFCs.py <DFT input> <MLFF input>
 
-This script extract interatomic force constant form HDF5 files, which calculated from Phono3py package.
+This script extract interatomic force constant from HDF5 files, which calculated from Phono3py package.
 Autodetect the order of IFCs (2nd or 3rd).
 
 This script was developed by Thanasee Thanasarnsurapong.
@@ -174,9 +174,9 @@ def process_ifc(order, dft_data, mlff_data):
 
 def main():
     """
-    Parses arguments, detect IFC oreder, compare IFC, and write outputs
+    Parses arguments, detect IFC order, compare IFC, and write outputs
     """
-    if '-h' in argv or len(argv) < 2 or len(argv) > 3:
+    if '-h' in argv or '--help' in argv or len(argv) != 3:
         usage()
 
     dft_file  = argv[1]
