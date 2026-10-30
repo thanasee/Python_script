@@ -754,8 +754,8 @@ def compute_spline(input_file, output_spline, output_exts, nj=20):
             candidates.append(-b[i] / (2 * c[i]))
         elif d[i] != 0:
             sq = np.sqrt(disc)
-            candidates.append((-c[i] + sq) / (3 * d[i]) * -1)
-            candidates.append((-c[i] - sq) / (3 * d[i]) * -1)
+            candidates.append((-c[i] + sq) / (3 * d[i]))
+            candidates.append((-c[i] - sq) / (3 * d[i]))
         for f in candidates:
             if 0.0 <= f <= 1.0:
                 extrema[i + f] = d[i]*f**3 + c[i]*f**2 + b[i]*f + a[i]
@@ -960,7 +960,8 @@ def find_image_dirs():
 
 
 def main():
-    if '-h' in argv or len(argv) > 2:
+    """Run the NEB analysis on image directories in the current folder."""
+    if '-h' in argv or '--help' in argv or len(argv) > 2:
         usage()
 
     nj = 20
