@@ -206,7 +206,7 @@ Extracts thermal transport properties from [ShengBTE](https://www.shengbte.org/)
 Usage: analyzeShengBTE.py <3ph/4ph>
 ```
 
-Temperature subdirectories (`T<value>K/`) are detected automatically from the working directory. All κL tensor components are written as the full 3×3 tensor (xx, xy, xz, yx, yy, yz, zx, zy, zz) in W/(m·K). All scattering rate and lifetime files are written per phonon branch. Phonon lifetimes are computed as τ = 1/(2 × 2π × Γ) (ps); modes with Γ ≤ 0 are assigned τ = 0.
+Temperature subdirectories (`T<value>K/`) are detected automatically from the working directory. Only `BTE.omega` and the `T<value>K/` directories are required; any other missing input (e.g. `BTE.KappaTensorVsT_CONV` when `convergence = .false.`) is skipped with a warning. All κL tensor components are written as the full 3×3 tensor (xx, xy, xz, yx, yy, yz, zx, zy, zz) in W/(m·K). All scattering rate and lifetime files are written per phonon branch. ShengBTE's scattering rate Γ is 1/τ (ps−1), so phonon lifetimes are computed as τ = 1/Γ (ps); modes with Γ ≤ 0 are assigned τ = 0.
 
 **Temperature-dependent files** (one value per temperature row, written to the working directory):
 - `Kappa_*VsT.dat` — total κL tensor vs. temperature, RTA and iterative (CONV) solutions
@@ -221,9 +221,9 @@ Temperature subdirectories (`T<value>K/`) are detected automatically from the wo
 - `P4*VsFrequency.dat` — same set for 4-phonon phase space (total, recombination ++, redistribution +-, splitting −−) [FourPhonon only]
 
 **Per-temperature files** (written into each `T<value>K/` subdirectory):
-- `CumulativeKappaVsMFP.dat` / `CumulativeKappaVsFrequency.dat` — cumulative κL tensor vs. mean free path (Å) and vs. frequency (THz)
-- `ScatteringRate_3ph*.dat` / `Lifetime_3ph*.dat` — 3ph scattering rate Γ and lifetime τ vs. frequency; process variants: total, `_Adsorption`(+), `_Emission`(-)
-- `WeightedPhaseSpace_3ph*.dat` — weighted 3-phonon phase space vs. frequency; process variants: total, `_Adsorption`(+), `_Emission`(-)
+- `CumulativeKappaVsMFP.dat` / `CumulativeKappaVsFrequency.dat` — cumulative κL tensor vs. mean free path (nm) and vs. frequency (THz)
+- `ScatteringRate_3ph*.dat` / `Lifetime_3ph*.dat` — 3ph scattering rate Γ and lifetime τ vs. frequency; process variants: total, `_Absorption`(+), `_Emission`(-)
+- `WeightedPhaseSpace_3ph*.dat` — weighted 3-phonon phase space vs. frequency; process variants: total, `_Absorption`(+), `_Emission`(-)
 - `ScatteringRateVsFrequency.dat` / `LifetimeVsFrequency.dat` — total combined (3ph + isotope) Γ and τ vs. frequency
 - `ScatteringRateFinalVsFrequency.dat` / `LifetimeFinalVsFrequency.dat` — final iterative Γ and τ vs. frequency
 - `ScatteringRate_4ph*.dat` / `Lifetime_4ph*.dat` — 4ph Γ and τ vs. frequency; process variants: total, `_Recombination`(++), `_Redistribution`(+-), `_Splitting`(--) [FourPhonon only]
