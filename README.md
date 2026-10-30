@@ -655,7 +655,7 @@ Generates NEB image directories with interpolated POSCAR files between two endpo
 Usage: vaspNEB.py <initial POSCAR> <final POSCAR> <N_images> [-linear]
 ```
 
-`N_images` is the number of intermediate images excluding endpoints. The script validates that both POSCARs share the same element symbols and atom counts, and warns if lattice matrices differ (dynamic cell / SSNEB mode), in which case the lattice is also linearly interpolated. All interpolation uses the minimum-image convention so atoms always take the shortest path across periodic boundaries. Output directories are named `00`, `01`, ..., with zero-padding; each contains one `POSCAR`. Selective Dynamics flags are carried from the initial image.
+`N_images` is the number of intermediate images excluding endpoints. The script validates that both POSCARs share the same element symbols and atom counts, and warns if lattice matrices differ (dynamic cell / SSNEB mode), in which case the lattice is also linearly interpolated. All interpolation uses the minimum-image convention so atoms always take the shortest path across periodic boundaries. Output directories are two-digit (`00`, `01`, ..., up to `99`), so `N_images` can be at most 98; each contains one `POSCAR`. Selective Dynamics flags are carried from the initial image.
 
 IDPP requires SciPy; if SciPy is not available the script falls back to linear interpolation automatically.
 
