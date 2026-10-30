@@ -151,7 +151,7 @@ Automatically scans for all `kappa-m*.hdf5` files, sorts them by mesh number, an
 
 #### `analyzePhono3py.py`
 
-Extracts mode-resolved thermal transport properties from a single Phono3py (4.x) `kappa-mXXX.hdf5` file and writes output files suitable for plotting in xmgrace or matplotlib. Supports `--br` and `--lbte` kappa files. Group velocities are read from the kappa file.
+Extracts mode-resolved thermal transport properties from a single Phono3py (4.x) `kappa-mXXX.hdf5` file and writes output files suitable for plotting in xmgrace or matplotlib. Supports `--br` and `--lbte` kappa files, including `--tt smm19/njc23/ibdb19`. Group velocities are read from the kappa file.
 
 ```
 Usage: analyzePhono3py.py <kappa HDF5 file> <gruneisen HDF5 file (optional)>
@@ -169,6 +169,8 @@ Output filenames follow the pattern `<tag>-mXXXXXX.dat`, where the mesh token is
 - `CvVsT.dat` — heat capacity Cv per unit cell (eV/K) vs. temperature
 - `Tau_CRTAVsT.dat` / `Tau_AvgVsT.dat` — CRTA lifetime tensor and mode-averaged phonon lifetime τ (ps) vs. temperature
 - `Kappa_RTAVsT.dat` / `Kappa_RTA_bandVsT.dat` — RTA κL tensor and band decomposition vs. temperature (--lbte only)
+- `Kappa_intraVsT.dat` / `Kappa_interVsT.dat` — `kappa_intra` (particle-like) and `kappa_inter` (coherence) κL vs. temperature (--br --tt)
+- `Kappa_intra_RTAVsT.dat` / `Kappa_intra_exactVsT.dat` / `Kappa_interVsT.dat` — `kappa_intra_RTA`, `kappa_intra_exact` and `kappa_inter` κL vs. temperature (--lbte --tt)
 
 **Temperature-independent files** (written to the working directory):
 - `GvVsFrequency.dat` / `Gv_amplitudeVsFrequency.dat` — group velocity vector (vx, vy, vz) and amplitude |v| in km/s vs. frequency (THz)
@@ -186,8 +188,9 @@ Output filenames follow the pattern `<tag>-mXXXXXX.dat`, where the mesh token is
 - `Gamma_NVsFrequency.dat` / `Tau_NVsFrequency.dat` and `Gamma_UVsFrequency.dat` / `Tau_UVsFrequency.dat` — Normal and Umklapp Γ and τ vs. frequency (--nu)
 
 **Special cases:**
-- `--lbte --reducible-colmat` files store frequencies on all grid points but other quantities on irreducible q-points only, so just `KappaVsT.dat` and `Kappa_RTAVsT.dat` are written (with a warning).
+- `--lbte --reducible-colmat` files store frequencies on all grid points but other quantities on irreducible q-points only, so only the κL tensor vs. temperature files are written (with a warning).
 - If `mode_kappa` does not add up to `kappa` (e.g. phono3py-wte `--br` files), a warning is printed and `ContributeKappaVsT.dat` and `Tau_CRTAVsT.dat` use the sum of `mode_kappa`; `KappaVsT.dat` still writes `kappa`.
+- `--tt` files contain no `mode_kappa` or `gv_by_gv`. In `--br --tt` files `kappa` = `kappa_intra` + `kappa_inter`; in `--lbte --tt` files `kappa` = `kappa_intra_exact` only. Each dataset is written as stored, with no derived total.
 - Outputs that need a missing dataset (`mode_kappa`, `mode_kappa_RTA`, `gv_by_gv`) are skipped with a warning.
 
 ---
