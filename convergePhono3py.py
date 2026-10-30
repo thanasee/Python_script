@@ -67,10 +67,8 @@ def read_HDF5(filepath):
     Keys not present in the file are returned as None.
 
     Supported phono3py calculation modes and their corresponding keys:
-        --br / --lbte          : 'kappa', 'kappa_RTA'
-        --wigner --br or --lbte: 'kappa_C'
-        --wigner --br          : 'kappa_P_RTA', 'kappa_TOT_RTA'
-        --wigner --lbte        : 'kappa_P_exact', 'kappa_TOT_exact'
+        --br / --lbte : 'kappa'
+        --lbte        : 'kappa_RTA'
 
     Parameters
     ----------
@@ -80,36 +78,30 @@ def read_HDF5(filepath):
     Returns
     -------
     dict
-        Dictionary with keys: 'mesh', 'temperature', 'kappa', 'kappa_RTA',
-        'kappa_C', 'kappa_P_RTA', 'kappa_TOT_RTA', 'kappa_P_exact', 'kappa_TOT_exact'.
+        Dictionary with keys: 'mesh', 'temperature', 'kappa', 'kappa_RTA'.
         Each value is a numpy array or None if not present in the file.
     """
 
     with h5.File(filepath, 'r') as f:
         data = {'mesh'           : np.array(f["mesh"])        if 'mesh'        in f else None,
                 'temperature'    : np.array(f["temperature"]) if 'temperature' in f else None,
-                # --br / --lbte
+                # --br and --lbte
                 'kappa'          : load(f, 'kappa'),
-                'kappa_RTA'      : load(f, 'kappa_RTA'),
+                'kappa_RTA'      : load(f, 'kappa_RTA')}
                 # --wigner --br or --wigner --lbte
-                'kappa_C'        : load(f, 'kappa_C'),
+                # 'kappa_C'        : load(f, 'kappa_C'),
                 # --wigner --br
-                'kappa_P_RTA'    : load(f, 'kappa_P_RTA'),
-                'kappa_TOT_RTA'  : load(f, 'kappa_TOT_RTA'),
+                # 'kappa_P_RTA'    : load(f, 'kappa_P_RTA'),
+                # 'kappa_TOT_RTA'  : load(f, 'kappa_TOT_RTA'),
                 # --wigner --lbte
-                'kappa_P_exact'  : load(f, 'kappa_P_exact'),
-                'kappa_TOT_exact': load(f, 'kappa_TOT_exact')}
+                # 'kappa_P_exact'  : load(f, 'kappa_P_exact'),
+                # 'kappa_TOT_exact': load(f, 'kappa_TOT_exact')}
 
     return data
 
 
 def validate(data, filepath):
-    """Check that the HDF5 file contains at least one usable set of kappa variables.
-
-    The script requires either:
-        - 'kappa' (from --lbte), or
-        - the complete Wigner-RTA set: 'kappa_C', 'kappa_P_RTA', 'kappa_TOT_RTA'
-          (from --wigner --br)
+    """Check that the HDF5 file contains 'kappa'.
 
     Parameters
     ----------
@@ -120,14 +112,10 @@ def validate(data, filepath):
 
     Exits
     -----
-    Exits with an error message if neither condition is satisfied.
+    Exits with an error message if 'kappa' is missing.
     """
-    k   = data['kappa']
-    kC  = data['kappa_C']
-    kPR = data['kappa_P_RTA']
-    kTR = data['kappa_TOT_RTA']
-    if k is None and (kC is None or kPR is None or kTR is None):
-        print(f"ERROR! Essential variables are not found in {filepath}.")
+    if data['kappa'] is None:
+        print(f"ERROR! 'kappa' does not exist in {filepath}.")
         exit(1)
 
 
@@ -584,12 +572,12 @@ def main():
 
     # Accumulators: one list of row-tuples per kappa type
     collected = {'kappa'          : [],
-                 'kappa_RTA'      : [],
-                 'kappa_C'        : [],
-                 'kappa_P_RTA'    : [],
-                 'kappa_TOT_RTA'  : [],
-                 'kappa_P_exact'  : [],
-                 'kappa_TOT_exact': []}
+                 'kappa_RTA'      : []}
+                 # 'kappa_C'        : [],
+                 # 'kappa_P_RTA'    : [],
+                 # 'kappa_TOT_RTA'  : [],
+                 # 'kappa_P_exact'  : [],
+                 # 'kappa_TOT_exact': []}
 
     last_temperature = None
     target_temp      = None
@@ -610,12 +598,12 @@ def main():
 
     # Output configuration: filename and whether to display to stdout
     output_map = {'kappa'          : ('KappaVsMesh.dat',           True),
-                  'kappa_RTA'      : ('Kappa_RTAVsMesh.dat',       False),
-                  'kappa_C'        : ('Kappa_CVsMesh.dat',         False),
-                  'kappa_P_RTA'    : ('Kappa_P_RTAVsMesh.dat',     True),
-                  'kappa_TOT_RTA'  : ('Kappa_TOT_RTAVsMesh.dat',   False),
-                  'kappa_P_exact'  : ('Kappa_P_exactVsMesh.dat',   False),
-                  'kappa_TOT_exact': ('Kappa_TOT_exactVsMesh.dat', False)}
+                  'kappa_RTA'      : ('Kappa_RTAVsMesh.dat',       False)}
+                  # 'kappa_C'        : ('Kappa_CVsMesh.dat',         False),
+                  # 'kappa_P_RTA'    : ('Kappa_P_RTAVsMesh.dat',     True),
+                  # 'kappa_TOT_RTA'  : ('Kappa_TOT_RTAVsMesh.dat',   False),
+                  # 'kappa_P_exact'  : ('Kappa_P_exactVsMesh.dat',   False),
+                  # 'kappa_TOT_exact': ('Kappa_TOT_exactVsMesh.dat', False)}
 
     for key, (filename, display) in output_map.items():
         rows = collected[key]
