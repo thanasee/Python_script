@@ -80,13 +80,13 @@ def get_vdw_radius(element):
  
     Returns
     -------
-    float — van der Waals radius in Angstrom, or 3.0 if not found
+    float or None — van der Waals radius in Angstrom, or None if not found
     """
     try:
         idx = _ELEMENT_SYMBOLS.index(element)
         return _VDW_RADIUS[idx]
     except ValueError:
-        return 3.0
+        return None
 
 
 def compute_interlayer_gap(bottom_species, bottom_positions_cartesian,
@@ -108,7 +108,8 @@ def compute_interlayer_gap(bottom_species, bottom_positions_cartesian,
 
     Returns
     -------
-    interlayer_gap : float -- interlayer gap in Angstrom
+    interlayer_gap : float -- interlayer gap in Angstrom (3.5 with a warning
+                              if either radius is unknown)
     """
 
     bottom_top_index = np.argmax(bottom_positions_cartesian[:, 2])
@@ -119,6 +120,13 @@ def compute_interlayer_gap(bottom_species, bottom_positions_cartesian,
 
     bottom_radius = get_vdw_radius(bottom_element)
     top_radius    = get_vdw_radius(top_element)
+
+    if bottom_radius is None or top_radius is None:
+        unknown = list(dict.fromkeys(e for e, r in ((bottom_element, bottom_radius),
+                                                    (top_element, top_radius)) if r is None))
+        print(f"WARNING! No van der Waals radius for {', '.join(unknown)}. "
+              f"Using an interlayer gap of 3.5 Ang.")
+        return 3.5
 
     interlayer_gap = bottom_radius + top_radius
     return interlayer_gap
@@ -669,10 +677,9 @@ def symmetric_common_vector(v_bottom, v_top):
     Points along the normalized sum of v_bottom and v_top (their angle
     bisector), scaled to the average of their two lengths:
     normalize(v_bottom + v_top) * (|v_bottom| + |v_top|) / 2. For two
-    equal-length vectors (homobilayer, zero strain), this is exactly
-    "rotate either vector by half the angle between them" — a true
-    periodicity vector. A naive average instead shrinks by cos(theta/2),
-    giving a vector that isn't a real lattice vector of either layer.
+    equal vectors (homobilayer CSL) it returns the vector itself. A naive
+    average of two vectors at an angle shrinks by cos(angle/2), giving a
+    vector that isn't a real lattice vector of either layer.
 
     Parameters
     ----------
@@ -702,9 +709,9 @@ def build_twisted_bilayer(layer1, layer2_rotated, selective_dynamics,
     symmetric_common_vector) so neither layer is privileged, then stacks
     them along z with the given interlayer gap.
 
-    For a homobilayer (zero strain), each layer's matched lattice and the
-    common lattice are related by a pure rotation, so this is just a rigid
-    rotation of each layer and the cartesian_to_direct wrap below is exact.
+    For a homobilayer (zero strain), both matched lattices are the same CSL
+    cell, so the common lattice equals it and the transform is the identity;
+    the twist comes only from the top layer's rotated tiling.
     For a heterobilayer (genuine strain), the two layers' matched lattices
     have different SHAPES — there's no lattice either is exactly periodic
     with. To avoid that mismatch corrupting positions on wrap (an atom far
@@ -1057,11 +1064,66 @@ def csl_supercell_matrix(m, n, lattice_type):
     return None
 
 
+def primitive_csl_matrix(M_bottom, primitive_2d, rotated_primitive_2d):
+    """Reduce a CSL cell to its primitive coincidence cell.
+
+    The cell M_bottom can hold k > 1 coincidence sites (bottom-lattice points
+    that are also top-lattice points), e.g. hexagonal (m - n) % 3 == 0 or
+    square with m, n both odd. The primitive cell is spanned by the two
+    shortest independent coincidence vectors enclosing 1/k of the area.
+
+    Parameters
+    ----------
+    M_bottom             : np.ndarray (2, 2) int — CSL cell in bottom-lattice indices
+    primitive_2d         : np.ndarray (2, 2) — bottom in-plane lattice vectors
+    rotated_primitive_2d : np.ndarray (2, 2) — top in-plane lattice vectors (rotated)
+
+    Returns
+    -------
+    M_bottom, M_top : np.ndarray (2, 2) int — primitive cell in bottom/top indices
+    """
+
+    to_top = primitive_2d @ np.linalg.inv(rotated_primitive_2d)
+    N = int(round(abs(np.linalg.det(M_bottom))))
+
+    # Bottom-lattice points inside the cell that are also top-lattice points
+    corners = np.array([[0, 0], [1, 0], [0, 1], [1, 1]]) @ M_bottom
+    low, high = corners.min(axis=0), corners.max(axis=0)
+    grid = np.array([[i, j] for i in range(low[0], high[0] + 1) for j in range(low[1], high[1] + 1)])
+    frac = grid @ np.linalg.inv(M_bottom)
+    inside = np.all((frac > -1e-9) & (frac < 1 - 1e-9), axis=1)
+    top_indices = grid @ to_top
+    on_top = np.all(np.abs(top_indices - np.round(top_indices)) < 1e-6, axis=1)
+    sites = grid[inside & on_top]
+    k = len(sites)
+
+    if k > 1:
+        shifts = np.array([[i, j] for i in range(-2, 3) for j in range(-2, 3)]) @ M_bottom
+        points = (sites[:, None, :] + shifts[None, :, :]).reshape(-1, 2)
+        points = points[np.any(points != 0, axis=1)]
+        lengths = np.round(np.linalg.norm(points @ primitive_2d, axis=1), 8)
+        points = points[np.lexsort((points[:, 1], points[:, 0], lengths))]
+        v1 = points[0]
+        for v2 in points[1:]:
+            det = v1[0] * v2[1] - v1[1] * v2[0]
+            if abs(det) * k == N:
+                M_bottom = np.array([v1, v2]) if det > 0 else np.array([v2, v1])
+                break
+        else:
+            print(f"WARNING! Could not reduce a CSL cell with {k} coincidence sites; kept as is.")
+
+    M_top = np.round(M_bottom @ to_top).astype(int)
+    return M_bottom, M_top
+
+
 def run_search_csl(bottom, top, sort_elements, known_elements, m_max=None):
     """Exact CSL search for a homobilayer — closed-form, no angle grid, no vector search.
 
     Strain is zero by construction (calculate_strain is a sanity check, not
-    a filter). indices1/indices2 store the CSL matrix M's four entries so
+    a filter). Pairs with gcd(m, n) > 1 are skipped and every cell is reduced
+    to its primitive coincidence cell (see primitive_csl_matrix).
+    indices1/indices2 store the bottom/top integer matrices of the
+    shared CSL cell (bottom lattice and theta-rotated top lattice) so
     read_twist_list can reconstruct vectors with the same formula shared
     across all search methods.
 
@@ -1079,13 +1141,20 @@ def run_search_csl(bottom, top, sort_elements, known_elements, m_max=None):
 
     lattice_type = get_2d_lattice_type(bottom["lattice_matrix"])
     if lattice_type not in ("hexagonal", "square"):
-        print(f"WARNING! CSL needs hexagonal or square lattice; detected '{lattice_type}'. "
+        a_vec, b_vec = bottom["lattice_matrix"][0], bottom["lattice_matrix"][1]
+        a_len, b_len = np.linalg.norm(a_vec), np.linalg.norm(b_vec)
+        gamma = np.degrees(np.arccos(np.clip(a_vec @ b_vec / (a_len * b_len), -1.0, 1.0)))
+        print(f"WARNING! CSL needs hexagonal or square lattice; detected '{lattice_type}' "
+              f"(a = {a_len:.8f}, b = {b_len:.8f} Ang, gamma = {gamma:.5f} deg). "
               f"Falling back to heterostrain-CSL search.")
         return run_search_heterostrain(bottom, top, sort_elements, known_elements)
 
+    # A coprime (m, n) cell holds up to k_max coincidence sites and is reduced
+    # to 1/k of its size, so larger (m, n) can still fit within MAX_ATOMS.
     n_atoms = bottom["total_atoms"]
+    k_max   = 3 if lattice_type == "hexagonal" else 2
     if m_max is None:
-        m_max = max(2, int(np.ceil(np.sqrt(MAX_ATOMS / (2 * n_atoms)))))
+        m_max = max(2, int(np.ceil(np.sqrt(k_max * MAX_ATOMS / (2 * n_atoms)))))
     print(f"Searching CSL angles ({lattice_type}, m up to {m_max})...")
 
     a1, a2, a3 = bottom["lattice_matrix"]
@@ -1095,32 +1164,63 @@ def run_search_csl(bottom, top, sort_elements, known_elements, m_max=None):
         for n in range(1, m):              # m > n > 0 — excludes the degenerate
                                             # n=0 case (theta=0 for square,
                                             # theta=60 for hexagonal at every m)
+            if np.gcd(m, n) > 1:           # same angle as (m, n) / gcd, larger cell
+                continue
+
             theta_deg, N_cell = csl_angle(m, n, lattice_type)
             if theta_deg is None:
                 continue
 
+            if 2 * n_atoms * N_cell > k_max * MAX_ATOMS:
+                continue
+
+            M = csl_supercell_matrix(m, n, lattice_type)
+            if lattice_type == "hexagonal" and a1[:2] @ a2[:2] > 0:
+                M = M @ np.array([[1, 0], [-1, 1]])   # M is for the 120 deg basis; rewrite for 60 deg
+
+            # Top layer = primitive lattice rotated by theta. Find integer matrices
+            # (M_bottom, M_top) with M_top @ (rotated lattice) == M_bottom @ lattice,
+            # so both layers tile the same cell and the twist is kept in the stack.
+            # Which of M_bottom/M_top equals M depends on the basis handedness.
+            prim_2d = np.array([a1[:2], a2[:2]])
+            rot_2d  = rotation_matrix(theta_deg)[:2, :2]
+            M_bottom = M_top = None
+            for M_b, M_t in ((M, M @ prim_2d @ rot_2d @ np.linalg.inv(prim_2d)),
+                             (M @ prim_2d @ rot_2d.T @ np.linalg.inv(prim_2d), M)):
+                if np.allclose(M_b, np.round(M_b), atol=1e-6) and np.allclose(M_t, np.round(M_t), atol=1e-6):
+                    M_bottom, M_top = np.round(M_b).astype(int), np.round(M_t).astype(int)
+                    break
+            if M_bottom is None:
+                print(f"WARNING! No integer CSL cell for m={m}, n={n} (theta = {theta_deg:.4f} deg). Skipped.")
+                continue
+
+            rotated_prim_2d = prim_2d @ rot_2d.T
+            M_bottom, M_top = primitive_csl_matrix(M_bottom, prim_2d, rotated_prim_2d)
+            N_cell = int(round(abs(np.linalg.det(M_bottom))))
             total_atoms_bilayer = 2 * n_atoms * N_cell
             if total_atoms_bilayer > MAX_ATOMS:
                 continue
 
-            M = csl_supercell_matrix(m, n, lattice_type)
-            A1_bottom = np.append(M[0, 0] * a1[:2] + M[0, 1] * a2[:2], 0.0)
-            A2_bottom = np.append(M[1, 0] * a1[:2] + M[1, 1] * a2[:2], 0.0)
+            A1_bottom = np.append(M_bottom[0, 0] * a1[:2] + M_bottom[0, 1] * a2[:2], 0.0)
+            A2_bottom = np.append(M_bottom[1, 0] * a1[:2] + M_bottom[1, 1] * a2[:2], 0.0)
             matched_bottom_lattice_matrix = np.array([A1_bottom, A2_bottom, a3])
 
-            config_key = canonicalize_cell(matched_bottom_lattice_matrix[0], matched_bottom_lattice_matrix[1])
+            # theta and 60 - theta (90 - theta) share a cell but are different
+            # structures for 3-fold layers, so the angle is part of the key.
+            config_key = (canonicalize_cell(matched_bottom_lattice_matrix[0], matched_bottom_lattice_matrix[1]),
+                          round(theta_deg, 3))
             if config_key in seen:
                 continue
             seen.add(config_key)
 
-            rot_2d = rotation_matrix(theta_deg)[:2, :2]
-            A1_top = np.append(rot_2d @ A1_bottom[:2], 0.0)
-            A2_top = np.append(rot_2d @ A2_bottom[:2], 0.0)
+            A1_top = np.append(M_top[0] @ rotated_prim_2d, 0.0)
+            A2_top = np.append(M_top[1] @ rotated_prim_2d, 0.0)
             matched_top_lattice_matrix = np.array([A1_top, A2_top, a3])
 
             strain = calculate_strain(matched_bottom_lattice_matrix, matched_top_lattice_matrix)  # sanity check, ~0
 
-            matrix_indices = (int(M[0, 0]), int(M[0, 1]), int(M[1, 0]), int(M[1, 1]))
+            indices_bottom = (int(M_bottom[0, 0]), int(M_bottom[0, 1]), int(M_bottom[1, 0]), int(M_bottom[1, 1]))
+            indices_top    = (int(M_top[0, 0]),    int(M_top[0, 1]),    int(M_top[1, 0]),    int(M_top[1, 1]))
 
             A1_common = symmetric_common_vector(matched_bottom_lattice_matrix[0], matched_top_lattice_matrix[0])
             A2_common = symmetric_common_vector(matched_bottom_lattice_matrix[1], matched_top_lattice_matrix[1])
@@ -1130,7 +1230,7 @@ def run_search_csl(bottom, top, sort_elements, known_elements, m_max=None):
                                "matched_top_lattice_matrix":    matched_top_lattice_matrix,
                                "strain": strain,
                                "replicas_bottom": N_cell, "replicas_top": N_cell,
-                               "indices1": matrix_indices, "indices2": matrix_indices,
+                               "indices1": indices_bottom, "indices2": indices_top,
                                "lattice_matrix": np.array([A1_common, A2_common, a3]),
                                "total_atoms": total_atoms_bilayer})
 
@@ -1203,54 +1303,22 @@ def find_heterostrain_pairs(primitive_bottom_lattice_matrix, primitive_top_latti
     return pairs
 
 
-def polar_decompose_2x2(D):
-    """Decompose a 2x2 deformation matrix into rotation and strain components.
-
-    D = R @ S (R orthogonal, S symmetric positive-definite), via
-    S = sqrt(DᵀD) then R = D @ S⁻¹. For a heterobilayer match where D maps
-    unrotated top vectors onto bottom vectors, R gives the exact twist
-    angle reconciling both.
-
-    Parameters
-    ----------
-    D : np.ndarray, shape (2, 2)
-
-    Returns
-    -------
-    theta_deg : float or None — rotation angle in degrees, or None if D
-                                  is singular or requires a reflection
-    strain    : np.ndarray (2, 2) or None — symmetric strain tensor (S - I)
-    """
-
-    if abs(np.linalg.det(D)) < 1e-12:
-        return None, None
-
-    DtD = D.T @ D
-    eigvals, eigvecs = np.linalg.eigh(DtD)
-    if np.any(eigvals <= 0):
-        return None, None
-
-    sqrt_DtD = eigvecs @ np.diag(np.sqrt(eigvals)) @ eigvecs.T
-    R = D @ np.linalg.inv(sqrt_DtD)
-
-    if np.linalg.det(R) < 0:
-        return None, None  # reflection component — not a physical twist
-
-    theta_deg = float(np.degrees(np.arctan2(R[1, 0], R[0, 0])) % 360.0)
-    strain = sqrt_DtD - np.eye(2)
-
-    return theta_deg, strain
-
-
 def find_heterostrain_candidates(pairs, primitive_bottom_lattice_matrix, bottom_species,
                                  primitive_top_lattice_matrix, top_species, max_strain):
     """Combine single-vector heterostrain matches into full 2D supercell candidates.
 
-    For a chosen pair of bottom vectors and the corresponding unrotated top
-    vectors, polar decomposition finds the single rotation that fits both
-    vectors at once (see polar_decompose_2x2). Candidates are filtered on
-    non-collinearity, a valid proper rotation, area ratios >= 1, atom count,
-    a hard strain cutoff (max_strain), and deduplicated via canonicalize_cell.
+    For a chosen pair of bottom vectors V and the corresponding unrotated top
+    vectors U (rows), T = (U⁻¹V)ᵀ maps top onto bottom vectors and its polar
+    rotation, theta = atan2(T10 - T01, T00 + T11) for det T > 0, is the single
+    twist that fits both. Candidates are filtered on non-collinearity, a
+    proper rotation, area ratios >= 1, atom count and a hard strain cutoff
+    (max_strain). Per twist angle (rounded to 0.01 deg) the smallest cell is
+    kept, plus each larger cell that lowers the strain further.
+
+    A pair's own angle differs from theta by at most phi, with
+    tan(phi) = (s1 - s2) / (2 sqrt(s1 s2)) and s = sqrt(1 +- 2 sqrt(3) max_strain),
+    so only pairs within 2 phi of each other are combined. All other pairs
+    are evaluated at once with numpy, per pair, over that angle window.
 
     Parameters
     ----------
@@ -1272,74 +1340,124 @@ def find_heterostrain_candidates(pairs, primitive_bottom_lattice_matrix, bottom_
 
     prim_cross_bottom = a1[0] * a2[1] - a1[1] * a2[0]
     prim_cross_top    = b1[0] * b2[1] - b1[1] * b2[0]
+    if abs(prim_cross_bottom) < 1e-10 or abs(prim_cross_top) < 1e-10:
+        return []
+
+    # (-v_bottom, -v_top) gives the same cells as (v_bottom, v_top): flip each
+    # pair to a positive bottom index and drop repeats. Near theta = 0 or 180
+    # only one sign survives the theta range filter, so pairs are flipped, not dropped.
+    unique = {}
+    for p in pairs:
+        if p[1] < 0 or (p[1] == 0 and p[2] < 0):
+            p = (p[0], -p[1], -p[2], -p[3], -p[4], p[5], -p[6], -p[7])
+        unique.setdefault(p[1:5], p)
+    pairs = sorted(unique.values(), key=lambda p: p[0])
+    if len(pairs) == 0:
+        return []
+    pair_theta    = np.array([p[0] for p in pairs])
+    index_bottom  = np.array([[p[1], p[2]] for p in pairs])
+    index_top     = np.array([[p[3], p[4]] for p in pairs])
+    vector_bottom = np.array([p[6] for p in pairs])
+    vector_top    = np.array([p[7] for p in pairs])
+
+    s_max = np.sqrt(1.0 + 2.0 * np.sqrt(3.0) * max_strain)
+    s_min = np.sqrt(max(1.0 - 2.0 * np.sqrt(3.0) * max_strain, 1e-12))
+    window = 2.0 * np.degrees(np.arctan((s_max - s_min) / (2.0 * np.sqrt(s_max * s_min)))) + 1e-6
+    window_end = np.searchsorted(pair_theta, pair_theta + window, side="right")
+
+    n_bottom, n_top = len(bottom_species), len(top_species)
+    found = []        # rows: theta, atoms, strain, i, j, omjer1, omjer2
+    for i in range(len(pairs)):
+        J = np.arange(i + 1, window_end[i])
+        if len(J) == 0:
+            continue
+        V0, V1 = vector_bottom[i], vector_bottom[J]
+        U0, U1 = vector_top[i],    vector_top[J]
+
+        sup_cross_bottom = V0[0] * V1[:, 1] - V0[1] * V1[:, 0]
+        sup_cross_top    = U0[0] * U1[:, 1] - U0[1] * U1[:, 0]
+        keep = (np.abs(sup_cross_bottom) > 1e-10) & (np.abs(sup_cross_top) > 1e-10)
+        omjer1 = np.round(np.abs(sup_cross_bottom / prim_cross_bottom)).astype(int)
+        omjer2 = np.round(np.abs(sup_cross_top    / prim_cross_top)).astype(int)
+        total_atoms = n_bottom * omjer1 + n_top * omjer2
+        keep &= (omjer1 >= 1) & (omjer2 >= 1) & (total_atoms <= MAX_ATOMS)
+
+        # T = (U⁻¹ V)ᵀ, U = [U0; U1], V = [V0; V1]
+        with np.errstate(all="ignore"):                   # collinear entries are masked out
+            T00 = ( U1[:, 1] * V0[0] - U0[1] * V1[:, 0]) / sup_cross_top
+            T10 = ( U1[:, 1] * V0[1] - U0[1] * V1[:, 1]) / sup_cross_top
+            T01 = (-U1[:, 0] * V0[0] + U0[0] * V1[:, 0]) / sup_cross_top
+            T11 = (-U1[:, 0] * V0[1] + U0[0] * V1[:, 1]) / sup_cross_top
+            keep &= (T00 * T11 - T01 * T10) > 1e-12      # proper rotation, no reflection
+
+        # Lagrangian strain from the metric tensors (same as calculate_strain)
+        gb11, gb12, gb22 = V0 @ V0, V1 @ V0, np.einsum("ij,ij->i", V1, V1)
+        gt11, gt12, gt22 = U0 @ U0, U1 @ U0, np.einsum("ij,ij->i", U1, U1)
+        with np.errstate(all="ignore"):
+            rb11, rb12 = np.sqrt(gb11), gb12 / np.sqrt(gb11)
+            rb22 = np.sqrt(gb22 - rb12 ** 2)
+            rt11, rt12 = np.sqrt(gt11), gt12 / np.sqrt(gt11)
+            rt22 = np.sqrt(gt22 - rt12 ** 2)
+            F00 = rt11 / rb11 - 1.0
+            F01 = rt12 / rb22 - rt11 * rb12 / (rb11 * rb22)
+            F11 = rt22 / rb22 - 1.0
+            E00 = F00 + 0.5 * F00 ** 2
+            E01 = 0.5 * (F01 + F00 * F01)
+            E11 = F11 + 0.5 * (F01 ** 2 + F11 ** 2)
+            strain = np.sqrt((E00 ** 2 + 2.0 * E01 ** 2 + E11 ** 2) / 3.0)
+        keep &= strain <= max_strain
+
+        k = np.nonzero(keep)[0]
+        if len(k) > 0:
+            theta = np.degrees(np.arctan2(T10[k] - T01[k], T00[k] + T11[k])) % 360.0
+            found.append(np.column_stack([theta, total_atoms[k], strain[k],
+                                          np.full(len(k), i), J[k], omjer1[k], omjer2[k]]))
+
+    if len(found) == 0:
+        return []
+    found = np.vstack(found)
+
+    # Per twist angle (0.01 deg): the smallest cell, plus any larger cell with lower strain.
+    theta_key = np.round(found[:, 0] * 100.0).astype(int) % 36000
+    order = np.lexsort((found[:, 4], found[:, 3], found[:, 2], found[:, 1], theta_key))
+    found, theta_key = found[order], theta_key[order]
+    group_start = np.nonzero(np.r_[True, theta_key[1:] != theta_key[:-1]])[0]
+    selected = []
+    for start, stop in zip(group_start, np.r_[group_start[1:], len(found)]):
+        lowest = np.inf
+        for row in range(start, stop):
+            if found[row, 2] < lowest - 1e-12:
+                selected.append(row)
+                lowest = found[row, 2]
 
     candidates = []
-    seen_configurations = set()
+    for row in selected:
+        theta_deg, total_atoms_bilayer, _, i, j, omjer1, omjer2 = found[row]
+        i, j = int(i), int(j)
+        theta_deg = float(theta_deg)
+        matched_bottom_lattice_matrix = np.array([np.append(vector_bottom[i], 0.0),
+                                                  np.append(vector_bottom[j], 0.0), a3])
+        rot_2d = rotation_matrix(theta_deg)[:2, :2]
+        matched_top_lattice_matrix = np.array([np.append(rot_2d @ vector_top[i], 0.0),
+                                               np.append(rot_2d @ vector_top[j], 0.0), a3])
+        lagrangian_strain = calculate_strain(matched_bottom_lattice_matrix, matched_top_lattice_matrix)
+        omjer1, omjer2, total_atoms_bilayer = int(omjer1), int(omjer2), int(total_atoms_bilayer)
+        indices1 = (int(index_bottom[i, 0]), int(index_bottom[i, 1]), int(index_bottom[j, 0]), int(index_bottom[j, 1]))
+        indices2 = (int(index_top[i, 0]),    int(index_top[i, 1]),    int(index_top[j, 0]),    int(index_top[j, 1]))
 
-    for i in range(len(pairs)):
-        _, n1_i, n2_i, m1_i, m2_i, _, v_bottom_i, v_top_raw_i = pairs[i]
-        for j in range(i, len(pairs)):
-            _, n1_j, n2_j, m1_j, m2_j, _, v_bottom_j, v_top_raw_j = pairs[j]
+        A1_common = symmetric_common_vector(matched_bottom_lattice_matrix[0], matched_top_lattice_matrix[0])
+        A2_common = symmetric_common_vector(matched_bottom_lattice_matrix[1], matched_top_lattice_matrix[1])
 
-            V_matrix     = np.array([v_bottom_i,  v_bottom_j])
-            U_raw_matrix = np.array([v_top_raw_i, v_top_raw_j])
-
-            sup_cross_bottom = V_matrix[0, 0] * V_matrix[1, 1] - V_matrix[0, 1] * V_matrix[1, 0]
-            if abs(sup_cross_bottom) < 1e-10 or abs(prim_cross_bottom) < 1e-10:
-                continue
-            sup_cross_top = U_raw_matrix[0, 0] * U_raw_matrix[1, 1] - U_raw_matrix[0, 1] * U_raw_matrix[1, 0]
-            if abs(sup_cross_top) < 1e-10 or abs(prim_cross_top) < 1e-10:
-                continue
-
-            try:
-                D = V_matrix @ np.linalg.inv(U_raw_matrix)
-            except np.linalg.LinAlgError:
-                continue
-
-            theta_deg, _ = polar_decompose_2x2(D)
-            if theta_deg is None:
-                continue
-
-            omjer1 = round(abs(sup_cross_bottom / prim_cross_bottom))
-            omjer2 = round(abs(sup_cross_top    / prim_cross_top))
-            if omjer1 < 1 or omjer2 < 1:
-                continue
-
-            total_atoms_bilayer = len(bottom_species) * omjer1 + len(top_species) * omjer2
-            if total_atoms_bilayer > MAX_ATOMS:
-                continue
-
-            rot_2d    = rotation_matrix(theta_deg)[:2, :2]
-            A1_top_2d = rot_2d @ U_raw_matrix[0]
-            A2_top_2d = rot_2d @ U_raw_matrix[1]
-
-            matched_bottom_lattice_matrix = np.array([np.append(V_matrix[0], 0.0),
-                                                       np.append(V_matrix[1], 0.0), a3])
-            matched_top_lattice_matrix    = np.array([np.append(A1_top_2d,    0.0),
-                                                       np.append(A2_top_2d,    0.0), a3])
-
-            lagrangian_strain = calculate_strain(matched_bottom_lattice_matrix, matched_top_lattice_matrix)
-            if lagrangian_strain > max_strain:
-                continue
-
-            config_key = canonicalize_cell(matched_bottom_lattice_matrix[0], matched_bottom_lattice_matrix[1])
-            if config_key in seen_configurations:
-                continue
-            seen_configurations.add(config_key)
-
-            A1_common = symmetric_common_vector(matched_bottom_lattice_matrix[0], matched_top_lattice_matrix[0])
-            A2_common = symmetric_common_vector(matched_bottom_lattice_matrix[1], matched_top_lattice_matrix[1])
-
-            candidates.append({"theta":                  theta_deg,
-                               "matched_bottom_lattice_matrix": matched_bottom_lattice_matrix,
-                               "matched_top_lattice_matrix":    matched_top_lattice_matrix,
-                               "strain":                 lagrangian_strain,
-                               "replicas_bottom":      omjer1,
-                               "replicas_top":         omjer2,
-                               "indices1":               (n1_i, n2_i, n1_j, n2_j),
-                               "indices2":               (m1_i, m2_i, m1_j, m2_j),
-                               "lattice_matrix":         np.array([A1_common, A2_common, a3]),
-                               "total_atoms":            total_atoms_bilayer})
+        candidates.append({"theta":                  theta_deg,
+                           "matched_bottom_lattice_matrix": matched_bottom_lattice_matrix,
+                           "matched_top_lattice_matrix":    matched_top_lattice_matrix,
+                           "strain":                 lagrangian_strain,
+                           "replicas_bottom":      omjer1,
+                           "replicas_top":         omjer2,
+                           "indices1":               indices1,
+                           "indices2":               indices2,
+                           "lattice_matrix":         np.array([A1_common, A2_common, a3]),
+                           "total_atoms":            total_atoms_bilayer})
 
     return candidates
 
@@ -1807,9 +1925,9 @@ def generate_POSCARs(chosen_indices, candidates, sort_elements, known_elements, 
 
     output_records = []
     written_count  = 0
-    p_twist = len(str(len(chosen_indices)))
+    p_twist = len(str(len(candidates)))
 
-    for list_no, index in enumerate(chosen_indices, start=1):
+    for index in chosen_indices:
         candidate = candidates[index]
 
         # Build atomic positions now — deferred until user selection
@@ -1840,7 +1958,7 @@ def generate_POSCARs(chosen_indices, candidates, sort_elements, known_elements, 
         shifts       = get_shift_grid(lattice_type)
         p_shift = len(str(len(shifts)))
 
-        base_name = f"{str(list_no).zfill(p_twist)}_{theta:.1f}_{total_atoms}"
+        base_name = f"{str(index + 1).zfill(p_twist)}_{theta:.1f}_{total_atoms}"
         base_dir = os.path.join(working_dir, base_name)
         os.makedirs(base_dir, exist_ok=True)
 
