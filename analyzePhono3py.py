@@ -1060,8 +1060,11 @@ def main():
         mode_kappa     = read_kappa(f, "mode_kappa",     threshold=1e-12, abs_value=True)
         kappa_RTA      = read_kappa(f, "kappa_RTA",      threshold=1e-12, abs_value=True)
         mode_kappa_RTA = read_kappa(f, "mode_kappa_RTA", threshold=1e-12, abs_value=True)
-        # --br --tt njc23/ibdb19/smm19: kappa = kappa_intra + kappa_inter
-        kappa_intra    = read_kappa(f, "kappa_intra",    threshold=1e-12, abs_value=True)
+        # --tt smm19/njc23/ibdb19
+        kappa_intra       = read_kappa(f, "kappa_intra",       threshold=1e-12, abs_value=True)
+        kappa_inter       = read_kappa(f, "kappa_inter",       threshold=1e-12, abs_value=True)
+        kappa_intra_RTA   = read_kappa(f, "kappa_intra_RTA",   threshold=1e-12, abs_value=True)
+        kappa_intra_exact = read_kappa(f, "kappa_intra_exact", threshold=1e-12, abs_value=True)
         # --isotope
         gamma_isotope  = read_kappa(f, "gamma_isotope")
         # --nu
@@ -1109,7 +1112,7 @@ def main():
         print("WARNING! 'frequency' and 'weight' have different numbers of q-points "
               f"({frequency.shape[0]} vs {weight.shape[0]}),")
         print("         as in kappa files from --lbte --reducible-colmat.")
-        print("         Only KappaVsT and Kappa_RTAVsT are written.")
+        print("         Only kappa tensors vs temperature (KappaVsT, Kappa_RTAVsT, Kappa_intra*VsT, Kappa_interVsT) are written.")
     else:
         if not has_mode_kappa:
             print("WARNING! 'mode_kappa' does not exist in the kappa file.")
@@ -1141,6 +1144,9 @@ def main():
         kappa_RTA          = _renorm(kappa_RTA)
         mode_kappa_RTA     = _renorm(mode_kappa_RTA)
         kappa_intra        = _renorm(kappa_intra)
+        kappa_inter        = _renorm(kappa_inter)
+        kappa_intra_RTA    = _renorm(kappa_intra_RTA)
+        kappa_intra_exact  = _renorm(kappa_intra_exact)
         # kappa_C            = _renorm(kappa_C)
         # mode_kappa_C       = _renorm(mode_kappa_C)
         # kappa_P_RTA        = _renorm(kappa_P_RTA)
@@ -1150,6 +1156,12 @@ def main():
         # mode_kappa_P_exact = _renorm(mode_kappa_P_exact)
         # kappa_TOT_exact    = _renorm(kappa_TOT_exact)
 
+
+    # --tt kappa components, written as stored in the kappa file
+    kappa_tt = (('Kappa_intraVsT',       kappa_intra),
+                ('Kappa_interVsT',       kappa_inter),
+                ('Kappa_intra_RTAVsT',   kappa_intra_RTA),
+                ('Kappa_intra_exactVsT', kappa_intra_exact))
 
     # ── Reducible collision matrix: kappa tensors only ────────────────────────
     if is_reducible:
@@ -1162,6 +1174,9 @@ def main():
             write_tensor_vs_temperature(
                 outpath(kappa_input_file, 'Kappa_RTAVsT'),
                 kappa_RTA, temperature)
+        for tag, arr in kappa_tt:
+            if arr is not None:
+                write_tensor_vs_temperature(outpath(kappa_input_file, tag), arr, temperature)
         print("\nConvert HDF5 file to DAT files ... Finished!")
         return
 
@@ -1373,6 +1388,11 @@ def main():
         write_band_tensor_vs_temperature(
             outpath(kappa_input_file, 'Kappa_RTA_bandVsT'),
             kappa_RTA_branch, temperature)
+
+    # ── Optional variant: --tt kappa_intra / kappa_inter ─────────────────────
+    for tag, arr in kappa_tt:
+        if arr is not None:
+            write_tensor_vs_temperature(outpath(kappa_input_file, tag), arr, temperature)
 
     # ── Optional variant: --wigner kappa_C ───────────────────────────────────
     # if kappa_C is not None and mode_kappa_C is not None:
