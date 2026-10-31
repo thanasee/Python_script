@@ -240,7 +240,7 @@ def get_vacuum_index():
     """
     while True:
         dim = input("2D materials or not (Y/N): ").strip().lower()
-        if dim[0] == 'y':
+        if dim.startswith('y'):
             while True:
                 vacuum = input("Enter vacuum direction (a/b/c): ").strip().lower()
                 if vacuum in ("a", "b", "c"):
@@ -248,7 +248,7 @@ def get_vacuum_index():
                 else:
                     print("Input must be a, b, or c!")
             return {"a": 0, "b": 1, "c": 2}[vacuum]
-        elif dim[0] == 'n':
+        elif dim.startswith('n'):
             return None
         else:
             print("Input must be Y or N!")
@@ -411,7 +411,7 @@ def get_vacuum_thickness(lattice_matrix, species, positions_cartesian, positions
 
     while True:
         choice = input("Use effective thickness as new cell thickness? (Y/N): ").strip().lower()
-        if choice[0] == 'y':
+        if choice.startswith('y'):
             new_length = t_eff
             if new_length >= z_range:
                 break
@@ -421,7 +421,7 @@ def get_vacuum_thickness(lattice_matrix, species, positions_cartesian, positions
                 print("Please enter a custom value instead.")
                 choice = 'n'  # fall through to manual entry below
 
-        if choice[0] == 'n':
+        if choice.startswith('n'):
             while True:
                 try:
                     new_length = float(input("Enter target cell thickness in Angstrom: "))
@@ -434,8 +434,7 @@ def get_vacuum_thickness(lattice_matrix, species, positions_cartesian, positions
                     print("Invalid input. Please enter a number.")
             break
 
-        if choice[0] not in ('y', 'n'):
-            print("Input must be Y or N!")
+        print("Input must be Y or N!")
 
     scale_factor = new_length / c_proj
 
@@ -538,11 +537,11 @@ def get_phonon_flags():
             elif n_phonon == 4:
                 while True:
                     device = input("Enter parallel devices (CPU/GPU): ").strip().upper()
-                    if device[0] == 'C':
+                    if device.startswith('C'):
                         print("Your parallel devices use CPU.")
                         convergence = '.true.'
                         break
-                    elif device[0] == 'G':
+                    elif device.startswith('G'):
                         print("Your parallel devices use GPU.")
                         convergence = '.false.'
                         break
@@ -558,7 +557,7 @@ def get_phonon_flags():
             print("Invalid input. Please enter integer numbers.")
 
  
-def write_CONTROL(filepath, lattice_matrix, elements, atom_counts, positions_direct,
+def write_CONTROL(filepath, lattice_matrix, species, positions_direct,
                   ngrid, supercell_matrix, phonon_flags):
     """
     Write the ShengBTE CONTROL file in Fortran namelist format.
@@ -566,23 +565,23 @@ def write_CONTROL(filepath, lattice_matrix, elements, atom_counts, positions_dir
     Constructs the &allocations, &crystal, &parameters, and &flags
     namelists and writes them to the specified file. The lattice factor
     lfactor is set to 0.1 to convert Angstrom to nanometers as required
-    by ShengBTE.
+    by ShengBTE. Elements are the unique species in first-appearance order;
+    atom order is kept so types/positions match the force constant files.
  
     Parameters
     ----------
     filepath         : str, output file path
     lattice_matrix   : ndarray (3, 3), lattice vectors as rows in Angstrom
-    elements         : list of str, element symbols in order
-    atom_counts      : list of int, number of atoms per element
+    species          : list of str, element symbol per atom
     positions_direct : ndarray (N, 3), fractional coordinates in [0, 1)
     ngrid            : list of int, q-point mesh [n1, n2, n3]
     supercell_matrix : str, space-separated supercell expansion integers
     phonon_flags     : str, closing &flags namelist content including &end
     """
-    total_atoms = sum(atom_counts)
+    elements = list(dict.fromkeys(species))
+    total_atoms = len(species)
     elements_str = " ".join([f'"{element}"' for element in elements])
-    types = " ".join([str(i + 1) for i, count in enumerate(atom_counts)
-                      for _ in range(count)])
+    types = " ".join([str(elements.index(s) + 1) for s in species])
  
     control = "&allocations"
     control += f"""\n        nelements= {len(elements)},
@@ -647,7 +646,7 @@ def main():
     phonon_flags = get_phonon_flags()
  
     output_file = "CONTROL.initial"
-    write_CONTROL(output_file, new_lattice_matrix, poscar["elements"], poscar["atom_counts"],
+    write_CONTROL(output_file, new_lattice_matrix, poscar["species"],
                   new_positions_direct, ngrid, supercell_matrix, phonon_flags)
  
     print(f"Written: {output_file}")
@@ -655,4 +654,3 @@ def main():
  
 if __name__ == "__main__":
     main()
- 
