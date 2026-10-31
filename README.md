@@ -289,10 +289,12 @@ Extracts vibrational normal modes from a VASP `OUTCAR` or Phonopy `YAML` file an
 Usage: vaspVibration.py <structure file> <OUTCAR or phonopy YAML> [scaling factor]
 ```
 
-- VASP OUTCAR: modes written in descending frequency order (VASP convention)
-- Phonopy YAML: modes written in ascending frequency order (Phonopy convention)
+- VASP OUTCAR: modes written in descending frequency order (VASP convention); NWRITE = 3 output is supported
+- Phonopy YAML: modes written in ascending frequency order (Phonopy convention); the file must contain eigenvectors (`--eigenvectors`)
 
-**Output:** One `.xsf` file per normal mode.
+Eigenvectors from both inputs are divided by √m (masses from the structure file), so the arrows of the same mode agree between OUTCAR and YAML input.
+
+**q-point selection (YAML):** For `band.yaml`, the path segment end points are the candidate high-symmetry q-points; for `mesh.yaml` and `qpoints.yaml`, every q-point is a candidate. Duplicates are removed, and if more than one candidate remains, the script lists them with their labels and prompts for one. The Bloch phase exp(2πi q·r) is applied before the real part is written; a warning is printed if the eigenvector is still complex (e.g. K or general q-points).
 
 ---
 
