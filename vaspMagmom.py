@@ -57,7 +57,7 @@ _ELEMENT_UNPAIRED = [
     3.0,  4.0,  5.0,  4.0,  3.0,  2.0,  1.0,  0.6,
     1.0,  2.0,  3.0,  2.0,  1.0,  0.6
 ]
- 
+
 _ELEMENT_MAGMOM = [
     0.6,  0.6,  0.6,  0.6,  0.6,  0.6,  0.6,  0.6,
     0.6,  0.6,  0.6,  0.6,  0.6,  0.6,  0.6,  0.6,
@@ -76,7 +76,7 @@ _ELEMENT_MAGMOM = [
     0.6,  0.6,  0.6,  0.6,  0.6,  0.6
 ]
 
- 
+
 def read_POSCAR(filepath):
     """Read a VASP POSCAR file and return its contents as a dictionary.
 
@@ -264,15 +264,15 @@ def cartesian_to_direct(lattice_matrix, positions_cartesian):
     positions_direct = (positions_cartesian @ np.linalg.inv(lattice_matrix)) % 1.0
 
     return positions_direct
- 
- 
+
+
 def get_default_magmom(element):
     """Look up the default initial magnetic moment (mu_B) for an element.
- 
+
     Parameters
     ----------
     element : str — element symbol
- 
+
     Returns
     -------
     float — default moment from _ELEMENT_MAGMOM, or 0.6 if not found
@@ -286,11 +286,11 @@ def get_default_magmom(element):
 
 def get_unpaired_electrons(element):
     """Look up the free-atom ground-state unpaired electron count for an element.
- 
+
     Parameters
     ----------
     element : str — element symbol
- 
+
     Returns
     -------
     float — value from _ELEMENT_UNPAIRED, or 0.6 if not found
@@ -300,8 +300,8 @@ def get_unpaired_electrons(element):
         return _ELEMENT_UNPAIRED[idx]
     except ValueError:
         return 0.6
- 
- 
+
+
 def build_default_magmom_values(unique_elements, element_counts):
     """Look up the initial magnetic moment for every unique element.
 
@@ -327,19 +327,19 @@ def build_default_magmom_values(unique_elements, element_counts):
             default = float(get_unpaired_electrons(element))
         magmom_values[element] = default
     return magmom_values
- 
- 
+
+
 def build_magmom_string(species, magmom_values):
     """Expand per-element moments to per-atom order and run-length-encode.
- 
+
     Consecutive atoms sharing the same moment are compressed into VASP's
     'count*value' shorthand, matching the atom order of the POSCAR file.
- 
+
     Parameters
     ----------
     species        : list[str]         — per-atom element labels, in POSCAR file order
     magmom_values  : dict[str, float]  — element -> magnetic moment
- 
+
     Returns
     -------
     str — MAGMOM tag value, e.g. '3*5.0 2*0.6 4*1.0'
@@ -350,13 +350,13 @@ def build_magmom_string(species, magmom_values):
         count = len(list(group))
         groups.append(f"{count}*{value:.1f}")
     return " ".join(groups)
- 
- 
+
+
 _TAG_PATTERN = re.compile(r'^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=')
- 
- 
+
+
 def read_INCAR(filepath):
-    """Read an existing INCAR file into a list of lines, dropping full-line comments.
+    """Read an existing INCAR file into a list of lines, keeping comments.
 
     Parameters
     ----------
@@ -364,22 +364,22 @@ def read_INCAR(filepath):
 
     Returns
     -------
-    list[str] — lines of the file, with '#'/'!' comment lines removed
+    list[str] — all lines of the file, including '#'/'!' comment lines
     """
     with open(filepath, 'r') as f:
         lines = f.readlines()
-    return [line for line in lines if not line.strip().startswith(('#', '!'))]
- 
- 
+    return lines
+
+
 def default_INCAR_lines(magmom_string):
     """Build a fresh INCAR from the standard spin-polarized template.
- 
+
     Used only when no INCAR is found in the current directory.
- 
+
     Parameters
     ----------
     magmom_string : str — MAGMOM tag value
- 
+
     Returns
     -------
     list[str] — INCAR lines, ready to write
@@ -399,16 +399,16 @@ def default_INCAR_lines(magmom_string):
         ("ENCUT",   "520"),
     ]
     return [f"{tag} = {value}\n" for tag, value in template]
- 
- 
+
+
 def find_tag_line(lines, tag):
     """Return the index of the (uncommented) line that sets `tag`, or None.
- 
+
     Parameters
     ----------
     lines : list[str]
     tag   : str — INCAR tag name, e.g. 'MAGMOM'
- 
+
     Returns
     -------
     int or None
@@ -421,11 +421,11 @@ def find_tag_line(lines, tag):
         if match and match.group(1).upper() == tag.upper():
             return i
     return None
- 
- 
+
+
 def set_tag(lines, tag, value):
     """Insert or replace a 'TAG = value' line in an INCAR line list, in place.
- 
+
     Parameters
     ----------
     lines : list[str] — modified in place
@@ -460,11 +460,11 @@ def remove_tag(lines, tag):
 
 def ensure_ispin(lines):
     """Ensure ISPIN = 2 is set, overriding any other value (e.g. ISPIN = 1).
- 
+
     Parameters
     ----------
     lines : list[str] — current INCAR lines
- 
+
     Returns
     -------
     bool — True if 'ISPIN = 2' should be (re)written
@@ -476,13 +476,13 @@ def ensure_ispin(lines):
         if current == '2':
             return False
         return True
- 
+
     return True
- 
- 
+
+
 def write_INCAR(filepath, lines):
     """Write INCAR lines to a file.
- 
+
     Parameters
     ----------
     filepath : str
@@ -490,27 +490,27 @@ def write_INCAR(filepath, lines):
     """
     with open(filepath, 'w') as f:
         f.writelines(lines)
- 
- 
+
+
 def main():
     """Parse arguments, build the MAGMOM tag from POSCAR composition, and overwrite INCAR in place."""
- 
+
     if '-h' in argv or '--help' in argv or len(argv) != 2:
         usage()
- 
+
     poscar_file = argv[1]
     incar_file = "INCAR"
- 
+
     poscar = read_POSCAR(poscar_file)
- 
+
     # First-occurrence order avoids reordering atoms; MAGMOM must follow the
     # exact atom order already present in the POSCAR file.
     unique_elements = list(dict.fromkeys(poscar["species"]))
     element_counts = Counter(poscar["species"])
- 
+
     magmom_values = build_default_magmom_values(unique_elements, element_counts)
     magmom_string = build_magmom_string(poscar["species"], magmom_values)
- 
+
     if os.path.exists(incar_file):
         lines = read_INCAR(incar_file)
         remove_tag(lines, "NUPDOWN")
@@ -519,9 +519,9 @@ def main():
             set_tag(lines, "ISPIN", "2")
     else:
         lines = default_INCAR_lines(magmom_string)
- 
+
     write_INCAR(incar_file, lines)
- 
- 
+
+
 if __name__ == "__main__":
     main()
