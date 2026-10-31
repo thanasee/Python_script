@@ -201,11 +201,19 @@ Output filenames follow the pattern `<tag>-mXXXXXX.dat`, where the mesh token is
 
 Converts a VASP POSCAR file into a CONTROL input file for the [ShengBTE](https://www.shengbte.org/) lattice thermal conductivity code (Fortran BTE solver).
 
-```
-Usage: poscar2control.py <POSCAR>
-```
+    Usage: poscar2control.py <POSCAR>
 
-Interactively prompts for supercell matrix and phonon process order (3-phonon or 4-phonon, with CPU/GPU branching). Sets `lfactor=0.1` (Å → nm) as required by ShengBTE. **Output:** `CONTROL.initial`
+**Interactive prompts:**
+1. 2D material (Y/N). If yes: vacuum direction (a/b/c). The sheet is recentred at 0.5 along the vacuum direction (periodic directions shifted to origin), then the vacuum lattice vector is shrunk so its projection on the layer normal equals t_eff (atomic span along the normal plus the Alvarez vdW radii of the two outermost atoms), or a user-entered thickness (must be ≥ the atomic span).
+2. q-point spacing (2π/Å) → `ngrid`: n_i = round(|b_i| / (2π × spacing)), minimum 1; the vacuum direction is set to 1.
+3. Supercell matrix (3 positive integers) → `scell`; must match the supercell used for the force constants.
+4. Phonon process order: 3 → `convergence=.true.`, `nthreads=-1`; 4 → CPU (`convergence` and `four_phonon_iteration` = `.true.`) or GPU (both `.false.`), with `four_phonon=.true.`.
+
+Repeated element blocks in the POSCAR (e.g. S Mo S) are merged into unique elements; atom order is kept so `types` and `positions` match the force constant files.
+
+**Hard-coded values:** `lfactor=0.1` (Å → nm), `T=300.`, `scalebroad=1.0`, `nonanalytic=.false.`, `isotopes=.true.`, `autoisotopes=.true.`, `nanowire=.false.`, `onlyharmonic=.false.` — edit `CONTROL.initial` to change them.
+
+**Output:** `CONTROL.initial`
 
 ---
 
