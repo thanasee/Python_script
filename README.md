@@ -812,15 +812,17 @@ Usage: vaspBorn.py <OUTCAR or vasprun.xml>
 
 #### `vaspMagmom.py`
 
-Builds an initial `MAGMOM` tag from a POSCAR/CONTCAR's element composition and writes it into `INCAR`, using standard per-element default magnetic moments (a built-in periodic-table lookup table, non-zero mainly for 3d/4d transition metals).
+Builds an initial `MAGMOM` tag from a POSCAR/CONTCAR's element composition and writes it into `INCAR`, using standard per-element default magnetic moments (a built-in periodic-table lookup table, non-zero for the 3d, 4d and 5d transition metals, the lanthanides Ce–Yb, and U; every other element gets the non-magnetic placeholder 0.6).
 
 ```
 Usage: vaspMagmom.py <POSCAR>
 ```
 
-Reads the structure via the toolkit's shared VASP4/5 POSCAR parser (prompts for element names only if a VASP4-format file lacks the element-symbol line). Per-atom moments are expanded in POSCAR atom order and run-length-encoded into VASP's `count*value` shorthand (e.g. `3*5.0 2*0.0`).
+Reads the structure via the toolkit's shared VASP4/5 POSCAR parser. For a VASP4-format file without the element-symbol line, element names are read from `POTCAR` in the same directory as the POSCAR; the user is prompted only if `POTCAR` is missing or its species count does not match. Per-atom moments are expanded in POSCAR atom order and run-length-encoded into VASP's `count*value` shorthand, grouped by (element, value) so different elements are never merged (e.g. `3*5.0 2*0.6`).
 
-**INCAR handling:** If `INCAR` already exists in the working directory, only the `MAGMOM` tag is set/overwritten in place (existing tags, comments, and ordering are preserved), and `ISPIN` is forced to `2` if not already set to `2`. If no `INCAR` exists, a fresh one is written from a standard spin-polarized template.
+**Single-atom override:** If an element's bulk default is 0.6 and the structure contains only one atom of it (e.g. a single adsorbate or dopant), its free-atom unpaired-electron count (Hund's rule) is used instead.
+
+**INCAR handling:** If `INCAR` already exists in the working directory, the `MAGMOM` tag is set/overwritten in place (other tags, comments, and ordering are preserved), `NUPDOWN` is removed if present (it fixes the total moment and conflicts with a per-atom guess), and `ISPIN` is forced to `2` if not already set to `2`. If no `INCAR` exists, a fresh one is written from a standard spin-polarized template.
 
 **Output:** `INCAR` (created or updated in place).
 
