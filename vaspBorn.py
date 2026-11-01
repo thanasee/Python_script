@@ -16,6 +16,11 @@ This script reads a VASP OUTCAR or vasprun.xml file and extracts:
   - Static (ion-clamped) dielectric tensor
   - Born effective charge tensors for each ion
 
+Output files:
+  - INCAR.LR : PHON_DIELECTRIC and PHON_BORN_CHARGES tags for VASP
+  - BORN     : NAC parameters for phonopy/phono3py (requires phonopy),
+               symmetrized, with the DFPT cell taken as the primitive cell
+
 This script was developed by Thanasee Thanasarnsurapong.
 """)
     exit(0)
@@ -26,8 +31,9 @@ def read_OUTCAR(filepath):
 
     Parses the OUTCAR written by a VASP DFPT run (LEPSILON=.TRUE.).
     The ion-clamped (electronic) dielectric tensor is read from the
-    ``MACROSCOPIC STATIC DIELECTRIC TENSOR`` block.  Born effective
-    charges are read from the ``BORN EFFECTIVE CHARGES`` block.
+    ``MACROSCOPIC STATIC DIELECTRIC TENSOR (including local field effects
+    in DFT)`` block.  Born effective charges are read from the
+    ``BORN EFFECTIVE CHARGES`` block.
 
     Parameters
     ----------
@@ -43,16 +49,21 @@ def read_OUTCAR(filepath):
         elementary charge (e).
     nions : int
         Number of ions in the cell.
+    cell : tuple
+        (lattice, fractional positions, symbols) of the initial structure.
     """
 
     with open(filepath, 'r') as f:
         lines = f.readlines()
 
     # ── Dielectric tensor ─────────────────────────────────────────────────────
+    # Match the DFT local-field block only; the "excluding local field
+    # effects" and "IONIC CONTRIBUTION" blocks share the same prefix.
     dielectric = None
     i = 0
     while i < len(lines):
-        if 'MACROSCOPIC STATIC DIELECTRIC TENSOR' in lines[i]:
+        if ('MACROSCOPIC STATIC DIELECTRIC TENSOR' in lines[i]
+                and 'including local field effects in DFT' in lines[i]):
             # Skip the header line and the separator line
             j = i + 2
             block = []
@@ -66,7 +77,6 @@ def read_OUTCAR(filepath):
                 j += 1
             if len(block) == 3:
                 dielectric = np.array(block)
-                break
         i += 1
 
     if dielectric is None:
@@ -120,7 +130,29 @@ def read_OUTCAR(filepath):
     nions = len(born_charges)
     born_charges = np.array(born_charges)  # shape (NIONS, 3, 3)
 
-    return dielectric, born_charges, nions
+    # ── Structure (first occurrence = initial structure) ──────────────────────
+    types, counts, lattice, positions = [], None, None, None
+    for i, line in enumerate(lines):
+        if 'VRHFIN' in line:
+            types.append(line.split('=')[1].split(':')[0].strip())
+        elif 'ions per type' in line and counts is None:
+            counts = [int(x) for x in line.split('=')[1].split()]
+        elif 'direct lattice vectors' in line and lattice is None:
+            lattice = [[float(x) for x in lines[i + k].split()[:3]] for k in (1, 2, 3)]
+        elif 'position of ions in fractional coordinates' in line and positions is None:
+            positions = [[float(x) for x in lines[i + k].split()[:3]] for k in range(1, nions + 1)]
+
+    if counts is None or lattice is None or positions is None or len(types) < len(counts):
+        print("ERROR!\nCould not read the structure from OUTCAR.")
+        exit(1)
+
+    symbols = [s for s, n in zip(types, counts) for _ in range(n)]
+    if len(symbols) != nions:
+        print(f"ERROR!\nNumber of ions ({len(symbols)}) does not match "
+              f"number of Born charge tensors ({nions}).")
+        exit(1)
+
+    return dielectric, born_charges, nions, (lattice, positions, symbols)
 
 
 def read_vasprun(filepath):
@@ -145,6 +177,8 @@ def read_vasprun(filepath):
         elementary charge (e).
     nions : int
         Number of ions in the cell.
+    cell : tuple
+        (lattice, fractional positions, symbols) of the initial structure.
     """
 
     try:
@@ -194,7 +228,25 @@ def read_vasprun(filepath):
     nions = len(born_charges)
     born_charges = np.array(born_charges)  # shape (NIONS, 3, 3)
 
-    return dielectric, born_charges, nions
+    # ── Structure ─────────────────────────────────────────────────────────────
+    structure = root.find("structure[@name='initialpos']")
+    atoms = root.find("atominfo/array[@name='atoms']/set")
+    if structure is None or atoms is None:
+        print("ERROR!\nCould not read the structure from vasprun.xml.")
+        exit(1)
+
+    lattice = [[float(x) for x in v.text.split()]
+               for v in structure.find("crystal/varray[@name='basis']")]
+    positions = [[float(x) for x in v.text.split()]
+                 for v in structure.find("varray[@name='positions']")]
+    symbols = [rc.find('c').text.strip() for rc in atoms]
+
+    if len(symbols) != nions:
+        print(f"ERROR!\nNumber of ions ({len(symbols)}) does not match "
+              f"number of Born charge tensors ({nions}).")
+        exit(1)
+
+    return dielectric, born_charges, nions, (lattice, positions, symbols)
 
 
 def format_val(x):
@@ -269,12 +321,30 @@ def write_INCAR_LR(dielectric, born_charges, nions, output_file='INCAR.LR'):
         f.write('\n'.join(lines))
 
 
+def write_BORN(dielectric, born_charges, cell, output_file='BORN'):
+    """Write phonopy BORN: symmetrized epsilon and Z* of independent atoms (phonopy-vasp-born format)."""
+
+    try:
+        from phonopy.structure.atoms import PhonopyAtoms
+        from phonopy.file_IO import get_BORN_lines
+    except ImportError:
+        print("ERROR!\nphonopy is required to write BORN.")
+        exit(1)
+
+    lattice, positions, symbols = cell
+    unitcell = PhonopyAtoms(symbols=symbols, cell=lattice, scaled_positions=positions)
+    lines = get_BORN_lines(unitcell, born_charges, dielectric)
+
+    with open(output_file, 'w') as f:
+        f.write('\n'.join(lines) + '\n')
+
+
 def main():
     """
-    Parse arguments, read the specified VASP output file, extract the dielectric tensor and Born effective charges, and write output to INCAR.LR.
+    Parse arguments, read the specified VASP output file, extract the dielectric tensor and Born effective charges, and write INCAR.LR and BORN.
     """
 
-    if '-h' in argv or len(argv) != 2:
+    if '-h' in argv or '--help' in argv or len(argv) != 2:
         usage()
 
     filepath = argv[1]
@@ -287,19 +357,20 @@ def main():
 
     # Dispatch by filename
     if filename == 'vasprun.xml':
-        dielectric, born_charges, nions = read_vasprun(filepath)
+        dielectric, born_charges, nions, cell = read_vasprun(filepath)
     elif filename == 'OUTCAR':
-        dielectric, born_charges, nions = read_OUTCAR(filepath)
+        dielectric, born_charges, nions, cell = read_OUTCAR(filepath)
     else:
         # Try to detect by content
         with open(filepath, 'r') as f:
             first_line = f.readline()
         if first_line.strip().startswith('<'):
-            dielectric, born_charges, nions = read_vasprun(filepath)
+            dielectric, born_charges, nions, cell = read_vasprun(filepath)
         else:
-            dielectric, born_charges, nions = read_OUTCAR(filepath)
+            dielectric, born_charges, nions, cell = read_OUTCAR(filepath)
 
     write_INCAR_LR(dielectric, born_charges, nions)
+    write_BORN(dielectric, born_charges, cell)
 
 
 if __name__ == '__main__':
