@@ -489,8 +489,10 @@ Usage: vaspRotate.py <POSCAR> <output POSCAR>
 
 The rotation axis is x, y, z, or a custom Cartesian vector; the angle is entered in degrees.
 
-- **Molecules:** all atoms are rotated about a pivot set to the geometric centre (unweighted mean of atomic positions), a specific atom, or a custom point entered in Direct (fractional) coordinates.
-- **2D/3D materials:** only the selected atoms (free-format selection) are rotated about their own geometric centre; all other atoms stay fixed.
+- **Molecules:** all atoms are rotated about a pivot set to the geometric center (unweighted mean of atomic positions), the center of mass (mass-weighted mean), a specific atom, or a custom point entered in Direct (fractional) coordinates.
+- **2D/3D materials:** only the selected atoms (free-format selection) are rotated about their own geometric center or center of mass; all other atoms stay fixed.
+
+The rotated atoms are unwrapped across periodic boundaries (minimum-image convention) before the pivot is computed, so a molecule or group split across the cell edge stays intact. With a custom pivot, the molecule is rotated from its periodic image nearest that point. Atomic masses are IUPAC standard atomic weights (most stable isotope for elements without one).
 
 ---
 
