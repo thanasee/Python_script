@@ -24,13 +24,10 @@ def usage():
     print("""
 Usage: plotGrid.py <X.grd> <Y.grd> <CHGLAVG.grd> [output prefix]
 
-This script reads a VASPKIT-style 2D grid (X.grd, Y.grd, CHGLAVG.grd, e.g.
-CHGLAVG.grd) and:
+This script reads a VASPKIT-style 2D grid (X.grd, Y.grd and a value grid,
+e.g. CHGLAVG.grd) and:
   1) plots a filled-contour heatmap as <prefix>.png
-  2) writes <prefix>_matrix.dat, an Origin-ready matrix ASCII file
-     (row 1 = X values, column 1 = Y values, interior = CHGLAVG), importable
-     via Origin's "Import Matrix > Simple ASCII"
-  3) writes <prefix>_xyz.dat, a plain X Y CHGLAVG column file for Origin's
+  2) writes <prefix>.dat, a plain X Y CHGLAVG column file for Origin's
      Data > Convert to Matrix > XYZ Gridding (or any generic plotting
      program)
 
@@ -162,7 +159,7 @@ def plot_grid(X, Y, CHGLAVG, output_png):
     """
     x_label, y_label = prompt_axis_labels()
 
-    fig, ax = plt.subplots(figsize=(6, 6 * X.max() / max(X.max(), Y.max()) or 6),
+    fig, ax = plt.subplots(figsize=(6, 6 * np.ptp(Y) / max(np.ptp(X), np.ptp(Y)) or 6),
                             dpi=300)
 
     cf = ax.contourf(X, Y, CHGLAVG, levels=N_LEVELS, cmap=COLORMAP)
@@ -213,7 +210,7 @@ def write_origin_column(X, Y, CHGLAVG, output_path):
     """
     Write a plain three-column X Y CHGLAVG ASCII file.
 
-    Suitable for Origin's Data > Convert to Matrix > XY-CHGLAVG Gridding, or
+    Suitable for Origin's Data > Convert to Matrix > XYZ Gridding, or
     for import into any generic contour/3D plotting tool.
 
     Parameters
@@ -232,9 +229,9 @@ def write_origin_column(X, Y, CHGLAVG, output_path):
 def main():
     """
     Parse arguments, read X/Y/CHGLAVG grids, plot a contour heatmap, and
-    write Origin-ready matrix and XYZ ASCII files.
+    write a three-column XYZ ASCII file.
     """
-    if '-h' in argv or len(argv) not in (4, 5):
+    if '-h' in argv or '--help' in argv or len(argv) not in (4, 5):
         usage()
 
     x_file, y_file, chglavg_file = argv[1], argv[2], argv[3]
