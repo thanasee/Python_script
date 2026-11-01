@@ -125,7 +125,9 @@ Reads the high-symmetry q-point path positions from a `band.dat` file produced b
 Usage: getQPATH.py <input band.dat>
 ```
 
-Q-point path distances (Å−1) are read from the second line of the input file. The frequency range is determined automatically as floor(f_min) to ceil(f_max) from all frequency values in the file. For each interior high-symmetry q-point, three coordinate pairs are written to trace a vertical tick from `fmin` to `fmax` and back. The outer box boundaries and the zero-frequency axis are appended at the end.
+Q-point path distances (Å−1) are read from the second line of the input file. The frequency window is determined automatically from all frequency values in the file as fmin = min(5·floor(f_min/5), −5) and fmax = 5·ceil(f_max/5) + 5, i.e. rounded outward to multiples of 5, with fmin at most −5 and 5 THz of headroom above the highest frequency.
+
+For each interior high-symmetry q-point, three coordinate pairs are written to trace a vertical tick from `fmin` to `fmax` and back. The outer box boundaries and the zero-frequency axis are appended at the end.
 
 **Output:** `QLINES.dat` — columns: q-path distance (Å−1), frequency boundary (THz).
 
