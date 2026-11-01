@@ -647,7 +647,7 @@ Converts VASP's `ML_AB` binary training data file to extended XYZ (`.extxyz`) fo
 Usage: mlab2extxyz.py <ML_AB input> <output.extxyz>
 ```
 
-Each configuration block is mapped to one extxyz frame with lattice, positions, energy, forces, and stress. Stress is converted from kbar to eV/Å3.
+Each configuration block is mapped to one extxyz frame with lattice, positions, energy, forces, and stress. Stress is converted from kbar to eV/Å<sup>3</sup> and sign-flipped, since VASP reports compressive stress as positive while the extxyz (ASE) convention reports it as negative.
 
 ---
 
