@@ -15,8 +15,8 @@ This script supports VASP5 Structure file format (i.e. POSCAR)
 for applying strain to a structure file.
 
 The expansion matrix can be specified as:
-  3 components  ->  \u03C3_xx \u03C3_yy \u03C3_zz  (diagonal)
-  9 components  ->  \u03C3_xx \u03C3_xy \u03C3_xz  \u03C3_yx \u03C3_yy \u03C3_yz  \u03C3_zx \u03C3_zy \u03C3_zz  (full 3×3)
+  3 components  ->  \u03B5_xx \u03B5_yy \u03B5_zz  (diagonal)
+  9 components  ->  \u03B5_xx \u03B5_xy \u03B5_xz  \u03B5_yx \u03B5_yy \u03B5_yz  \u03B5_zx \u03B5_zy \u03B5_zz  (full 3×3)
 
 This script was developed by Thanasee Thanasarnsurapong.
 """)
@@ -447,8 +447,8 @@ def applying_strain(lattice_matrix, positions_direct):
     
     text = """
 Strain matrix components :
-  3 components  ->  \u03C3_xx \u03C3_yy \u03C3_zz  (diagonal)
-  9 components  ->  \u03C3_xx \u03C3_xy \u03C3_xz  \u03C3_yx \u03C3_yy \u03C3_yz  \u03C3_zx \u03C3_zy \u03C3_zz  (full 3×3)
+  3 components  ->  \u03B5_xx \u03B5_yy \u03B5_zz  (diagonal)
+  9 components  ->  \u03B5_xx \u03B5_xy \u03B5_xz  \u03B5_yx \u03B5_yy \u03B5_yz  \u03B5_zx \u03B5_zy \u03B5_zz  (full 3×3)
 Enter strain matrix (separate by space):"""
     print(text)
 
@@ -462,10 +462,10 @@ Enter strain matrix (separate by space):"""
             elif len(values) == 9:
                 strain_matrix = values.reshape(3, 3)
             else:
-                print("Input must be 3 or 9 compenents!")
+                print("Input must be 3 or 9 components!")
                 continue
         except ValueError:
-            print("Invalid input. Please enter integer numbers separated by spaces.")
+            print("Invalid input. Please enter numbers separated by spaces.")
             continue
         # Make the strain matrix symmetric by averaging the non-symmetric elements
         strain_matrix = (strain_matrix + strain_matrix.T) / 2
@@ -494,7 +494,7 @@ def main():
                  mapping["positions_cartesian"], mapping["positions_direct"], unstrain["selective_dynamics"],
                  mapping["flags"], labels)
     
-    print("\nApplied strain matrix (\u03C3):")
+    print("\nApplied strain matrix (\u03B5):")
     for strain in strained["strain_matrix"]:
         print(f"  {strain[0]:>6.3f}  {strain[1]:>6.3f}  {strain[2]:>6.3f}")
     print("")
