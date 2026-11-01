@@ -499,7 +499,7 @@ Applies Selective Dynamics constraints to a VASP POSCAR, fixing atoms in specifi
 Usage: vaspFix.py <POSCAR> <output POSCAR>
 ```
 
-Three atom-selection modes: by index/label, by cutoff radius (PBC-aware), or from an existing `SELECTED_FIX_ATOMS_LIST` file. Writes a `SELECTED_FIX_ATOMS_LIST` log for reference and reuse.
+Three atom-selection modes: by index/label; by cutoff radius, which fixes the atoms outside the radius from the PBC-unwrapped centroid of selected reference atoms (minimum-image distances); or from an existing `FIXED_ATOMS_LIST` file. Writes a `FIXED_ATOMS_LIST` log (atoms in output POSCAR order) for reference and reuse.
 
 ---
 
