@@ -259,7 +259,7 @@ Scripts that read VASP POSCAR/CONTCAR structure files and compute structural pro
 ---
 
 #### `calDistance.py`
-**Inspired by:** [Jiraroj T-Thienprasert](https://scholar.google.com/citations?user=_U_cXy0AAAAJ&hl=en)
+**Inspired by:** [Jiraroj T-Thienprasert](https://scholar.google.com/citations?user=_U_cXy0AAAAJ)
 
 Computes interatomic distances from a VASP POSCAR/CONTCAR file under periodic boundary conditions using the minimum-image convention. Four calculation modes are available interactively.
 
@@ -521,6 +521,7 @@ Accepts 3 values (diagonal strain) or 9 values (full 3×3 tensor). Off-diagonal 
 ---
 
 #### `vaspSupercell.py`
+**Inspired by:** [Jiraroj T-Thienprasert](https://scholar.google.com/citations?user=_U_cXy0AAAAJ)
 
 Generates a supercell POSCAR from a unit cell input using an expansion matrix. Accepts 3 values (diagonal expansion) or 9 values (full 3×3 matrix).
 
@@ -529,6 +530,8 @@ Usage: vaspSupercell.py <POSCAR> <output POSCAR>
 ```
 
 Uses an integer-exact (adjugate-matrix-based) grid point generation to avoid floating-point rounding errors. Supports anisotropic scale factors and Selective Dynamics.
+
+**Expansion matrix input:** If `TRANSMAT.in` exists in the working directory, the matrix is read from it: the first line is skipped (header), then 3 rows of 3 integers (blank lines and `#` comments are ignored). Otherwise, or if `TRANSMAT.in` is invalid or its determinant is not a positive integer, the matrix is entered at the prompt and written to `TRANSMAT` in the same layout, so it can be renamed to `TRANSMAT.in` for reuse.
 
 ---
 
