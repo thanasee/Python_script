@@ -781,9 +781,10 @@ def place_around(lattice_matrix_substrate, total_atoms_substrate, positions_subs
     """Place adsorbent copies symmetrically around one or more chosen substrate atoms.
 
     For each target atom, number_adsorbent copies are distributed evenly at angle
-    intervals of 2π/number_adsorbent around it. The side (top/bottom) is selected
-    by the user for each target. The adsorbent lowest atom (top) or highest atom
-    (bottom) is aligned to the target atom z.
+    intervals of 2π/number_adsorbent around it. The side (top/bottom) is detected
+    from the target atom z relative to the substrate mean z; the user is prompted
+    if the target lies within 0.01 Å of the mean. The adsorbent lowest atom (top)
+    or highest atom (bottom) is aligned to the target atom z.
 
     Parameters
     ----------
@@ -837,6 +838,7 @@ def place_around(lattice_matrix_substrate, total_atoms_substrate, positions_subs
             print("Invalid input! Please enter a number.")
 
     angle_step = 2 * np.pi / number_adsorbent
+    z_mean = np.mean(positions_substrate[:, 2])
 
     new_positions_adsorbent = []
     new_species_adsorbent = []
@@ -856,8 +858,13 @@ def place_around(lattice_matrix_substrate, total_atoms_substrate, positions_subs
                 print("Invalid input! Please enter a number.")
         target_center = positions_substrate[target_atom, :]
 
-        # Choose side for this target
-        side = select_side()
+        # Detect side from substrate mean z; prompt if target lies in the mean plane
+        if target_center[2] > z_mean + 1e-2:
+            side = 1
+        elif target_center[2] < z_mean - 1e-2:
+            side = -1
+        else:
+            side = select_side()
         facing_idx = np.argmin(positions_adsorbent[:, 2]) if side == 1 else np.argmax(positions_adsorbent[:, 2])
         reference_adsorbent[2] = positions_adsorbent[facing_idx, 2]
 
