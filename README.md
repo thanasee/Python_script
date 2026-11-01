@@ -377,7 +377,7 @@ Supports both 2D materials (with vacuum-layer thickness correction) and 3D bulk 
 ---
 
 #### `plotMechanics.py`
-Inspired by:** [Klichchupong Dabsamut](https://scholar.google.com/citations?user=KbqQhGkAAAAJ)
+**Inspired by:** [Klichchupong Dabsamut](https://scholar.google.com/citations?user=KbqQhGkAAAAJ)
 
 Plots polar diagrams of angle-dependent mechanical properties (Young's modulus, Poisson's ratio, Shear modulus) for up to 6 materials simultaneously for visual comparison.
 
