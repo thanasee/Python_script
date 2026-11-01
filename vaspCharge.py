@@ -23,7 +23,7 @@ of the following:
    7) Macroscopic-Average Charge Density -> MACROSCOPIC_AVERAGE.dat
    8) Charge Density Along a Specified Path -> CHG_LINE.dat
    9) Build Supercell of Charge Density -> CHGCAR_SUPERCELL.vasp
-  10) STM Simulation                 -> STM_X/Y.grd + STM_HEIGHT.grd or STM_CURRENT.grd
+  10) STM Simulation                 -> STM_X/Y.grd + STM_DENSITY.grd or STM_TOPOGRAPHY.grd
 
 Non-collinear CHGCAR files are not supported, but will be supported in a future version.
 
@@ -52,8 +52,21 @@ _ELEMENT_SYMBOLS = [
 
 
 def _looks_like_grid_header(line, expected_ngrid=None):
-    """True if ``line`` is an 'NGXF NGYF NGZF' header (three positive ints,
-    optionally matching ``expected_ngrid``)."""
+    """Check whether a line is an 'NGXF NGYF NGZF' grid header.
+
+    Parameters
+    ----------
+    line : str
+        Line to test.
+    expected_ngrid : tuple of int, optional
+        Grid dimensions the header must match.
+
+    Returns
+    -------
+    bool
+        True if the line holds three positive integers (matching
+        ``expected_ngrid`` when given).
+    """
     tokens = line.split()
     if len(tokens) != 3 or not all(t.isdigit() for t in tokens):
         return False
@@ -66,10 +79,23 @@ def _looks_like_grid_header(line, expected_ngrid=None):
 
 
 def _read_grid_block(lines, line_idx):
-    """
-    Read one 'NGXF NGYF NGZF' header plus its NGXF*NGYF*NGZF values, and
-    reshape in Fortran order (x fastest) to match VASP's own write order.
-    Returns (ngrid, grid, line_idx_after_block).
+    """Read one density grid block in Fortran (x-fastest) order.
+
+    Parameters
+    ----------
+    lines : list of str
+        File lines.
+    line_idx : int
+        Index of the 'NGXF NGYF NGZF' header line.
+
+    Returns
+    -------
+    ngrid : tuple of int
+        Grid dimensions (NGXF, NGYF, NGZF).
+    grid : ndarray, shape ngrid
+        Grid values as stored (rho * V_cell).
+    line_idx : int
+        Index of the first line after the block.
     """
     ngrid = tuple(int(x) for x in lines[line_idx].split()[:3])
     n_values = ngrid[0] * ngrid[1] * ngrid[2]
@@ -90,10 +116,22 @@ def _read_grid_block(lines, line_idx):
 
 
 def _skip_augmentation(lines, line_idx, total_atoms):
-    """
-    Skip a PAW 'augmentation occupancies' block if present right after a
-    density grid (one header + values per atom). Returns line_idx
-    unchanged if no such block is there.
+    """Skip a PAW 'augmentation occupancies' block, if present.
+
+    Parameters
+    ----------
+    lines : list of str
+        File lines.
+    line_idx : int
+        Index of the first line after a density grid.
+    total_atoms : int
+        Number of atoms (one augmentation sub-block per atom).
+
+    Returns
+    -------
+    int
+        Index of the first line after the block, or ``line_idx``
+        unchanged if no block is present.
     """
     peek = line_idx
     while peek < len(lines) and lines[peek].strip() == '':
@@ -114,19 +152,27 @@ def _skip_augmentation(lines, line_idx, total_atoms):
 
 
 def read_CHGCAR(filepath):
-    """
-    Read a CHGCAR-format volumetric file (CHGCAR, CHG, and PARCHG all share
-    this layout): structural header (VASP4/5/6, same as read_POSCAR) plus
-    one or two density grids. Grid values are returned exactly as stored,
-    i.e. rho(r) * V_cell -- not divided by cell volume -- so they can be
-    written back out as valid CHGCAR files with no renormalization.
+    """Read a CHGCAR-format volumetric file (CHGCAR, CHG, PARCHG).
 
-    Non-collinear (LSORBIT/LNONCOLLINEAR) files, which carry three
-    magnetization components (mx, my, mz) instead of one, raise an error.
+    Supports VASP4/5/6 headers and one (ISPIN = 1) or two (ISPIN = 2)
+    density grids. Non-collinear files (mx/my/mz blocks) raise an error.
 
-    Returns a dict: lattice_matrix, elements, atom_counts, total_atoms,
-    positions_direct, ngrid, ispin, density_tot, density_mag (None unless
-    ISPIN = 2).
+    Parameters
+    ----------
+    filepath : str
+        Path to the CHGCAR-format file.
+
+    Returns
+    -------
+    dict
+        Keys: ``lattice_matrix`` (3x3, Å), ``elements``, ``atom_counts``,
+        ``total_atoms``, ``positions_direct`` (Nx3), ``ngrid``, ``ispin``,
+        ``density_tot``, ``density_mag`` (None unless ISPIN = 2).
+
+    Notes
+    -----
+    Grid values are returned as stored, rho(r) * V_cell (not divided by
+    the cell volume), so they can be written back with no renormalization.
     """
     if not os.path.exists(filepath):
         print(f"ERROR!\nFile: {filepath} does not exist.")
@@ -244,9 +290,9 @@ def read_POTCAR(filepath):
 
     Returns
     -------
-    elements : list[str] or None
+    elements : list of str or None
         Element symbols in POTCAR order (PAW suffixes stripped), or None
-        if the POTCAR file does not exist.
+        if the file does not exist.
     """
     if not os.path.exists(filepath):
         elements = None
@@ -260,11 +306,32 @@ def read_POTCAR(filepath):
 
 def write_CHGCAR(filepath, lattice_matrix, elements, atom_counts,
                  positions_direct, ngrid, density_tot, density_mag=None):
-    """
-    Write a CHGCAR-format file (structural header plus one or two density
-    grids) in VASP's native rho*V_cell convention and x-fastest write
-    order. No PAW augmentation-occupancies block is written, so this is
-    fine for visualization (e.g. VESTA) but not for restarting VASP.
+    """Write a CHGCAR-format file with one or two density grids.
+
+    Parameters
+    ----------
+    filepath : str
+        Output path.
+    lattice_matrix : ndarray, shape (3, 3)
+        Lattice vectors as rows (Å).
+    elements : list of str
+        Element symbols.
+    atom_counts : list of int
+        Number of atoms per element.
+    positions_direct : ndarray, shape (N, 3)
+        Fractional atomic positions.
+    ngrid : tuple of int
+        Grid dimensions (NGXF, NGYF, NGZF).
+    density_tot : ndarray
+        Total density grid (rho * V_cell).
+    density_mag : ndarray, optional
+        Magnetization grid (rho * V_cell), written as a second block.
+
+    Notes
+    -----
+    Values are written in x-fastest order. No PAW augmentation block is
+    written, so the file is valid for visualization (e.g. VESTA) but not
+    for restarting VASP.
     """
     with open(filepath, 'w') as o:
         o.write("Generated by vaspCharge.py\n")
@@ -291,12 +358,34 @@ def write_CHGCAR(filepath, lattice_matrix, elements, atom_counts,
 
 
 def task_charge_density(chgcar):
-    """2) Charge Density -- total electron density, exactly as stored."""
+    """2) Charge Density -- total electron density, unmodified.
+
+    Parameters
+    ----------
+    chgcar : dict
+        Output of ``read_CHGCAR``.
+
+    Returns
+    -------
+    ndarray
+        Total density grid (rho * V_cell).
+    """
     return chgcar["density_tot"]
 
 
 def task_spin_density(chgcar):
-    """3) Spin Density -- magnetization (rho_up - rho_down)."""
+    """3) Spin Density -- magnetization rho_up - rho_down (ISPIN = 2 only).
+
+    Parameters
+    ----------
+    chgcar : dict
+        Output of ``read_CHGCAR``.
+
+    Returns
+    -------
+    ndarray
+        Magnetization grid (rho * V_cell).
+    """
     if chgcar["ispin"] != 2:
         print("ERROR! Task 3 (Spin Density) requires a spin-polarized "
               "CHGCAR (ISPIN = 2); this file has no magnetization block.")
@@ -305,9 +394,19 @@ def task_spin_density(chgcar):
 
 
 def task_spin_updown(chgcar):
-    """
-    4) Spin-Up & Spin-Down Density -- derived from the total and
-    magnetization blocks: rho_up = (tot + mag) / 2, rho_dw = (tot - mag) / 2.
+    """4) Spin-Up & Spin-Down Density (ISPIN = 2 only).
+
+    Parameters
+    ----------
+    chgcar : dict
+        Output of ``read_CHGCAR``.
+
+    Returns
+    -------
+    density_up : ndarray
+        (tot + mag) / 2 (rho * V_cell).
+    density_dw : ndarray
+        (tot - mag) / 2 (rho * V_cell).
     """
     if chgcar["ispin"] != 2:
         print("ERROR! Task 4 (Spin-Up & Spin-Down Density) requires a "
@@ -320,12 +419,34 @@ def task_spin_updown(chgcar):
 
 
 def cell_volume(lattice_matrix):
-    """Return the unit-cell volume (Å**3) as |det(lattice_matrix)|."""
+    """Return the unit-cell volume.
+
+    Parameters
+    ----------
+    lattice_matrix : ndarray, shape (3, 3)
+        Lattice vectors as rows (Å).
+
+    Returns
+    -------
+    float
+        |det(lattice_matrix)| (Å**3).
+    """
     return abs(np.linalg.det(lattice_matrix))
 
 
 def prompt_axis(prompt_text="Enter the lattice axis (A/B/C): "):
-    """Prompt for A/B/C (re-prompting on invalid input); returns 0/1/2."""
+    """Prompt for a lattice axis, re-prompting on invalid input.
+
+    Parameters
+    ----------
+    prompt_text : str, optional
+        Prompt shown to the user.
+
+    Returns
+    -------
+    int
+        0, 1 or 2 for A, B or C.
+    """
     valid = ('A', 'B', 'C')
     axis = input(prompt_text).strip().upper()
     while axis not in valid:
@@ -334,11 +455,27 @@ def prompt_axis(prompt_text="Enter the lattice axis (A/B/C): "):
 
 
 def _build_plane_XY(lattice_matrix, ngrid, axis_idx):
-    """
-    Build Cartesian X, Y coordinate grids for the plane perpendicular to
-    ``axis_idx``, spanned by the other two lattice vectors. Uses only
-    their x/y components, which is exact for a slab-in-vacuum cell but
-    approximate for a strongly non-orthogonal one.
+    """Build Cartesian X, Y grids for the plane normal to a lattice axis.
+
+    Parameters
+    ----------
+    lattice_matrix : ndarray, shape (3, 3)
+        Lattice vectors as rows (Å).
+    ngrid : tuple of int
+        Grid dimensions (NGXF, NGYF, NGZF).
+    axis_idx : int
+        Axis normal to the plane (0, 1, 2).
+
+    Returns
+    -------
+    X, Y : ndarray
+        Cartesian x and y coordinates (Å) of the in-plane grid points.
+
+    Notes
+    -----
+    Uses only the x/y components of the two in-plane lattice vectors:
+    exact for a slab-in-vacuum cell, approximate for a strongly
+    non-orthogonal one.
     """
     other_idx = [i for i in range(3) if i != axis_idx]
     n1, n2 = ngrid[other_idx[0]], ngrid[other_idx[1]]
@@ -352,15 +489,44 @@ def _build_plane_XY(lattice_matrix, ngrid, axis_idx):
 
 
 def _axis_positions(lattice_matrix, ngrid, axis_idx):
-    """1D array of Cartesian distances (Å) along ``axis_idx`` at each grid point."""
+    """Return Cartesian distances along a lattice axis at each grid point.
+
+    Parameters
+    ----------
+    lattice_matrix : ndarray, shape (3, 3)
+        Lattice vectors as rows (Å).
+    ngrid : tuple of int
+        Grid dimensions (NGXF, NGYF, NGZF).
+    axis_idx : int
+        Lattice axis (0, 1, 2).
+
+    Returns
+    -------
+    ndarray, shape (ngrid[axis_idx],)
+        Distances from the origin (Å).
+    """
     n = ngrid[axis_idx]
     length = np.linalg.norm(lattice_matrix[axis_idx])
     return np.arange(n) / n * length
 
 
 def _slice_along_axis(grid, axis_idx, frac):
-    """2D cross-section of ``grid`` perpendicular to ``axis_idx`` at fractional
-    coordinate ``frac``, linearly interpolated between the two nearest planes."""
+    """Return a 2D cross-section of a 3D grid normal to a lattice axis.
+
+    Parameters
+    ----------
+    grid : ndarray, shape (nx, ny, nz)
+        3D grid.
+    axis_idx : int
+        Axis normal to the slice (0, 1, 2).
+    frac : float
+        Fractional coordinate of the slice (wrapped into [0, 1)).
+
+    Returns
+    -------
+    ndarray
+        Slice linearly interpolated between the two nearest grid planes.
+    """
     n = grid.shape[axis_idx]
     pos = (frac % 1.0) * n
     i0 = int(np.floor(pos)) % n
@@ -372,16 +538,29 @@ def _slice_along_axis(grid, axis_idx, frac):
 
 
 def _write_grd(path, array):
-    """Write a plain whitespace-delimited 2D grid, readable by plotGrid.py."""
+    """Write a 2D array as a whitespace-delimited grid (readable by plotGrid.py).
+
+    Parameters
+    ----------
+    path : str
+        Output path.
+    array : ndarray
+        2D array to write.
+    """
     np.savetxt(path, array, fmt='%.6f')
 
 
 def task_slice(chgcar):
-    """
-    1) Slice of Charge Density -- 2D cross-section of the physical
-    density (e/A^3) on a plane perpendicular to a chosen axis, at a
-    chosen fractional coordinate (interpolated between grid planes).
-    Writes SLICE_X.grd, SLICE_Y.grd, CHGSLICE.grd (readable by plotGrid.py).
+    """1) Slice of Charge Density -- 2D cross-section of rho (e/A^3).
+
+    Prompts for the axis normal to the slice and the fractional
+    coordinate along it; the slice is linearly interpolated between grid
+    planes. Writes SLICE_X.grd, SLICE_Y.grd and CHGSLICE.grd.
+
+    Parameters
+    ----------
+    chgcar : dict
+        Output of ``read_CHGCAR``.
     """
     axis_idx = prompt_axis("Enter the lattice axis normal to the slice plane (A/B/C): ")
     frac = float(input("Enter the fractional coordinate along that axis (0-1): "))
@@ -399,10 +578,15 @@ def task_slice(chgcar):
 
 
 def task_linear_average(chgcar):
-    """
-    5) Linear-Average Charge Density -- average the physical density
-    (e/A^3) along ONE chosen axis, leaving a 2D map over the other two.
-    Writes LAVG_X.grd, LAVG_Y.grd, CHGLAVG.grd for plotGrid.py.
+    """5) Linear-Average Charge Density -- rho (e/A^3) averaged along one axis.
+
+    Prompts for the axis to average over, leaving a 2D map over the other
+    two. Writes LAVG_X.grd, LAVG_Y.grd and CHGLAVG.grd.
+
+    Parameters
+    ----------
+    chgcar : dict
+        Output of ``read_CHGCAR``.
     """
     axis_idx = prompt_axis("Enter the lattice axis to average over (A/B/C): ")
     volume = cell_volume(chgcar["lattice_matrix"])
@@ -418,9 +602,21 @@ def task_linear_average(chgcar):
 
 
 def _planar_average_profile(chgcar, axis_idx):
-    """
-    Average the physical density (e/A^3) over the plane perpendicular to
-    ``axis_idx``, giving a 1D profile. Returns (positions, profile).
+    """Average rho (e/A^3) over the plane normal to a lattice axis.
+
+    Parameters
+    ----------
+    chgcar : dict
+        Output of ``read_CHGCAR``.
+    axis_idx : int
+        Axis to profile along (0, 1, 2).
+
+    Returns
+    -------
+    positions : ndarray
+        Distances along the axis (Å).
+    profile : ndarray
+        Planar-averaged density (e/A^3).
     """
     other_idx = tuple(i for i in range(3) if i != axis_idx)
     volume = cell_volume(chgcar["lattice_matrix"])
@@ -431,9 +627,14 @@ def _planar_average_profile(chgcar, axis_idx):
 
 
 def task_planar_average(chgcar):
-    """
-    6) Planar-Average Charge Density -- 1D profile of the physical
-    density (e/A^3) along a chosen axis. Writes PLANAR_AVERAGE.dat.
+    """6) Planar-Average Charge Density -- 1D profile of rho (e/A^3).
+
+    Prompts for the axis to profile along. Writes PLANAR_AVERAGE.dat.
+
+    Parameters
+    ----------
+    chgcar : dict
+        Output of ``read_CHGCAR``.
     """
     axis_idx = prompt_axis("Enter the lattice axis to profile along (A/B/C): ")
     positions, profile = _planar_average_profile(chgcar, axis_idx)
@@ -447,7 +648,20 @@ def task_planar_average(chgcar):
 
 
 def _circular_moving_average(profile, window_points):
-    """Periodic boxcar moving average via FFT convolution (profile is periodic)."""
+    """Periodic boxcar moving average via FFT convolution.
+
+    Parameters
+    ----------
+    profile : ndarray
+        Periodic 1D profile.
+    window_points : int
+        Window width in grid points (clipped to [1, len(profile)]).
+
+    Returns
+    -------
+    ndarray
+        Smoothed profile.
+    """
     n = len(profile)
     window_points = min(max(window_points, 1), n)
     kernel = np.zeros(n)
@@ -460,11 +674,16 @@ def _circular_moving_average(profile, window_points):
 
 
 def task_macroscopic_average(chgcar):
-    """
-    7) Macroscopic-Average Charge Density -- smooths the planar-average
-    profile (task 6) with a periodic moving-window average, commonly used
-    for work-function / band-alignment analysis. Window length should
-    normally be one interplanar spacing. Writes MACROSCOPIC_AVERAGE.dat.
+    """7) Macroscopic-Average Charge Density -- smoothed planar average.
+
+    Prompts for the axis and the window length (Å), normally one
+    interplanar spacing; the task-6 profile is smoothed with a periodic
+    moving-window average. Writes MACROSCOPIC_AVERAGE.dat.
+
+    Parameters
+    ----------
+    chgcar : dict
+        Output of ``read_CHGCAR``.
     """
     axis_idx = prompt_axis("Enter the lattice axis to profile along (A/B/C): ")
     positions, profile = _planar_average_profile(chgcar, axis_idx)
@@ -486,7 +705,20 @@ def task_macroscopic_average(chgcar):
 
 
 def _trilinear_interp_periodic(grid, frac_coord):
-    """Trilinear interpolation at an arbitrary fractional point, wrapping at cell boundaries."""
+    """Trilinear interpolation of a periodic 3D grid.
+
+    Parameters
+    ----------
+    grid : ndarray, shape (nx, ny, nz)
+        3D grid.
+    frac_coord : array_like, shape (3,)
+        Fractional coordinates (wrapped into [0, 1)).
+
+    Returns
+    -------
+    float
+        Interpolated value.
+    """
     nx, ny, nz = grid.shape
     fx, fy, fz = (c % 1.0 for c in frac_coord)
     x, y, z = fx * nx, fy * ny, fz * nz
@@ -512,7 +744,18 @@ def _trilinear_interp_periodic(grid, frac_coord):
 
 
 def _prompt_fractional_point(prompt_text):
-    """Interactively prompt for three whitespace-separated fractional coordinates."""
+    """Prompt for three fractional coordinates, re-prompting on invalid input.
+
+    Parameters
+    ----------
+    prompt_text : str
+        Prompt shown to the user.
+
+    Returns
+    -------
+    ndarray, shape (3,)
+        Fractional coordinates (a, b, c).
+    """
     while True:
         parts = input(prompt_text).split()
         if len(parts) == 3:
@@ -525,10 +768,15 @@ def _prompt_fractional_point(prompt_text):
 
 
 def task_line_profile(chgcar):
-    """
-    8) Charge Density Along a Specified Path -- interpolated physical
-    density (e/A^3) along a line between two fractional points. Writes
-    CHG_LINE.dat.
+    """8) Charge Density Along a Specified Path -- rho (e/A^3) along a line.
+
+    Prompts for two fractional end points and the number of sampling
+    points; values are trilinearly interpolated. Writes CHG_LINE.dat.
+
+    Parameters
+    ----------
+    chgcar : dict
+        Output of ``read_CHGCAR``.
     """
     point1 = _prompt_fractional_point("Enter the starting point (fractional a b c): ")
     point2 = _prompt_fractional_point("Enter the ending point (fractional a b c): ")
@@ -560,13 +808,21 @@ def task_line_profile(chgcar):
 
 
 def task_build_supercell(chgcar):
-    """
-    9) Build Supercell of Charge Density -- tiles the density grid and
-    structure by integer multiples (n1, n2, n3); diagonal transformations
-    only, no arbitrary 3x3 matrix. Tiled values are also scaled by
-    n1*n2*n3, since CHGCAR stores rho(r)*V_cell and plain tiling would
-    leave values normalized to the original (smaller) cell's volume.
-    Writes CHGCAR_SUPERCELL.vasp.
+    """9) Build Supercell of Charge Density -- diagonal (n1, n2, n3) tiling.
+
+    Prompts for the integer multiples along A, B and C. Writes
+    CHGCAR_SUPERCELL.vasp.
+
+    Parameters
+    ----------
+    chgcar : dict
+        Output of ``read_CHGCAR``.
+
+    Notes
+    -----
+    Tiled values are scaled by n1*n2*n3, since CHGCAR stores
+    rho(r) * V_cell and plain tiling would leave them normalized to the
+    original (smaller) cell volume.
     """
     print("\nBuild Supercell of Charge Density: diagonal transformation only "
           "(n1 x n2 x n3 integer multiples).")
@@ -608,14 +864,22 @@ def task_build_supercell(chgcar):
 
 
 def task_stm_simulation(chgcar):
-    """
-    10) STM Simulation -- Tersoff-Hamann-style image from a (partial)
-    charge density, e.g. a PARCHG near E_F. Assumes the surface normal is
-    axis C with vacuum on the +C side. Constant-height mode reports
-    I(x,y) at a fixed height; constant-current mode reports the height
-    z(x,y) where density first crosses a chosen threshold, scanning in
-    from vacuum. Writes STM_X.grd, STM_Y.grd, and STM_HEIGHT.grd or
-    STM_CURRENT.grd.
+    """10) STM Simulation -- Tersoff-Hamann-style image.
+
+    Constant-height mode writes the density map rho(x,y) (e/A^3) at a
+    fixed height to STM_DENSITY.grd; constant-current mode writes the
+    height map z(x,y) (Å) where the density first crosses a threshold,
+    scanning in from vacuum, to STM_TOPOGRAPHY.grd. Both modes also write
+    STM_X.grd and STM_Y.grd.
+
+    Parameters
+    ----------
+    chgcar : dict
+        Output of ``read_CHGCAR``, typically from a PARCHG near E_F.
+
+    Notes
+    -----
+    Assumes the surface normal is axis C with vacuum on the +C side.
     """
     volume = cell_volume(chgcar["lattice_matrix"])
     density = chgcar["density_tot"] / volume
@@ -637,7 +901,7 @@ STM Simulation modes:
     if mode == '1':
         frac_c = float(input("Enter the fractional height along axis C (0-1): "))
         image = _slice_along_axis(density, 2, frac_c)
-        out_path = "STM_HEIGHT.grd"
+        out_path = "STM_DENSITY.grd"
         _write_grd(out_path, image)
     else:
         threshold = float(input("Enter the target density threshold (e/A^3): "))
@@ -656,14 +920,14 @@ STM Simulation modes:
                   "in from the vacuum side, +C) for some (x, y) points; "
                   "those entries are written as NaN.")
 
-        out_path = "STM_CURRENT.grd"
+        out_path = "STM_TOPOGRAPHY.grd"
         _write_grd(out_path, height_map)
 
     print(f"Wrote STM_X.grd, STM_Y.grd, {out_path}")
 
 
 def main():
-    """Parse arguments, read the CHGCAR, dispatch to the chosen task, and write output."""
+    """Parse arguments, read the CHGCAR, and dispatch the chosen task."""
     if '-h' in argv or '--help' in argv or len(argv) != 2:
         usage()
 
