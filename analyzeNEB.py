@@ -960,7 +960,7 @@ def find_image_dirs():
 
 
 def main():
-    """Run the NEB analysis on image directories in the current folder."""
+    """Parse arguments, analyze the NEB image directories, and write outputs."""
     if '-h' in argv or '--help' in argv or len(argv) > 2:
         usage()
 
