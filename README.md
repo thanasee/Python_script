@@ -487,7 +487,10 @@ Rotates atoms in a VASP POSCAR/CONTCAR file about a user-specified pivot point a
 Usage: vaspRotate.py <POSCAR> <output POSCAR>
 ```
 
-Supports rotation about arbitrary axes; pivot can be set to a specific atom, the center of mass, or a custom Cartesian point.
+The rotation axis is x, y, z, or a custom Cartesian vector; the angle is entered in degrees.
+
+- **Molecules:** all atoms are rotated about a pivot set to the geometric centre (unweighted mean of atomic positions), a specific atom, or a custom point entered in Direct (fractional) coordinates.
+- **2D/3D materials:** only the selected atoms (free-format selection) are rotated about their own geometric centre; all other atoms stay fixed.
 
 ---
 
