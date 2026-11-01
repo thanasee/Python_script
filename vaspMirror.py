@@ -11,7 +11,7 @@ def usage():
     print("""
 Usage: vaspMirror.py <input> <output>
 
-This script support VASP5 Structure file format (i.e. POSCAR) 
+This script support VASP5 Structure file format (i.e. POSCAR)
 for reflect Structure file along cartesian coordinates.
 
 This script was developed by Thanasee Thanasarnsurapong.
@@ -433,7 +433,7 @@ def reflect(positions_cartesian):
     -------
     new_positions_cartesian : np.ndarray, shape (N, 3) — reflected Cartesian coordinates in Å
     """
-    
+
     print("""
 Choice of reflection plane
 1) XY plane
@@ -443,15 +443,18 @@ Choice of reflection plane
     while True:
         try:
             option = int(input("Enter choice: "))
-            break
         except ValueError:
             print("Error!! Choose again")
-    if option in [1, 2, 3]:
-        axis = {1: 2, 2: 1, 3: 0}[option]
-        reflect_plane = np.array([-1. if i == axis else 1. for i in range(3)])
-    
+            continue
+        if option in [1, 2, 3]:
+            break
+        print("Error!! Choose again")
+
+    axis = {1: 2, 2: 1, 3: 0}[option]
+    reflect_plane = np.array([-1. if i == axis else 1. for i in range(3)])
+
     new_positions_cartesian = positions_cartesian * reflect_plane
-    
+
     return new_positions_cartesian
 
 
@@ -461,7 +464,7 @@ def main():
     """
     if '-h' in argv or '--help' in argv or len(argv) != 3:
         usage()
-    
+
     unmirror = read_POSCAR(argv[1])
     reflect_positions_cartesian = reflect(unmirror["positions_cartesian"])
     reflect_positions_direct = cartesian_to_direct(unmirror["lattice_matrix"], reflect_positions_cartesian)
