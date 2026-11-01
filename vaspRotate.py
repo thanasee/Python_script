@@ -36,6 +36,27 @@ _ELEMENT_SYMBOLS = [
     "Nh", "Fl", "Mc", "Lv", "Ts", "Og"
 ]
 
+# Standard atomic weights (amu); most stable isotope for elements without one
+_ATOMIC_MASS = [
+    1.008,     4.0026,    6.94,      9.0122,    10.81,     12.011,    14.007,    15.999,
+    18.9984,   20.1797,   22.9898,   24.305,    26.9815,   28.085,    30.9738,   32.06,
+    35.45,     39.948,    39.0983,   40.078,    44.9559,   47.867,    50.9415,   51.9961,
+    54.938,    55.845,    58.9332,   58.6934,   63.546,    65.38,     69.723,    72.63,
+    74.9216,   78.971,    79.904,    83.798,    85.4678,   87.62,     88.9058,   91.224,
+    92.9064,   95.95,     97.9072,   101.07,    102.9055,  106.42,    107.8682,  112.414,
+    114.818,   118.71,    121.76,    127.6,     126.9045,  131.293,   132.9055,  137.327,
+    138.9055,  140.116,   140.9077,  144.242,   144.9128,  150.36,    151.964,   157.25,
+    158.9254,  162.5,     164.9303,  167.259,   168.9342,  173.054,   174.9668,  178.49,
+    180.9479,  183.84,    186.207,   190.23,    192.217,   195.084,   196.9666,  200.592,
+    204.38,    207.2,     208.9804,  208.9824,  209.9872,  222.0176,  223.0197,  226.0254,
+    227.0277,  232.0377,  231.0359,  238.0289,  237.0482,  244.0642,  243.0614,  247.0703,
+    247.0703,  251.0796,  252.083,   257.0951,  258.0984,  259.101,   262.11,    267.122,
+    268.126,   271.134,   270.133,   269.1338,  278.156,   281.165,   281.166,   285.177,
+    286.182,   289.19,    289.194,   293.204,   293.208,   294.214
+]
+
+_MASS = dict(zip(_ELEMENT_SYMBOLS, _ATOMIC_MASS))
+
 
 def read_POSCAR(filepath):
     """Read a VASP POSCAR file and return its contents as a dictionary.
@@ -553,28 +574,30 @@ Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
     return selected_atoms
 
 
-def select_pivot(lattice_matrix, total_atoms, positions_cartesian, species):
-    """Determine the material type and pivot point for rotation interactively.
+def select_pivot(lattice_matrix, total_atoms, positions_direct, species):
+    """Determine the rotated atoms and pivot point interactively.
 
-    For molecules (type 1), the pivot point is chosen from three methods:
-    geometric center, a specific atom position, or a custom fractional coordinate.
-    For 2D/3D materials (type 2), atoms are selected via select_index() and the
-    pivot point is set to their geometric center.
+    The rotated atoms are unwrapped across periodic boundaries (minimum image
+    relative to the first one), so a group split across the cell edge stays intact.
+    Molecules (type 1): all atoms rotate about the geometric center, the center of
+    mass, a specific atom, or a custom fractional point.
+    2D/3D materials (type 2): only the selected atoms rotate, about their own
+    geometric center or center of mass.
 
     Parameters
     ----------
-    lattice_matrix      : np.ndarray (3, 3) — lattice vectors in Å
-    total_atoms         : int               — total number of atoms
-    positions_cartesian : np.ndarray (N, 3) — Cartesian coordinates in Å
-    species             : list[str]         — per-atom element labels
+    lattice_matrix   : np.ndarray (3, 3) — lattice vectors in Å
+    total_atoms      : int               — total number of atoms
+    positions_direct : np.ndarray (N, 3) — fractional coordinates
+    species          : list[str]         — per-atom element labels
 
     Returns
     -------
-    input_type     : str            — '1' for molecule, '2' for 2D/3D material
-    selected_atoms : list[int] or None — 0-based atom indexes (None for type 1)
+    selected_atoms : list[int]         — 0-based indexes of the rotated atoms
+    group          : np.ndarray (M, 3) — unwrapped Cartesian coordinates of the rotated atoms in Å
     ref_point      : np.ndarray (3,)   — pivot point in Cartesian coordinates
     """
-    
+
     print("""
 Choices of type of material:
 1) molecules
@@ -587,67 +610,87 @@ Choices of type of material:
         print("ERROR! Wrong input")
 
     if input_type == '1':
+        selected_atoms = list(range(total_atoms))
         print("""
 Method for selecting the pivot point of molecule
-1) center of molecule
-2) position of atom in molecule
-3) Custom""")
+1) geometric center of molecule
+2) center of mass of molecule
+3) position of atom in molecule
+4) Custom""")
+    else:
+        selected_atoms = list(dict.fromkeys(select_index(total_atoms, species)))
+        print("""
+Method for selecting the pivot point of selected atoms
+1) geometric center of selected atoms
+2) center of mass of selected atoms""")
 
-        while True:
-            option = input("Enter method: ")
-            if option == '1':
-                return input_type, None, np.mean(positions_cartesian, axis=0)
-            elif option == '2':
-                for j in range(total_atoms):
-                    print(f"{species[j]} atom : {j + 1:>3.0f}")
+    # Unwrap the rotated atoms relative to the first one (minimum image)
+    group = positions_direct[selected_atoms]
+    group = group[0] + (group - group[0]) - np.round(group - group[0])
+    group_species = [species[i] for i in selected_atoms]
+
+    options = ['1', '2', '3', '4'] if input_type == '1' else ['1', '2']
+    while True:
+        option = input("Enter method: ")
+        if option not in options:
+            print("ERROR!! Choose method again")
+            continue
+        if option == '1':
+            ref_point = np.mean(group, axis=0)
+        elif option == '2':
+            unknown = sorted(set(s for s in group_species if s not in _MASS))
+            if unknown:
+                print(f"ERROR! No atomic mass for {' '.join(unknown)}. Choose method again")
+                continue
+            ref_point = np.average(group, axis=0, weights=[_MASS[s] for s in group_species])
+        elif option == '3':
+            for j in range(total_atoms):
+                print(f"{species[j]} atom : {j + 1:>3.0f}")
+            while True:
+                try:
+                    select = [int(s) for s in input(f"Select the atom as the pivot point (  1 to {total_atoms:>3}): ").split()]
+                    if len(select) == 1:
+                        select_atom = select[0] - 1
+                        if 0 <= select_atom < total_atoms:
+                            break
+                        print('WRONG No. of atom')
+                        continue
+                    print("  Invalid input! Range of input must be 1.")
+                    continue
+                except ValueError:
+                    print("  Invalid input! Please enter a number.")
+                    continue
+            ref_point = group[select_atom]
+        else:
+            point = []
+            for i in ('a', 'b', 'c'):
                 while True:
                     try:
-                        select = [int(s) for s in input(f"Select the atom as the pivot point (  1 to {total_atoms:>3}): ").split()]
-                        if len(select) == 1:
-                            select_atom = select[0] - 1
-                            if 0 <= select_atom < total_atoms:
-                                break
-                            print('WRONG No. of atom')
-                            continue
-                        print("  Invalid input! Range of input must be 1.")
-                        continue
+                        p = float(input(f"Enter position in {i} direction (direct): "))
+                        break
                     except ValueError:
-                        print("  Invalid input! Please enter a number.")
-                        continue
-                return input_type, None, positions_cartesian[select_atom]
-            elif option == '3':
-                point = []
-                for i in ('a', 'b', 'c'):
-                    while True:
-                        try:
-                            p = float(input(f"Enter position in {i} direction (direct): "))
-                            break
-                        except ValueError:
-                            print("Wrong input! Please enter a number.")
-                    point.append(float(p))
-                point = np.array(point)
-                return input_type, None, point @ lattice_matrix
-            else:
-                print("ERROR!! Choose method again")
+                        print("Wrong input! Please enter a number.")
+                point.append(p)
+            ref_point = np.array(point)
+            # Move the molecule to the periodic image nearest the custom point
+            group = group - np.round(np.mean(group, axis=0) - ref_point)
+        break
 
-    else:
-        selected_atoms = select_index(total_atoms, species)
-        ref_point = np.mean(positions_cartesian[selected_atoms], axis=0)
-        return input_type, selected_atoms, ref_point
+    return selected_atoms, group @ lattice_matrix, ref_point @ lattice_matrix
 
 
-def rotate_atoms(lattice_matrix, total_atoms, positions_cartesian, species, rotate_matrix):
+def rotate_atoms(lattice_matrix, total_atoms, positions_cartesian, positions_direct, species, rotate_matrix):
     """Apply a rotation matrix to atoms and return new Cartesian coordinates.
 
-    Delegates pivot point and atom selection to select_pivot(). For molecules
-    (type 1), all atoms are rotated about the pivot. For 2D/3D materials (type 2),
-    only the selected subset is rotated while the rest remain fixed.
+    Delegates atom selection and pivot point to select_pivot(). Only the selected
+    atoms (all atoms for molecules) are rotated; the rest remain fixed.
 
     Parameters
     ----------
     lattice_matrix      : np.ndarray (3, 3) — lattice vectors in Å
     total_atoms         : int               — total number of atoms
     positions_cartesian : np.ndarray (N, 3) — Cartesian coordinates in Å
+    positions_direct    : np.ndarray (N, 3) — fractional coordinates
     species             : list[str]         — per-atom element labels
     rotate_matrix       : np.ndarray (3, 3) — rotation matrix from rotation_matrix()
 
@@ -655,14 +698,11 @@ def rotate_atoms(lattice_matrix, total_atoms, positions_cartesian, species, rota
     -------
     new_positions_cartesian : np.ndarray (N, 3) — rotated Cartesian coordinates in Å
     """
-    
-    input_type, selected_atoms, ref_point = select_pivot(lattice_matrix, total_atoms, positions_cartesian, species)
 
-    if input_type == '1':
-        new_positions_cartesian = (positions_cartesian - ref_point) @ rotate_matrix.T + ref_point
-    else:
-        new_positions_cartesian = np.copy(positions_cartesian)
-        new_positions_cartesian[selected_atoms] = (positions_cartesian[selected_atoms] - ref_point) @ rotate_matrix.T + ref_point
+    selected_atoms, group, ref_point = select_pivot(lattice_matrix, total_atoms, positions_direct, species)
+
+    new_positions_cartesian = np.copy(positions_cartesian)
+    new_positions_cartesian[selected_atoms] = (group - ref_point) @ rotate_matrix.T + ref_point
 
     return new_positions_cartesian
 
@@ -677,7 +717,7 @@ def main():
     unrotate = read_POSCAR(argv[1])
     rotate = rotation_matrix()
     rotate_positions_cartesian = rotate_atoms(unrotate["lattice_matrix"], unrotate["total_atoms"], unrotate["positions_cartesian"],
-                                              unrotate["species"], rotate)
+                                              unrotate["positions_direct"], unrotate["species"], rotate)
     rotate_positions_direct = cartesian_to_direct(unrotate["lattice_matrix"], rotate_positions_cartesian)
     mapping = mapping_elements(unrotate["elements"], unrotate["atom_counts"], rotate_positions_cartesian,
                                rotate_positions_direct, unrotate["species"], unrotate["selective_dynamics"],
