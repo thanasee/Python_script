@@ -446,10 +446,10 @@ Usage: vaspShift.py <POSCAR> <output POSCAR>
 All modes first unwrap atoms across periodic boundaries to compute a geometrically correct centroid before shifting.
 
 - **Mode 0 — 0D molecule:** centroid shifted to cell center (0.5, 0.5, 0.5)
-- **Mode 1 — 1D nanowire:** extend direction shifted to origin; transverse directions centered at 0.5. User selects the extend direction (x/y/z)
-- **Mode 2 — 2D sheet:** vacuum direction centered at 0.5; periodic directions shifted to origin. User selects the vacuum direction (x/y/z)
+- **Mode 1 — 1D nanowire:** extend direction shifted to origin; transverse directions centered at 0.5. User selects the extend direction (a/b/c)
+- **Mode 2 — 2D sheet:** vacuum direction centered at 0.5; periodic directions shifted to origin. User selects the vacuum direction (a/b/c)
 - **Mode 3 — 3D bulk:** selected atom shifted to origin
-- **Mode 4 — Adsorbate:** selected adsorbate group centered in XY at (0.5, 0.5); z-coordinates of all atoms left unchanged. Adsorbate selection supports free-format input (index, range, element symbol, `all`)
+- **Mode 4 — Adsorbate:** selected adsorbate group centered in ab at (0.5, 0.5); c coordinates of all atoms left unchanged. Adsorbate selection supports free-format input (index, range, element symbol, `all`)
 
 ---
  
