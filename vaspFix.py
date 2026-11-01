@@ -580,15 +580,17 @@ Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
 def select_radius(lattice_matrix, total_atoms, positions_cartesian, species):
     """Select atoms that lie outside a cutoff radius from a reference point.
  
-    The reference point is the centroid of a user-specified set of atoms.
-    Distances are minimised over all 27 periodic image cells to correctly
-    handle atoms near cell boundaries.
+    The reference point is the centroid of a user-specified set of atoms,
+    unwrapped across periodic boundaries before averaging. Distances are
+    minimised over all 27 periodic image cells to correctly handle atoms
+    near cell boundaries.
  
     Parameters
     ----------
     lattice_matrix      : np.ndarray (3, 3) — lattice vectors in Å (used for PBC)
     total_atoms         : int               — total number of atoms
     positions_cartesian : np.ndarray (N, 3) — Cartesian coordinates in Å
+    species             : list[str]         — per-atom element label
  
     Returns
     -------
@@ -600,15 +602,21 @@ Choose reference point
 Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
 (Free-format input, e.g., 1 3 1-4 C H all)""")
  
-    reference_point = np.mean(positions_cartesian[targets], axis=0)
+    # Unwrap the selected atoms about the first one (minimum image) before averaging
+    targets_direct = cartesian_to_direct(lattice_matrix, positions_cartesian[targets])
+    delta = targets_direct - targets_direct[0]
+    delta -= np.round(delta)
+    reference_point = direct_to_cartesian(lattice_matrix, targets_direct[0] + delta.mean(axis=0))
  
     while True:
         try:
             input_radius = float(input("Input cutoff radius in Angstrom (select atoms outside cutoff radius): "))
-            if input_radius > 0:
-                break
         except ValueError:
             print("ERROR! Input cutoff radius must be a positive number.")
+            continue
+        if input_radius > 0:
+            break
+        print("ERROR! Input cutoff radius must be a positive number.")
  
     selected_atoms = []
     image_offsets = compute_image_offsets(lattice_matrix)
@@ -621,37 +629,45 @@ Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
     return selected_atoms
 
 
-def select_file(total_atoms):
-    """Read Selective Dynamics flags from a SELECTED_FIX_ATOMS_LIST file.
+def select_file(total_atoms, labels, order):
+    """Read Selective Dynamics flags from a FIXED_ATOMS_LIST file.
  
-    Tries the default filename 'SELECTED_FIX_ATOMS_LIST' in the current
-    directory first. On failure or atom-count mismatch, the user is prompted
-    for the correct path and the check is retried.
+    Tries the default filename 'FIXED_ATOMS_LIST' in the current directory
+    first. On failure, atom-count mismatch, or label mismatch, the user is
+    prompted for the correct path and the check is retried. The file lists
+    atoms in output (element-grouped) order; flags are mapped back to input
+    POSCAR order.
  
     Parameters
     ----------
-    total_atoms : int — expected number of atoms (used to validate the file)
+    total_atoms : int       — expected number of atoms (used to validate the file)
+    labels      : list[str] — per-atom labels in output order (used to validate the file)
+    order       : list[int] — input-POSCAR index of each atom in output order
  
     Returns
     -------
-    flags : np.ndarray (N, 3) — T/F flag strings read from the file
+    flags : np.ndarray (N, 3) — T/F flag strings in input POSCAR order
     """
     
-    select_file = 'SELECTED_FIX_ATOMS_LIST'
+    select_file = 'FIXED_ATOMS_LIST'
     while True:
         try:
             with open(select_file, 'r') as s:
                 file_lines = s.readlines()
         except FileNotFoundError:
-            select_file = input("Enter your SELECTED_FIX_ATOMS_LIST path: ")
+            select_file = input("Enter your FIXED_ATOMS_LIST path: ")
             continue
  
-        flags = np.array([[x for x in line.split()[2:]] for line in file_lines[3:]])
-        if len(flags) == total_atoms:
-            return flags
+        rows = [line.split() for line in file_lines[3:] if line.strip()]
+        if len(rows) != total_atoms:
+            print("ERROR! The numbers of atom in FIXED_ATOMS_LIST and POSCAR files not match!")
+        elif [row[1] for row in rows] != labels:
+            print("ERROR! The atom labels in FIXED_ATOMS_LIST and POSCAR files not match!")
         else:
-            print("ERROR! The numbers of atom in SELECTED_FIX_ATOMS_LIST and POSCAR files not match!")
-            select_file = input("Enter your SELECTED_FIX_ATOMS_LIST path: ")
+            flags = np.full((total_atoms, 3), 'T')
+            flags[order] = [row[2:5] for row in rows]
+            return flags
+        select_file = input("Enter your FIXED_ATOMS_LIST path: ")
 
 
 def select_direction():
@@ -695,7 +711,7 @@ Input the direction index to fix (1 to 3):
             print("ERROR! Directions must be between 1 and 3. Try again.")
     
 
-def fix_mode(lattice_matrix, total_atoms, positions_cartesian, species, flags):
+def fix_mode(lattice_matrix, total_atoms, positions_cartesian, species, flags, labels, order):
     """Prompt the user to choose a fixing method and return the updated flags array.
  
     Three selection methods are available:
@@ -713,6 +729,8 @@ def fix_mode(lattice_matrix, total_atoms, positions_cartesian, species, flags):
     positions_cartesian : np.ndarray (N, 3) — Cartesian coordinates in Å
     species             : list[str]         — per-atom element label
     flags               : np.ndarray (N, 3) — current T/F flags to be modified
+    labels              : list[str]         — per-atom labels in output order (mode 3)
+    order               : list[int]         — input-POSCAR index of each atom in output order (mode 3)
  
     Returns
     -------
@@ -722,7 +740,7 @@ def fix_mode(lattice_matrix, total_atoms, positions_cartesian, species, flags):
 Choices of fixing atoms method
 1) Atomic Indexes/Labels
 2) Cutoff Radius From Reference Point
-3) Read From SELECTED_ATOMS_LIST File""")
+3) Read From FIXED_ATOMS_LIST File""")
  
     while True:
         fix_mode = input("Enter choice: ")
@@ -734,7 +752,7 @@ Choices of fixing atoms method
             selected_atoms = select_radius(lattice_matrix, total_atoms, positions_cartesian, species)
             break
         elif fix_mode == '3':
-            flags = select_file(total_atoms)
+            flags = select_file(total_atoms, labels, order)
             return flags
         else:
             print("ERROR!! Must choose fixing atoms method")
@@ -749,17 +767,18 @@ Choices of fixing atoms method
 
 
 def write_selected(flags, labels):
-    """Write the SELECTED_FIX_ATOMS_LIST file summarising the current fix status.
+    """Write the FIXED_ATOMS_LIST file summarising the current fix status.
  
-    The file lists every atom's 1-based index, label, and T/F flags for x, y, z.
-    It can be used as input to Mode 3 of fix_mode() in a future run.
+    The file lists every atom's 1-based index, label, and T/F flags for x, y, z,
+    in output POSCAR order. It can be used as input to Mode 3 of fix_mode() in
+    a future run.
  
     Parameters
     ----------
     flags  : np.ndarray (N, 3) — T/F flag strings per atom
     labels : list[str]         — per-atom labels (e.g. 'Mo01', 'S003')
     """
-    select_file = "SELECTED_FIX_ATOMS_LIST"
+    select_file = "FIXED_ATOMS_LIST"
     with open(select_file, 'w') as o:
         o.write("#                Fix Status\n")
         o.write("#Index   LABEL   x  y  z\n")
@@ -775,13 +794,20 @@ def main():
         usage()
  
     poscar = read_POSCAR(argv[1])
+
+    # Resolve the output element order first, so mode 3 can map the file onto input order
+    sort_elements = check_elements(poscar["elements"])
+    elements = sort_elements if sort_elements is not None else poscar["elements"]
+    order = [i for element in elements
+             for i, symbol in enumerate(poscar["species"]) if symbol == element]
+    labels = define_labels(elements, [poscar["species"].count(element) for element in elements])
+
     flags, skip = refix(poscar["total_atoms"], poscar["selective_dynamics"], poscar["flags"])
     if not skip:
         flags = fix_mode(poscar["lattice_matrix"], poscar["total_atoms"], poscar["positions_cartesian"],
-                         poscar["species"], flags)
+                         poscar["species"], flags, labels, order)
     mapping = mapping_elements(poscar["elements"], poscar["atom_counts"], poscar["positions_cartesian"],
-                               poscar["positions_direct"], poscar["species"], True, flags)
-    labels = define_labels(mapping["elements"], mapping["atom_counts"])
+                               poscar["positions_direct"], poscar["species"], True, flags, sort_elements)
     write_POSCAR(argv[2], poscar["lattice_matrix"], mapping["elements"], mapping["atom_counts"],
                  mapping["positions_cartesian"], mapping["positions_direct"], True,
                  mapping["flags"], labels)
