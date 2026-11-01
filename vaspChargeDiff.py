@@ -40,8 +40,21 @@ _ELEMENT_SYMBOLS = [
 
 
 def _looks_like_grid_header(line, expected_ngrid=None):
-    """True if ``line`` is an 'NGXF NGYF NGZF' header (three positive ints,
-    optionally matching ``expected_ngrid``)."""
+    """Check whether a line is an 'NGXF NGYF NGZF' grid header.
+
+    Parameters
+    ----------
+    line : str
+        Line to test.
+    expected_ngrid : tuple of int, optional
+        If given, the three values must also match it.
+
+    Returns
+    -------
+    bool
+        True if ``line`` holds three positive integers (matching
+        ``expected_ngrid`` when given).
+    """
     tokens = line.split()
     if len(tokens) != 3 or not all(t.isdigit() for t in tokens):
         return False
@@ -54,10 +67,23 @@ def _looks_like_grid_header(line, expected_ngrid=None):
 
 
 def _read_grid_block(lines, line_idx):
-    """
-    Read one 'NGXF NGYF NGZF' header plus its NGXF*NGYF*NGZF values, and
-    reshape in Fortran order (x fastest) to match VASP's own write order.
-    Returns (ngrid, grid, line_idx_after_block).
+    """Read one density grid block from a CHGCAR.
+
+    Parameters
+    ----------
+    lines : list of str
+        File contents.
+    line_idx : int
+        Index of the 'NGXF NGYF NGZF' header line.
+
+    Returns
+    -------
+    ngrid : tuple of int
+        Grid dimensions (NGXF, NGYF, NGZF).
+    grid : ndarray, shape ngrid
+        Values reshaped in Fortran order (x fastest), as VASP writes them.
+    line_idx : int
+        Index of the first line after the block.
     """
     ngrid = tuple(int(x) for x in lines[line_idx].split()[:3])
     n_values = ngrid[0] * ngrid[1] * ngrid[2]
@@ -78,10 +104,21 @@ def _read_grid_block(lines, line_idx):
 
 
 def _skip_augmentation(lines, line_idx, total_atoms):
-    """
-    Skip a PAW 'augmentation occupancies' block if present right after a
-    density grid (one header + values per atom). Returns line_idx
-    unchanged if no such block is there.
+    """Skip a PAW 'augmentation occupancies' block if one follows a grid.
+
+    Parameters
+    ----------
+    lines : list of str
+        File contents.
+    line_idx : int
+        Index of the first line after a density grid.
+    total_atoms : int
+        Number of atoms (one augmentation sub-block per atom).
+
+    Returns
+    -------
+    line_idx : int
+        Index after the block, or unchanged if no block is present.
     """
     peek = line_idx
     while peek < len(lines) and lines[peek].strip() == '':
@@ -102,19 +139,25 @@ def _skip_augmentation(lines, line_idx, total_atoms):
 
 
 def read_CHGCAR(filepath):
-    """
-    Read a CHGCAR-format volumetric file (CHGCAR, CHG, and PARCHG all share
-    this layout): structural header (VASP4/5/6, same as read_POSCAR) plus
-    one or two density grids. Grid values are returned exactly as stored,
-    i.e. rho(r) * V_cell -- not divided by cell volume -- so they can be
-    written back out as valid CHGCAR files with no renormalization.
+    """Read a CHGCAR-format volumetric file (CHGCAR, CHG, PARCHG).
 
-    Non-collinear (LSORBIT/LNONCOLLINEAR) files, which carry three
-    magnetization components (mx, my, mz) instead of one, raise an error.
+    Parameters
+    ----------
+    filepath : str
+        Path to the file (VASP4/5/6 header).
 
-    Returns a dict: lattice_matrix, elements, atom_counts, total_atoms,
-    positions_direct, ngrid, ispin, density_tot, density_mag (None unless
-    ISPIN = 2).
+    Returns
+    -------
+    chgcar : dict
+        Keys: lattice_matrix, elements, atom_counts, total_atoms,
+        positions_direct, ngrid, ispin, density_tot, density_mag
+        (None unless ISPIN = 2).
+
+    Notes
+    -----
+    Grid values are returned as stored, rho(r) * V_cell, so they can be
+    written back out with no renormalization. Non-collinear
+    (LSORBIT/LNONCOLLINEAR) files raise an error.
     """
     if not os.path.exists(filepath):
         print(f"ERROR!\nFile: {filepath} does not exist.")
@@ -248,11 +291,31 @@ def read_POTCAR(filepath):
 
 def write_CHGCAR(filepath, lattice_matrix, elements, atom_counts,
                  positions_direct, ngrid, density_tot, density_mag=None):
-    """
-    Write a CHGCAR-format file (structural header plus one or two density
-    grids) in VASP's native rho*V_cell convention and x-fastest write
-    order. No PAW augmentation-occupancies block is written, so this is
-    fine for visualization (e.g. VESTA) but not for restarting VASP.
+    """Write a CHGCAR-format file with one or two density grids.
+
+    Parameters
+    ----------
+    filepath : str
+        Output path.
+    lattice_matrix : ndarray, shape (3, 3)
+        Lattice vectors (Å) as rows.
+    elements : list of str
+        Element symbols.
+    atom_counts : list of int
+        Atoms per element.
+    positions_direct : ndarray, shape (N, 3)
+        Fractional coordinates.
+    ngrid : tuple of int
+        Grid dimensions.
+    density_tot : ndarray
+        Total density, rho(r) * V_cell.
+    density_mag : ndarray, optional
+        Magnetization density; written as a second block if given.
+
+    Notes
+    -----
+    Written in x-fastest order with no PAW augmentation block: fine for
+    visualization (e.g. VESTA), not for restarting VASP.
     """
     with open(filepath, 'w') as o:
         o.write("Generated by vaspChargeDiff.py\n")
@@ -279,10 +342,24 @@ def write_CHGCAR(filepath, lattice_matrix, elements, atom_counts,
 
 
 def task_charge_difference(chgcar_AB, chgcar_A, chgcar_B):
-    """
-    Charge-Density Difference -- Δρ = ρ_AB - ρ_A - ρ_B, e.g. for analyzing
-    electron transfer in an adsorbate (A) + substrate (B) system. All three
-    CHGCARs must share the same grid dimensions.
+    """Compute the charge-density difference Δρ = ρ_AB - ρ_A - ρ_B.
+
+    Parameters
+    ----------
+    chgcar_AB, chgcar_A, chgcar_B : dict
+        read_CHGCAR outputs for the combined system and the two isolated
+        fragments in the same cell, e.g. adsorbate (A) + substrate (B).
+
+    Returns
+    -------
+    diff : ndarray
+        Difference of the total densities, rho(r) * V_cell.
+
+    Notes
+    -----
+    Grid dimensions must match (hard error); a lattice mismatch beyond
+    1e-4 Å only warns. For ISPIN = 2 inputs only the total density is
+    differenced; the magnetization block is ignored.
     """
     if not (chgcar_AB["ngrid"] == chgcar_A["ngrid"] == chgcar_B["ngrid"]):
         print(f"ERROR! Grid mismatch: AB{chgcar_AB['ngrid']}, "
