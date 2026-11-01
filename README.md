@@ -756,7 +756,7 @@ Usage: vaspCharge.py <CHGCAR>
 7. Macroscopic-Average Charge Density — the planar-average profile further smoothed with a periodic moving-window average (FFT convolution), for work-function/band-alignment analysis; window length should normally equal one interplanar spacing. Output: `MACROSCOPIC_AVERAGE.dat`
 8. Charge Density Along a Specified Path — trilinear-interpolated density along a line between two fractional points. Output: `CHG_LINE.dat`
 9. Build Supercell of Charge Density — tiles the density grid and structure by integer (n<sub>1</sub>, n<sub>2</sub>, n<sub>3</sub>) multiples; tiled values are rescaled by n<sub>1</sub>×n<sub>2</sub>×n<sub>3</sub> since CHGCAR stores ρ(r)·V_cell. Output: `CHGCAR_SUPERCELL.vasp`
-10. STM Simulation — Tersoff-Hamann-style image from the density (e.g. a PARCHG near E<sub>F</sub>), assuming the surface normal is axis C with vacuum on the +C side. Constant-height mode reports I(x,y) at a fixed height; constant-current mode reports the height z(x,y) where density first crosses a chosen threshold, scanning in from vacuum. Output: `STM_X.grd`, `STM_Y.grd`, and `STM_HEIGHT.grd` or `STM_CURRENT.grd`
+10. STM Simulation — Tersoff-Hamann-style image from the density (e.g. a PARCHG near E<sub>F</sub>), assuming the surface normal is axis C with vacuum on the +C side. Constant-height mode writes the density map ρ(x,y) at a fixed height; constant-current mode writes the height map z(x,y) where density first crosses a chosen threshold, scanning in from vacuum. Output: `STM_X.grd`, `STM_Y.grd`, and `STM_DENSITY.grd` (constant-height) or `STM_TOPOGRAPHY.grd` (constant-current)
 
 **Output convention:** `.vasp` outputs are written in VASP's native ρ(r)·V<sub>cell</sub> convention with no PAW augmentation-occupancies block — valid for visualization (e.g. VESTA) but not for restarting VASP. `.grd` outputs are plain whitespace-delimited grids, readable by `plotGrid.py`.
 
@@ -806,15 +806,13 @@ Scripts for preparing calculation-control tags for VASP and follow-on codes — 
 
 #### `vaspBorn.py`
 
-Extracts the ion-clamped (electronic) dielectric tensor and Born effective charge tensors from a VASP DFPT calculation (`LEPSILON=.TRUE.`) and writes them to `INCAR.LR` and a Phonopy `BORN` file. Accepts either `OUTCAR` or `vasprun.xml`; file type is auto-detected by filename with content-based fallback. From `OUTCAR`, the dielectric tensor is read only from the `MACROSCOPIC STATIC DIELECTRIC TENSOR (including local field effects in DFT)` block.
+Extracts the ion-clamped (electronic) dielectric tensor and Born effective charge tensors from a VASP DFPT calculation (`LEPSILON=.TRUE.`) and writes them to `INCAR.LR`. Accepts either `OUTCAR` or `vasprun.xml`; file type is auto-detected by filename with content-based fallback.
 
 ```
 Usage: vaspBorn.py <OUTCAR or vasprun.xml>
 ```
 
-**Output:**
-- `INCAR.LR` — `PHON_DIELECTRIC` and `PHON_BORN_CHARGES` tags in backslash-continuation format
-- `BORN` — symmetrized dielectric tensor and Born effective charges of the symmetrically independent atoms, for Phonopy/Phono3py (same as `phonopy-vasp-born`; requires Phonopy). The cell of the DFPT calculation is taken as the primitive cell; for a different `PRIMITIVE_AXES`, use `phonopy-vasp-born --pa`.
+**Output:** `INCAR.LR` — `PHON_DIELECTRIC` and `PHON_BORN_CHARGES` tags in backslash-continuation format.
 
 ---
 
