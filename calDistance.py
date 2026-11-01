@@ -648,16 +648,18 @@ def atom_pairs(total_atoms, positions_cartesian, labels, image_offsets):
         o.write(f"      Average   {np.mean(distances):>12.8f}\n")
 
 
-def atom_molecule(total_atoms, positions_cartesian, species, labels, image_offsets):
+def atom_molecule(lattice_matrix, total_atoms, positions_cartesian, species, labels, image_offsets):
     """Method 3: compute distances from selected atoms to molecule centroids.
 
     For each pair, prompts for a reference atom and a group of atoms
     defining the molecule. The distance is measured from the reference atom
-    to the centroid (geometric center) of the selected molecule atoms.
+    to the centroid (geometric center) of the selected molecule atoms,
+    unwrapped across periodic boundaries relative to the first selected atom.
     Prints results to stdout and writes to distance-atom-molecule.dat.
 
     Parameters
     ----------
+    lattice_matrix      : (3, 3) ndarray, Cartesian lattice vectors (Angstrom)
     total_atoms         : int, total number of atoms
     positions_cartesian : (N, 3) ndarray, Cartesian atomic positions (Angstrom)
     species             : list of str, element symbol for each atom
@@ -705,7 +707,12 @@ def atom_molecule(total_atoms, positions_cartesian, species, labels, image_offse
         targets = select_index(total_atoms, species, f"\nInput element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})\n"
 "(Free-format input, e.g., 1 3 1-4 C H all)")
  
-        target_site = np.mean(positions_cartesian[targets], axis=0)  # centroid (3,)
+        # Unwrap the molecule across periodic boundaries before taking its centroid
+        targets = list(dict.fromkeys(targets))
+        targets_direct = cartesian_to_direct(lattice_matrix, positions_cartesian[targets])
+        delta = targets_direct - targets_direct[0]
+        delta -= np.round(delta)
+        target_site = direct_to_cartesian(lattice_matrix, np.mean(targets_direct[0] + delta, axis=0))  # centroid (3,)
         min_distance = min_image_distance(positions_cartesian[index_select], target_site, image_offsets)
         pair.append((labels[index_select], str(i + 1).zfill(digits)))
         distances.append(min_distance)
@@ -807,7 +814,7 @@ def z_distance(total_atoms, positions, species):
 def main():
     """Parse arguments, read POSCAR, calculate distance by selected method, write output files."""
 
-    if '-h' in argv or len(argv) != 2:
+    if '-h' in argv or '--help' in argv or len(argv) != 2:
         usage()
  
     poscar = read_POSCAR(argv[1])
@@ -833,7 +840,7 @@ Choices of calculating distance
             atom_pairs(poscar["total_atoms"], mapping["positions_cartesian"], labels, image_offsets)
             break
         elif method == '3':
-            atom_molecule(poscar["total_atoms"], mapping["positions_cartesian"], mapping["species"], labels, image_offsets)
+            atom_molecule(poscar["lattice_matrix"], poscar["total_atoms"], mapping["positions_cartesian"], mapping["species"], labels, image_offsets)
             break
         elif method == '4':
             z_distance(poscar["total_atoms"], mapping["positions_cartesian"], mapping["species"])
