@@ -17,7 +17,7 @@ which has 2 main functions:
   2) adsorb around target atom
 This script support VASP5 position file format (i.e. POSCAR).
 
-This script was inspired by Aroon Ananchunsook
+This script was inspired by Aroon Ananchuensook
 and developed by Thanasee Thanasarnsurapong.
 """)
     exit(0)
@@ -781,10 +781,9 @@ def place_around(lattice_matrix_substrate, total_atoms_substrate, positions_subs
     """Place adsorbent copies symmetrically around one or more chosen substrate atoms.
 
     For each target atom, number_adsorbent copies are distributed evenly at angle
-    intervals of 2π/number_adsorbent around it. The side (top/bottom) is detected
-    automatically from the target atom z position relative to the substrate mean z.
-    The adsorbent lowest atom (top) or highest atom (bottom) is aligned to the
-    target atom z.
+    intervals of 2π/number_adsorbent around it. The side (top/bottom) is selected
+    by the user for each target. The adsorbent lowest atom (top) or highest atom
+    (bottom) is aligned to the target atom z.
 
     Parameters
     ----------
@@ -838,7 +837,6 @@ def place_around(lattice_matrix_substrate, total_atoms_substrate, positions_subs
             print("Invalid input! Please enter a number.")
 
     angle_step = 2 * np.pi / number_adsorbent
-    z_mean = np.mean(positions_substrate[:, 2])
 
     new_positions_adsorbent = []
     new_species_adsorbent = []
@@ -858,7 +856,9 @@ def place_around(lattice_matrix_substrate, total_atoms_substrate, positions_subs
                 print("Invalid input! Please enter a number.")
         target_center = positions_substrate[target_atom, :]
 
-        facing_idx = np.argmin(positions_adsorbent[:, 2]) if target_center[2] > z_mean else np.argmax(positions_adsorbent[:, 2])
+        # Choose side for this target
+        side = select_side()
+        facing_idx = np.argmin(positions_adsorbent[:, 2]) if side == 1 else np.argmax(positions_adsorbent[:, 2])
         reference_adsorbent[2] = positions_adsorbent[facing_idx, 2]
 
         # Choose initial adsorption site direction
@@ -1057,7 +1057,7 @@ Method of positioning adsorbent
         # Prompt user for optional selective dynamics
         while True:
             selective = input("Want to selective dynamic? (Y/N): ").strip().upper()
-            if selective[0] == 'Y':
+            if selective.startswith('Y'):
                 selective_dynamics = True
                 new_flags = np.full((total_atoms, 3), 'T')
                 fix_prompt = (f"\nInput element-symbol and/or atom-indexes to choose "
@@ -1070,7 +1070,7 @@ Method of positioning adsorbent
                     for direction in fix_coordinates:
                         new_flags[atom][direction] = 'F'
                 break
-            elif selective[0] == 'N':
+            elif selective.startswith('N'):
                 new_flags = None
                 break
             else:
