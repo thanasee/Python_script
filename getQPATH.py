@@ -33,10 +33,10 @@ def read_band_dat(filepath):
         Q-path distances (1/Angstrom) extracted from the second line of the file.
     fmin : float
         Minimum frequency (THz) found in the data columns, rounded down
-        to the nearest multiple of 5.
+        to the nearest multiple of 5 and capped at -5 or below.
     fmax : float
         Maximum frequency (THz) found in the data columns, rounded up
-        to the nearest multiple of 5.
+        to the nearest multiple of 5 plus 5.
     """
     with open(filepath, 'r') as f:
         lines = f.readlines()
@@ -126,7 +126,7 @@ def write_QLINES(q_points, fmin, fmax, output_path="QLINES.dat"):
 
 def main():
     """Parse arguments, read band.dat, write QLINES.dat."""
-    if '-h' in argv or len(argv) != 2:
+    if '-h' in argv or '--help' in argv or len(argv) != 2:
         usage()
  
     input_file = argv[1]
