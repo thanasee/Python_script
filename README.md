@@ -806,13 +806,15 @@ Scripts for preparing calculation-control tags for VASP and follow-on codes — 
 
 #### `vaspBorn.py`
 
-Extracts the ion-clamped (electronic) dielectric tensor and Born effective charge tensors from a VASP DFPT calculation (`LEPSILON=.TRUE.`) and writes them to `INCAR.LR`. Accepts either `OUTCAR` or `vasprun.xml`; file type is auto-detected by filename with content-based fallback.
+Extracts the ion-clamped (electronic) dielectric tensor and Born effective charge tensors from a VASP DFPT calculation (`LEPSILON=.TRUE.`) and writes them to `INCAR.LR` and a Phonopy `BORN` file. Accepts either `OUTCAR` or `vasprun.xml`; file type is auto-detected by filename with content-based fallback. From `OUTCAR`, the dielectric tensor is read only from the `MACROSCOPIC STATIC DIELECTRIC TENSOR (including local field effects in DFT)` block.
 
 ```
 Usage: vaspBorn.py <OUTCAR or vasprun.xml>
 ```
 
-**Output:** `INCAR.LR` — `PHON_DIELECTRIC` and `PHON_BORN_CHARGES` tags in backslash-continuation format.
+**Output:**
+- `INCAR.LR` — `PHON_DIELECTRIC` and `PHON_BORN_CHARGES` tags in backslash-continuation format
+- `BORN` — symmetrized dielectric tensor and Born effective charges of the symmetrically independent atoms, for Phonopy/Phono3py (same as `phonopy-vasp-born`; requires Phonopy). The cell of the DFPT calculation is taken as the primitive cell; for a different `PRIMITIVE_AXES`, use `phonopy-vasp-born --pa`.
 
 ---
 
