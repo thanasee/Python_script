@@ -454,17 +454,17 @@ All modes first unwrap atoms across periodic boundaries to compute a geometrical
 ---
  
 #### `vaspVacuum.py`
- 
+
 Adds vacuum space to, or rebuilds it in, a VASP POSCAR along a chosen lattice direction (a, b, or c) — for adjusting the vacuum gap in slab or 2D-material cells.
- 
+
 ```
 Usage: vaspVacuum.py <POSCAR> <output POSCAR>
 ```
- 
+
 - **Mode 1 — Add vacuum:** Grows the chosen lattice vector's length by an entered thickness (Å), preserving its direction; the other two vectors are unchanged. Vacuum is added on top of whatever already exists.
- 
-- **Mode 2 — Rebuild vacuum:** Resets the total vacuum along the chosen direction to an entered thickness, discarding whatever vacuum already exists — the vector is resized to (slab thickness + entered vacuum).
- 
+
+- **Mode 2 — Rebuild vacuum:** Resets the total vacuum along the chosen direction to an entered thickness, discarding whatever vacuum already exists. Slab thickness and vacuum are measured along the normal of the plane spanned by the other two vectors, so the entered value is the perpendicular vacuum even for a tilted vector; the vector keeps its direction and is resized to (slab thickness + entered vacuum) along that normal.
+
 **Output:** One VASP5-format POSCAR with Direct coordinates.
  
 ---
