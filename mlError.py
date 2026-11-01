@@ -21,12 +21,12 @@ This script was developed by Thanasee Thanasarnsurapong.
 def read_files(input_file):
     """
     Check if the input file exists and read all lines.
-    
+
     Parameters
     ----------
     input_file : str
         Path to the ML_LOGFILE.
-    
+
     Returns
     -------
     list of str
@@ -42,14 +42,14 @@ def read_files(input_file):
 def parse_lines(log_lines, keyword):
     """
     Extract data rows from log lines where the first token matches the given keyword.
-    
+
     Parameters
     ----------
     log_lines : list of str
         All lines read from the ML_LOGFILE.
     keyword : str
         The keyword to match at the start of each line (e.g. 'BEEF' or 'ERR').
-    
+
     Returns
     -------
     numpy.ndarray
@@ -70,7 +70,7 @@ def write_beef(beef_lines, filename="BEEF.dat"):
     Write Bayesian Error Estimation in Forces (BEEF) data to an output file.
     Columns: nstep, bee_energy, bee_max_force, bee_ave_force,
              threshold, bee_max_stress, bee_ave_stress.
-    
+
     Parameters
     ----------
     beef_lines : numpy.ndarray
@@ -97,7 +97,7 @@ def write_err(err_lines, filename="ERR.dat"):
     """
     Write Root Mean Square Error (RMSE) data to an output file.
     Columns: nstep, rmse_energy, rmse_force, rmse_stress.
-    
+
     Parameters
     ----------
     err_lines : numpy.ndarray
@@ -120,7 +120,7 @@ def main():
     """
     Parses arguments, reads the ML_LOGFILE, extracts BEEF and ERR data, and writes output files.
     """
-    if '-h' in argv or len(argv) != 2:
+    if '-h' in argv or '--help' in argv or len(argv) != 2:
         usage()
 
     input_file = argv[1]
