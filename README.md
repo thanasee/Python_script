@@ -377,6 +377,7 @@ Supports both 2D materials (with vacuum-layer thickness correction) and 3D bulk 
 ---
 
 #### `plotMechanics.py`
+Inspired by:** [Klichchupong Dabsamut](https://scholar.google.com/citations?user=KbqQhGkAAAAJ)
 
 Plots polar diagrams of angle-dependent mechanical properties (Young's modulus, Poisson's ratio, Shear modulus) for up to 6 materials simultaneously for visual comparison.
 
@@ -574,7 +575,7 @@ Providing one POSCAR builds a homobilayer (both layers identical); providing two
 ---
 
 #### `vaspAdsorb.py`
-**Inspired by:** [Aroon Ananchuensook](https://scholar.google.com/citations?user=6mmg4mUAAAAJ&hl=en)
+**Inspired by:** [Aroon Ananchuensook](https://scholar.google.com/citations?user=6mmg4mUAAAAJ)
 
 Combines a substrate and an adsorbent POSCAR into a single POSCAR for adsorption DFT calculations. Supports placing multiple adsorbent copies simultaneously. The user specifies the number of copies and the vertical separation distance (Å) before selecting a placement mode.
 
@@ -847,4 +848,4 @@ All scripts follow the same conventions:
 
 ## License
 
-Developed by [Thanasee Thanasarnsurapong](https://scholar.google.com/citations?user=4KHXv9gAAAAJ&hl=en) and [Claude](https://claude.ai/). For research and academic use.
+Developed by [Thanasee Thanasarnsurapong](https://scholar.google.com/citations?user=4KHXv9gAAAAJ) and [Claude](https://claude.ai/). For research and academic use.
