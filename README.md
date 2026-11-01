@@ -775,7 +775,7 @@ All three files must share identical grid dimensions (hard error on mismatch). A
 
 #### `plotGrid.py`
 
-Reads a VASPKIT-generated 2D grid — `X.grd`, `Y.grd`, and a value grid such as `CHGLAVG.grd` (planar-averaged charge density) — and produces a filled-contour heatmap plus an ASCII export for external plotting.
+Reads a VASPKIT-generated 2D grid — `X.grd`, `Y.grd`, and a value grid such as `CHGLAVG.grd` (linear-averaged charge density) — and produces a filled-contour heatmap plus an ASCII export for external plotting.
 
 ```
 Usage: plotGrid.py <X.grd> <Y.grd> <CHGLAVG.grd> [output prefix]
@@ -787,7 +787,7 @@ If [output prefix] is omitted, the value-grid filename (without extension) is us
 
 **Interactive axis labeling:** Before plotting, the script always prompts (mandatory, non-empty, restricted to X/Y/Z) for which physical axis each plot axis represents, and labels it in Å with mathtext formatting.
 
-**Plot:** filled contour (viridis colormap, 100 levels, equal aspect ratio) with a colorbar labeled for charge density (e/Å3 by default — edit the `CHGLAVG_LABEL` constant for other quantities), rendered in Times New Roman/serif per the toolkit's plot styling convention, saved at 300 dpi.
+**Plot:** filled contour (viridis colormap, 100 levels, equal aspect ratio) with a colorbar labeled for charge density (e/Å<sup>3</sup> by default — edit the `CHGLAVG_LABEL` constant for other quantities), rendered in Times New Roman/serif per the toolkit's plot styling convention, saved at 300 dpi.
 
 **Output:**
 - `<prefix>.png` — filled-contour heatmap
