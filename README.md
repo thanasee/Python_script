@@ -770,7 +770,7 @@ Computes a charge-density difference Δρ = ρ<sub>AB</sub> − ρ<sub>A</sub> �
 Usage: vaspChargeDiff.py <CHGCAR_AB> <CHGCAR_A> <CHGCAR_B>
 ```
 
-All three files must share identical grid dimensions (hard error on mismatch). A lattice-vector mismatch between `CHGCAR_AB` and either fragment (tolerance 10<sup>–4</sup> Å) only warns, since the difference may still be informative.
+All three files must share identical grid dimensions (hard error on mismatch). A lattice-vector mismatch between `CHGCAR_AB` and either fragment (tolerance 10<sup>–4</sup> Å) only warns, since the difference may still be informative. For spin-polarized (ISPIN = 2) inputs only the total density is differenced; the magnetization block is ignored, so `CHGDIFF.vasp` contains a single density block.
 
 **Output:** `CHGDIFF.vasp` — same ρ(r)·V_cell convention as `vaspCharge.py`.
 
