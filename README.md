@@ -577,7 +577,7 @@ Providing one POSCAR builds a homobilayer (both layers identical); providing two
 #### `vaspAdsorb.py`
 **Inspired by:** [Aroon Ananchuensook](https://scholar.google.com/citations?user=6mmg4mUAAAAJ)
 
-Combines a substrate and an adsorbent POSCAR into a single POSCAR for adsorption DFT calculations. Supports placing multiple adsorbent copies simultaneously. The user specifies the number of copies and the vertical separation distance (Å) before selecting a placement mode.
+Combines a substrate and an adsorbent POSCAR into a single POSCAR for adsorption DFT calculations. Supports placing multiple adsorbent copies simultaneously. After selecting a placement mode, the user specifies the number of copies and the separation distance (Å).
 
 ```
 Usage: vaspAdsorb.py <substrate POSCAR> <adsorbent POSCAR> <output POSCAR>
@@ -585,7 +585,9 @@ Usage: vaspAdsorb.py <substrate POSCAR> <adsorbent POSCAR> <output POSCAR>
 
 **Mode 1 — on top of a specific site:** Places each adsorbent copy above a user-defined target point on the substrate. For each copy, the user selects: (a) the placement side (top or bottom); (b) the substrate reference height (highest atom, a selected atom, or average height); (c) the adsorbent anchor point (centroid or a specific/lowest atom); (d) the target xy position (by atom selection with free-format input, or custom fractional coordinates). The adsorbent is translated so its anchor lands at the target at the specified vertical distance.
 
-**Mode 2 — ring around a target atom:** Places N copies evenly distributed at angular intervals of 2π/N around each chosen substrate atom using Rodrigues z-axis rotation. Supports multiple target atoms; the user specifies the number of targets and selects each one sequentially. The placement side (top or bottom) is auto-detected from the target atom z position relative to the substrate mean z. For each target, the user selects the initial adsorption direction (by atom selection or custom fractional coordinates). The radial distance from the target atom is set by the distance input.
+**Mode 2 — ring around a target atom:** Places N copies evenly distributed at angular intervals of 2π/N around each chosen substrate atom (e.g. a decorating ion) using Rodrigues z-axis rotation. Supports multiple target atoms; the user specifies the number of targets and selects each one sequentially. For each target, the user selects the placement side (top or bottom) and the initial adsorption direction (by atom selection or custom fractional coordinates). The adsorbent's lowest atom (top) or highest atom (bottom) is aligned with the target atom's height, and the radial distance from the target atom is set by the distance input.
+
+**Automatic distance:** A negative distance switches to an automatic distance equal to the sum of the van der Waals radii of the two facing atoms (3.0 Å for an element without a tabulated radius). In mode 1 these are the outermost substrate atom on the chosen side and the adsorbent atom facing it, and the result is used as the vertical distance. In mode 2 they are the target atom and the adsorbent atom facing it, and the result is used as the radial distance. The value is computed per copy (mode 1) or per target (mode 2) and printed.
 
 If either POSCAR has Selective Dynamics, flags are merged, and the other structure defaults to all-T. If neither has Selective Dynamics, the user is prompted after placement to optionally add constraints, with free-format atom and direction selection. A summary table of atom counts per element (substrate/adsorbent/total) is printed at the end.
 
