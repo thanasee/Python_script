@@ -190,27 +190,38 @@ def write_band_yaml(output, data, ordered_bands):
 
     lines = []
 
-    lines.append(f'nqpoint: {data["nqpoint"]}')
-    lines.append(f'npath: {data["npath"]}')
-    lines.append('segment_nqpoint:')
-    for nq in data['segment_nqpoint']:
-        lines.append(f'- {nq}')
-
-    lines.append('reciprocal_lattice:')
-    for vec, label in zip(data['reciprocal_lattice'], ['a*', 'b*', 'c*']):
-        lines.append(vec3_recip(vec, label))
-
-    lines.append(f'natom: {data["natom"]}')
-
-    lines.append('lattice:')
-    for vec, label in zip(data['lattice'], ['a', 'b', 'c']):
-        lines.append(vec3_lattice(vec, label))
-
-    lines.append('points:')
-    for i, pt in enumerate(data['points']):
-        lines.append(f'- symbol: {pt["symbol"]} # {i + 1}')
-        lines.append(f'  coordinates: {vec3_coords(pt["coordinates"])}')
-        lines.append(f'  mass: {pt["mass"]:.6f}')
+    # Keys are written in input order; keys without a dedicated format
+    # (e.g. calculator, length_unit) are passed through via yaml.dump
+    for key, value in data.items():
+        if key == 'phonon':
+            continue
+        elif key in ('nqpoint', 'npath', 'natom'):
+            lines.append(f'{key}: {value}')
+        elif key == 'segment_nqpoint':
+            lines.append('segment_nqpoint:')
+            for nq in value:
+                lines.append(f'- {nq}')
+        elif key == 'labels':
+            lines.append('labels:')
+            for start, end in value:
+                lines.append(f"- [ '{start}', '{end}' ]")
+        elif key == 'reciprocal_lattice':
+            lines.append('reciprocal_lattice:')
+            for vec, label in zip(value, ['a*', 'b*', 'c*']):
+                lines.append(vec3_recip(vec, label))
+        elif key == 'lattice':
+            lines.append('lattice:')
+            for vec, label in zip(value, ['a', 'b', 'c']):
+                lines.append(vec3_lattice(vec, label))
+        elif key == 'points':
+            lines.append('points:')
+            for i, pt in enumerate(value):
+                lines.append(f'- symbol: {pt["symbol"]} # {i + 1}')
+                lines.append(f'  coordinates: {vec3_coords(pt["coordinates"])}')
+                lines.append(f'  mass: {pt["mass"]:.6f}')
+        else:
+            lines.append(yaml.dump({key: value}, default_flow_style=False,
+                                   sort_keys=False).rstrip('\n'))
 
     lines.append('')
     lines.append('phonon:')
@@ -224,6 +235,9 @@ def write_band_yaml(output, data, ordered_bands):
         for b_idx, band in enumerate(band_data):
             lines.append(f'  - # {b_idx + 1}')
             lines.append(f'    frequency: {band["frequency"]:16.10f}')
+            if 'group_velocity' in band:
+                inner = ','.join(f'{v:14.7f}' for v in band['group_velocity'])
+                lines.append(f'    group_velocity: [{inner} ]')
             lines.append('    eigenvector:')
             for a_idx, atom_evec in enumerate(band['eigenvector']):
                 lines.append(f'    - # atom {a_idx + 1}')
@@ -238,7 +252,7 @@ def write_band_yaml(output, data, ordered_bands):
 
 def main():
     """Read input, reorder bands across segments, and write output."""
-    if '-h' in argv or len(argv) != 3:
+    if '-h' in argv or '--help' in argv or len(argv) != 3:
         usage()
 
     filepath = argv[1]
