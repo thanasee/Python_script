@@ -430,11 +430,11 @@ def unwrap(positions_direct):
     reference : np.ndarray (3,)   — fractional coordinate of atom[0]
     unwrapped : np.ndarray (N, 3) — unwrapped fractional coordinates
     """
-    
+
     reference = np.copy(positions_direct[0])
     delta = positions_direct - reference
     delta -= np.round(delta)
-    
+
     return reference, reference + delta
 
 
@@ -478,7 +478,7 @@ def get_direction(prompt):
     -------
     idx : int — 0-based axis index (0=a, 1=b, 2=c)
     """
-    
+
     print(f"""
 Input the direction index of {prompt} direction (1 to 3):
 1) a direction
@@ -545,7 +545,7 @@ def add_vacuum(lattice_matrix, positions_direct):
     """
     axis = get_direction("vacuum")
     direction = "abc"[axis]
-    vacuum = get_vacuum("Vacuum to add (\u00c5): ")
+    vacuum = get_vacuum("Vacuum to add (Å): ")
     unit_vector = lattice_matrix[axis] / np.linalg.norm(lattice_matrix[axis])
     new_length = np.linalg.norm(lattice_matrix[axis]) + vacuum
 
@@ -571,8 +571,11 @@ def rebuild_vacuum(lattice_matrix, positions_direct):
 
     Shifts first with shift_sheet() so the slab's true thickness can be
     measured cleanly under the OLD lattice (resolving any split across the
-    periodic boundary), then sizes the vector to slab thickness plus the
-    entered total vacuum.
+    periodic boundary). Thickness and vacuum are measured along the normal
+    of the plane spanned by the other two vectors, so the entered value is
+    the perpendicular vacuum even for a tilted vector; the vector keeps its
+    direction and is resized until its height along that normal equals
+    slab thickness plus the entered vacuum.
 
     Parameters
     ----------
@@ -586,19 +589,22 @@ def rebuild_vacuum(lattice_matrix, positions_direct):
     dict with keys:
         direction        : str                        — direction letter modified ('a', 'b', or 'c')
         mode             : str                        — always "rebuild"
-        vacuum           : float                      — total vacuum entered, in Å
+        vacuum           : float                      — total perpendicular vacuum entered, in Å
         lattice_matrix   : np.ndarray, shape (3, 3)   — new lattice matrix
         positions_direct : np.ndarray, shape (N, 3)   — new fractional coordinates
     """
     axis = get_direction("vacuum")
     direction = "abc"[axis]
-    vacuum = get_vacuum("Total vacuum (\u00c5): ")
+    vacuum = get_vacuum("Total vacuum (Å): ")
     unit_vector = lattice_matrix[axis] / np.linalg.norm(lattice_matrix[axis])
+    periodic = [i for i in range(3) if i != axis]
+    normal = np.cross(lattice_matrix[periodic[0]], lattice_matrix[periodic[1]])
+    normal *= np.sign(normal @ unit_vector) / np.linalg.norm(normal)
 
     shift_positions_direct = shift_sheet(positions_direct, axis)
     shift_positions_cartesian = direct_to_cartesian(lattice_matrix, shift_positions_direct)
-    rebuilt_length = shift_positions_cartesian @ unit_vector
-    new_length = (rebuilt_length.max() - rebuilt_length.min()) + vacuum
+    rebuilt_length = shift_positions_cartesian @ normal
+    new_length = ((rebuilt_length.max() - rebuilt_length.min()) + vacuum) / (unit_vector @ normal)
 
     new_lattice_matrix = lattice_matrix.copy()
     new_lattice_matrix[axis] = unit_vector * new_length
@@ -669,7 +675,7 @@ def main():
                  mapping["flags"], labels)
 
     verb = "Added" if vacuumed["mode"] == "add" else "Rebuilt"
-    print(f"\n{verb} vacuum of {vacuumed['vacuum']:.4f} \u00c5 along the {vacuumed['direction']}-direction.\n")
+    print(f"\n{verb} vacuum of {vacuumed['vacuum']:.4f} Å along the {vacuumed['direction']}-direction.\n")
 
 
 if __name__ == "__main__":
