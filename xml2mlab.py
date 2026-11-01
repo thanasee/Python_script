@@ -66,7 +66,7 @@ _HEADER_FMT_STR = """ 1.0 Version
 **************************************************
      The maximum number of atoms per atom type
 --------------------------------------------------
-{max_per_type}
+{max_per_type:>14}
 **************************************************
      Reference atomic energy (eV)
 --------------------------------------------------
@@ -245,7 +245,7 @@ def build_global_meta(info_list, xml_paths):
     dict with keys:
         elements       : list of str  — union element list, first-seen order
         max_atoms      : int          — max NIONS across all files
-        max_per_type   : dict         — {element: max count} across all files
+        max_per_type   : int          — max atoms of one element in one file
         ref_energy     : dict         — {element: 0.0}
         atomic_mass    : dict         — {element: standard mass}
     """
@@ -274,12 +274,8 @@ def build_global_meta(info_list, xml_paths):
     # Max atoms per system
     max_atoms = max(info['nions'] for info in info_list)
 
-    # Max atoms per atom type across all files
-    max_per_type = {el: 0 for el in union}
-    for info in info_list:
-        for el, cnt in zip(info['elements'], info['counts']):
-            if cnt > max_per_type[el]:
-                max_per_type[el] = cnt
+    # Max atoms per atom type: one integer over all elements and files
+    max_per_type = max(max(info['counts']) for info in info_list)
 
     return {
         'elements'    : union,
@@ -339,7 +335,6 @@ def prompt_skip_stride(xml_paths, step_counts):
     print("\n--- Summary ---")
     total = 0
     for i, (path, steps) in enumerate(zip(xml_paths, step_counts), 1):
-        available = max(0, steps - skip)
         selected  = len(range(skip, steps, stride))
         end_step  = steps - 1
         print("  [{}] {}   ->  {} configs selected   (steps {}–{}, stride {})".format(
@@ -409,7 +404,8 @@ def parse_positions(calc, lat):
 
 def parse_energy(calc):
     """
-    Extract the total energy (without entropy) from a <calculation> element.
+    Extract the converged total energy (without entropy) from a <calculation>
+    element. Reads the <energy> child of <calculation>, not the <scstep> ones.
 
     Parameters
     ----------
@@ -421,9 +417,11 @@ def parse_energy(calc):
     float
         Total energy in eV (e_wo_entrp).
     """
-    for item in calc.iter('i'):
-        if item.get('name') == 'e_wo_entrp':
-            return float(item.text.strip())
+    energy = calc.find('energy')
+    if energy is not None:
+        for item in energy.findall('i'):
+            if item.get('name') == 'e_wo_entrp':
+                return float(item.text.strip())
     raise ValueError("e_wo_entrp not found in calculation block")
 
 
@@ -657,10 +655,6 @@ def write_header(f, meta, n_configs):
         type_lines.append('     ' + '  '.join('{:<2}'.format(e) for e in chunk))
     atom_types_str = '\n'.join(type_lines)
 
-    # Max atoms per atom type: <=3 per line
-    max_per_type_vals = [meta['max_per_type'][el] for el in elements]
-    max_per_type_str  = _fmt_blocked(max_per_type_vals, '{:>14}')
-
     # Reference atomic energy: 0.0 for all, <=3 per line
     ref_vals = [0.0 for _ in elements]
     ref_str  = _fmt_blocked(ref_vals, '{:>22.13f}')
@@ -689,7 +683,7 @@ def write_header(f, meta, n_configs):
         ntype        = ntype,
         atom_types   = atom_types_str,
         max_atoms    = meta['max_atoms'],
-        max_per_type = max_per_type_str,
+        max_per_type = meta['max_per_type'],
         ref_energy   = ref_str,
         atomic_mass  = mass_str,
         nbasis       = nbasis_str,
@@ -747,7 +741,7 @@ def main():
     # Validate files exist
     for path in xml_paths:
         if not os.path.isfile(path):
-            print("Error: file not found: {}".format(path))
+            print("ERROR!\nFile: {} does not exist.".format(path))
             exit(1)
 
     # Count steps (fast pre-scan)
