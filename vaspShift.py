@@ -15,9 +15,9 @@ This script support VASP5 Structure file format (i.e. POSCAR)
 for shifting a structure file:
   molecule (0D)  ->  shift to center
   nanowire (1D)  ->  shift to origin in extend direction and center in other direction
-  sheet (2D)     ->  shift to center in vacuum direction and center in other direction
+  sheet (2D)     ->  shift to center in vacuum direction and origin in other direction
   bulk (3D)      ->  shift to origin
-  adsorbate      ->  shift to origin in XY
+  adsorbate      ->  shift adsorbate to center in ab, c unchanged
 
 This script was developed by Thanasee Thanasarnsurapong.
 """)
@@ -470,43 +470,74 @@ Input the direction index of {prompt} direction (1 to 3):
             print("ERROR! Must enter a number. Try again.")
 
 
-def get_adsorbent_atoms(total_atoms, species):
-    """Prompt the user to select a set of adsorbate atoms by index, range, or element.
+def select_index(total_atoms, species, prompt=None, allow_all=True):
+    """Prompt the user to select atoms by element symbol and/or atom index.
 
-    Accepts free-format input combining single indices, ranges (e.g. 1-4),
-    element symbols, and the keyword 'all'.
+    Accepts free-format input mixing element symbols (e.g. 'C'), single indexes
+    (e.g. '3'), ranges (e.g. '1-4'), and the keyword 'all'. Repeats the prompt
+    on invalid input. The selected_atoms list is reset on each retry to prevent
+    duplicates accumulating across bad inputs.
 
     Parameters
     ----------
-    total_atoms : int       — total number of atoms in the system
-    species     : list[str] — per-atom element labels
+    total_atoms : int       — total number of atoms (used for bounds checking)
+    species     : list[str] — per-atom element label (used for symbol selection)
+    prompt      : srt       — message printed before the input prompt
+    allow_all   : bool      — whether the keyword 'all' is permitted (default True)
 
     Returns
     -------
-    adsorbent_atoms : list[int] — 0-based indices of selected adsorbate atoms
+    selected_atoms : list[int] — 0-based indexes of the chosen atoms
     """
-    
-    print(f"""
-Input element-symbol and/or atom-indexes of adsorbent ({1:>3} to {total_atoms:>3})
+
+    if prompt != None:
+        print(prompt)
+    else:
+        print(f"""
+Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
 (Free-format input, e.g., 1 3 1-4 C H all)""")
     while True:
-        adsorbent_atoms = []
-        for adsorbent in input().split():
-            if 'all' in adsorbent:
-                adsorbent_atoms.extend(range(total_atoms))
+        selected_atoms = []
+        input_select = input().split()
+        valid = True
+
+        for select in input_select:
+            if 'all' in select:
+                if not allow_all:
+                    print("Cannot use 'all' in this session. TRY AGAIN!")
+                    valid = False
+                    break
+                selected_atoms.extend(range(total_atoms))
                 break
-            if adsorbent.isnumeric() or '-' in adsorbent:
-                if '-' in adsorbent:
-                    start, end = map(int, adsorbent.split('-'))
-                    adsorbent_atoms.extend(range(start - 1, end))
+            if select.isnumeric() or '-' in select:
+                if '-' in select:
+                    start, end = map(int, select.split('-'))
+                    if start < end:
+                        selected_atoms.extend(range(start - 1, end))
+                    else:
+                        selected_atoms.extend(range(end - 1, start))
                 else:
-                    adsorbent_atoms.append(int(adsorbent) - 1)
+                    selected_atoms.append(int(select) - 1)
             else:
-                adsorbent_atoms.extend([i for i, label in enumerate(species) if label == adsorbent])
-        if len(adsorbent_atoms) > total_atoms or not all(0 <= idx < total_atoms for idx in adsorbent_atoms):
-            print("Wrong input atom-indexes !TRY AGAIN!")
+                if select not in species:
+                    print(f"  '{select}' is not a species in this structure. TRY AGAIN!")
+                    valid = False
+                    break
+                if select not in _ELEMENT_SYMBOLS:
+                    print(f"  '{select}' is not a valid element name. TRY AGAIN!")
+                    valid = False
+                    break
+                selected_atoms.extend([i for i, label in enumerate(species) if label == select])
+
+        if not valid:
+            continue
+
+        if len(selected_atoms) > total_atoms or not all(0 <= idx < total_atoms for idx in selected_atoms):
+            print("Wrong input atom-indexes! TRY AGAIN!")
         else:
-            return adsorbent_atoms
+            break
+
+    return selected_atoms
 
 
 def shift_molecule(positions_direct):
@@ -637,7 +668,13 @@ def shift_special(total_atoms, positions_direct, species):
     np.ndarray (N, 3) — shifted fractional coordinates in [0, 1)
     """
     
-    adsorbent_atoms = get_adsorbent_atoms(total_atoms, species)
+    while True:
+        adsorbent_atoms = select_index(total_atoms, species, prompt=f"""
+Input element-symbol and/or atom-indexes of adsorbent ({1:>3} to {total_atoms:>3})
+(Free-format input, e.g., 1 3 1-4 C H all)""")
+        if adsorbent_atoms:
+            break
+        print("ERROR! No atoms selected. Try again.")
     _, unwrapped = unwrap(positions_direct)
     # re-unwrap around adsorbate reference
     ref_ads = np.copy(positions_direct[adsorbent_atoms[0]])
