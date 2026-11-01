@@ -271,12 +271,11 @@ Usage: calDistance.py <POSCAR>
 **Mode 2 — atom pairs:** Distances between user-specified pairs of atoms.
 - **Output:** `distance-atom-atom.dat`
 
-**Mode 3 — atom to molecule:** Distance from a selected atom to the geometric centroid of a user-defined group of atoms.
-- **Output:** `distance-atom-molecule.dat`
+**Mode 3 — atom to molecule:** Distance from a selected atom to the geometric centroid of a user-defined group of atoms. The group is unwrapped across periodic boundaries before averaging, so molecules split across the cell edge are handled correctly.
 
 **Mode 4 — z-axis separation:** Separation along the z-axis between the highest atom in a substrate group and the lowest atom in an adsorbent group. Useful for measuring adsorption height or slab thickness. Output printed to stdout only.
 
-All modes support free-format atom selection by index, range (e.g., `1-4`), element symbol, or `all`.
+All modes support free-format atom selection by index, range (e.g., `1-4`), element symbol, or `all`.Modes 1 and 2, and the reference atom in mode 3, take a single atom index. The molecule group in mode 3 and the substrate/adsorbent groups in mode 4 use free-format selection by index, range (e.g., `1-4`), or element symbol; `all` is accepted in mode 3 but not in mode 4.
 
 ---
 
