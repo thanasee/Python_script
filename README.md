@@ -287,14 +287,14 @@ Extracts vibrational normal modes from a VASP `OUTCAR` or Phonopy `YAML` file an
 
 ```
 Usage: vaspVibration.py <structure file> <OUTCAR or phonopy YAML> [scaling factor]
+       vaspVibration.py <vaspout.h5> [scaling factor]
 ```
 
-- VASP OUTCAR: modes written in descending frequency order (VASP convention); NWRITE = 3 output is supported
+- VASP OUTCAR (Γ block): modes written in descending frequency order (VASP convention); NWRITE = 3 output is supported
+- VASP phonon dispersion (LPHON_DISPERSION): read from OUTCAR (PHON_NWRITE = -3; the structure file is the supercell POSCAR of the run) or from vaspout.h5 (any PHON_NWRITE; the primitive cell is read from the file). If the OUTCAR has both the Γ block and the dispersion, the user is prompted to choose. Modes written in ascending frequency order
 - Phonopy YAML: modes written in ascending frequency order (Phonopy convention); the file must contain eigenvectors (`--eigenvectors`)
 
-Eigenvectors from both inputs are divided by √m (masses from the structure file), so the arrows of the same mode agree between OUTCAR and YAML input.
-
-**q-point selection (YAML):** For `band.yaml`, the path segment end points are the candidate high-symmetry q-points; for `mesh.yaml` and `qpoints.yaml`, every q-point is a candidate. Duplicates are removed, and if more than one candidate remains, the script lists them with their labels and prompts for one. The Bloch phase exp(2πi q·r) is applied before the real part is written; a warning is printed if the eigenvector is still complex (e.g. K or general q-points).
+**q-point selection (YAML and VASP dispersion):** Candidates are the high-symmetry q-points of the path (segment ends for band.yaml; path ends, segment ends and kinks for VASP, labeled from QPOINTS if present), or every q-point for mesh.yaml/qpoints.yaml. Duplicates are removed, and if more than one remains, the script prompts for one. Phonopy eigenvectors get the Bloch phase exp(2πi q·r); VASP eigenvectors already refer to each ion's stored cell, so ions outside the cell are wrapped with the matching phase. Eigenvectors are divided by √m, and a warning is printed if they are still complex (e.g. K or general q-points).
 
 ---
 
