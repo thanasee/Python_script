@@ -73,13 +73,13 @@ def find_section_index(lines):
             stress_index = i
             break
     if energy_index is None:
-        print("The 'Total energies (eV)' section was not found in the ML_REG file.")
+        print("ERROR! The 'Total energies (eV)' section was not found in the ML_REG file.")
         exit(1)
     if force_index is None:
-        print("The 'Forces (eV ang.^-1)' section was not found in the ML_REG file.")
+        print("ERROR! The 'Forces (eV ang.^-1)' section was not found in the ML_REG file.")
         exit(1)
     if stress_index is None:
-        print("The 'Stress (kbar)' section was not found in the ML_REG file.")
+        print("ERROR! The 'Stress (kbar)' section was not found in the ML_REG file.")
         exit(1)
     return energy_index, force_index, stress_index
 
@@ -290,7 +290,7 @@ def write_force(force_reshape, filename='Force.dat'):
 def write_stress(stress_reshape, filename='Stress.dat'):
     """Write stress parity data for all 6 Voigt components to a file.
 
-    Components are written in order: XX, YY, ZZ, XY, XZ, YZ, each as a
+    Components are written in VASP order: XX, YY, ZZ, XY, YZ, ZX (as in ML_AB), each as a
     separate block separated by a blank line for xmgrace multi-dataset plots.
 
     Parameters
@@ -300,7 +300,7 @@ def write_stress(stress_reshape, filename='Stress.dat'):
     filename : str, optional
         Output filename (default: 'Stress.dat').
     """
-    labels = ['XX', 'YY', 'ZZ', 'XY', 'XZ', 'YZ']
+    labels = ['XX', 'YY', 'ZZ', 'XY', 'YZ', 'ZX']
     with open(filename, 'w') as o:
         for i, label in enumerate(labels):
             if i > 0:
