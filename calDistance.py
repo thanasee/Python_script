@@ -201,7 +201,7 @@ def direct_to_cartesian(lattice_matrix, positions_direct):
 
     positions = positions_direct % 1.0
     positions_cartesian = positions @ lattice_matrix
-    
+
     return positions_cartesian
 
 
@@ -219,7 +219,7 @@ def cartesian_to_direct(lattice_matrix, positions_cartesian):
     """
 
     positions_direct = (positions_cartesian @ np.linalg.inv(lattice_matrix)) % 1.0
-    
+
     return positions_direct
 
 
@@ -365,7 +365,7 @@ def define_labels(elements, atom_counts):
     digits = len(str(max(atom_counts))) + 1
     labels = [f"{symbol}{str(counter).zfill(digits)}" for symbol, number in zip(elements, atom_counts)
               for counter in range(1, number + 1)]
-    
+
     return labels
 
 
@@ -388,7 +388,7 @@ def compute_image_offsets(lattice_matrix):
     klm = np.array([[k, l, m] for k in range(-1, 2)
                                for l in range(-1, 2)
                                for m in range(-1, 2)])
-    
+
     return klm @ lattice_matrix
 
 
@@ -411,7 +411,7 @@ def min_image_distance(position_i, position_j, image_offsets):
 
     diff = position_j - position_i                   # (3,)
     diff_offset = diff[np.newaxis, :] + image_offsets # (27, 3)
-    
+
     return np.linalg.norm(diff_offset, axis=1).min()
 
 
@@ -437,23 +437,22 @@ def min_image_distances(position_reference, positions_others, image_offsets):
 
     diff = positions_others - position_reference                         # (N, 3)
     diff_offset = diff[:, np.newaxis, :] + image_offsets[np.newaxis, :, :] # (N, 27, 3)
-    
+
     return np.linalg.norm(diff_offset, axis=2).min(axis=1)              # (N,)
 
 
 def select_index(total_atoms, species, prompt=None, allow_all=True):
     """Prompt the user to select atoms by element symbol and/or atom index.
-    
+
     Accepts free-format input mixing element symbols (e.g. 'C'), single indexes
     (e.g. '3'), ranges (e.g. '1-4'), and the keyword 'all'. Repeats the prompt
-    on invalid input. The selected_atoms list is reset on each retry to prevent
-    duplicates accumulating across bad inputs.
+    on invalid or empty input. Duplicates are removed, keeping the input order.
 
     Parameters
     ----------
     total_atoms : int       — total number of atoms (used for bounds checking)
     species     : list[str] — per-atom element label (used for symbol selection)
-    prompt      : srt       — message printed before the input prompt
+    prompt      : str       — message printed before the input prompt
     allow_all   : bool      — whether the keyword 'all' is permitted (default True)
 
     Returns
@@ -471,7 +470,7 @@ Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
         selected_atoms = []
         input_select = input().split()
         valid = True
-        
+
         for select in input_select:
             if 'all' in select:
                 if not allow_all:
@@ -481,14 +480,19 @@ Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
                 selected_atoms.extend(range(total_atoms))
                 break
             if select.isnumeric() or '-' in select:
-                if '-' in select:
-                    start, end = map(int, select.split('-'))
-                    if start < end:
-                        selected_atoms.extend(range(start - 1, end))
+                try:
+                    if '-' in select:
+                        start, end = map(int, select.split('-'))
+                        if start < end:
+                            selected_atoms.extend(range(start - 1, end))
+                        else:
+                            selected_atoms.extend(range(end - 1, start))
                     else:
-                        selected_atoms.extend(range(end - 1, start))
-                else:
-                    selected_atoms.append(int(select) - 1)
+                        selected_atoms.append(int(select) - 1)
+                except ValueError:
+                    print(f"  '{select}' is not a valid index or range. TRY AGAIN!")
+                    valid = False
+                    break
             else:
                 if select not in species:
                     print(f"  '{select}' is not a species in this structure. TRY AGAIN!")
@@ -503,7 +507,10 @@ Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
         if not valid:
             continue
 
-        if len(selected_atoms) > total_atoms or not all(0 <= idx < total_atoms for idx in selected_atoms):
+        selected_atoms = list(dict.fromkeys(selected_atoms))
+        if len(selected_atoms) == 0:
+            print("No atoms selected! TRY AGAIN!")
+        elif not all(0 <= idx < total_atoms for idx in selected_atoms):
             print("Wrong input atom-indexes! TRY AGAIN!")
         else:
             break
@@ -544,7 +551,7 @@ def one_to_all(total_atoms, positions_cartesian, labels, image_offsets):
     mask = np.arange(total_atoms) != index_select
     other_positions = positions_cartesian[mask]
     other_labels = [labels[i] for i in range(total_atoms) if i != index_select]
- 
+
     min_distances = min_image_distances(positions_cartesian[index_select], other_positions, image_offsets)
     pair = [(labels[index_select], lbl) for lbl in other_labels]
 
@@ -594,7 +601,7 @@ def atom_pairs(total_atoms, positions_cartesian, labels, image_offsets):
         except ValueError:
             print("ERROR! Please enter a number.")
             continue
- 
+
     distances, pair = [], []
     for i in range(number_pair):
         j = i + 1
@@ -629,17 +636,17 @@ def atom_pairs(total_atoms, positions_cartesian, labels, image_offsets):
             except ValueError:
                 print("  Invalid input! Please enter a number.")
                 continue
- 
+
         min_distance = min_image_distance(positions_cartesian[idx1], positions_cartesian[idx2], image_offsets)
         pair.append((labels[idx1], labels[idx2]))
         distances.append(min_distance)
- 
+
     print("# Distance between 2 atoms")
     print("# Atom1  Atom2    Distance")
     for (a1, a2), min_distance in zip(pair, distances):
         print(f"  {a1:>5s}  {a2:>5s}  {min_distance:>12.8f}")
     print(f"      Average   {np.mean(distances):>12.8f}")
- 
+
     with open('distance-atom-atom.dat', 'w') as o:
         o.write("# Distance between 2 atoms\n")
         o.write("# Atom1  Atom2    Distance\n")
@@ -683,7 +690,7 @@ def atom_molecule(lattice_matrix, total_atoms, positions_cartesian, species, lab
         except ValueError:
             print("ERROR! Please enter a number.")
             continue
- 
+
     distances, pair = [], []
     for i in range(number_pair):
         j = i + 1
@@ -703,10 +710,10 @@ def atom_molecule(lattice_matrix, total_atoms, positions_cartesian, species, lab
             except ValueError:
                 print("  Invalid input! Please enter a number.")
                 continue
- 
+
         targets = select_index(total_atoms, species, f"\nInput element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})\n"
 "(Free-format input, e.g., 1 3 1-4 C H all)")
- 
+
         # Unwrap the molecule across periodic boundaries before taking its centroid
         targets = list(dict.fromkeys(targets))
         targets_direct = cartesian_to_direct(lattice_matrix, positions_cartesian[targets])
@@ -716,13 +723,13 @@ def atom_molecule(lattice_matrix, total_atoms, positions_cartesian, species, lab
         min_distance = min_image_distance(positions_cartesian[index_select], target_site, image_offsets)
         pair.append((labels[index_select], str(i + 1).zfill(digits)))
         distances.append(min_distance)
- 
+
     print("# Distance between selected atom and molecule")
     print("# Atom     Molecule  Distance")
     for (atom, mol), min_distance in zip(pair, distances):
         print(f"  {atom:>5s}  {mol:>5s}    {min_distance:>12.8f}")
     print(f"        Average   {np.mean(distances):>12.8f}")
- 
+
     with open('distance-atom-molecule.dat', 'w') as o:
         o.write("# Distance between selected atom and molecule\n")
         o.write("# Atom     Molecule  Distance\n")
@@ -748,11 +755,11 @@ def z_distance(total_atoms, positions, species):
     """
 
     print("Tip: this method can measure the thickness of your system.")
- 
+
     # Substrate: find the atom with the maximum z-coordinate
     substrate_index = select_index(total_atoms, species, f"\nSubstrate — input element-symbol and/or atom-indexes ({1:>3} to {total_atoms:>3})\n"
 "(Free-format input, e.g., 1 3 1-4 C H  — 'all' not allowed)", False)
- 
+
     if len(substrate_index) == 1:
         highest_substrate = positions[substrate_index[0]]
     else:
@@ -777,11 +784,11 @@ def z_distance(total_atoms, positions, species):
                 except ValueError:
                     print("  Invalid input! Please enter a number.")
                     continue
- 
+
     # Adsorbent: find the atom with the minimum z-coordinate
     adsorbent_index = select_index(total_atoms, species, f"\nAdsorbent — input element-symbol and/or atom-indexes ({1:>3} to {total_atoms:>3})\n"
 "(Free-format input, e.g., 1 3 1-4 C H  — 'all' not allowed)", False)
- 
+
     if len(adsorbent_index) == 1:
         lowest_adsorbent = positions[adsorbent_index[0]]
     else:
@@ -806,7 +813,7 @@ def z_distance(total_atoms, positions, species):
                 except ValueError:
                     print("  Invalid input! Please enter a number.")
                     continue
- 
+
     distance = np.abs(lowest_adsorbent[2] - highest_substrate[2])
     print(f"Distance along z-axis is {distance:>12.8f} Angstrom.")
 
@@ -816,21 +823,21 @@ def main():
 
     if '-h' in argv or '--help' in argv or len(argv) != 2:
         usage()
- 
+
     poscar = read_POSCAR(argv[1])
     mapping = mapping_elements(poscar["elements"], poscar["atom_counts"], poscar["positions_cartesian"],
                                poscar["positions_direct"], poscar["species"],
                                poscar["selective_dynamics"], poscar["flags"])
     labels = define_labels(mapping["elements"], mapping["atom_counts"])
     image_offsets = compute_image_offsets(poscar["lattice_matrix"])
- 
+
     print("""
 Choices of calculating distance
  1) Between selected atom and all other atoms
  2) Between 2 selected atoms
  3) Between selected atom and molecule
  4) Between highest atom in substrate and lowest atom in molecule (along z-axis only)""")
- 
+
     while True:
         method = input("Enter choice : ")
         if method == '1':
