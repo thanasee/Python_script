@@ -227,7 +227,8 @@ def read_FORCE_CONSTANTS(filepath, total_atoms):
     """Read and parse a phonopy/phono3py FORCE_CONSTANTS file.
 
     The file format is:
-      Line 0  : <total_symmetry> <total_atoms>
+      Line 0  : <total_symmetry> <total_atoms>, or <total_atoms> alone
+                (older phonopy, full force constants: total_symmetry = total_atoms)
       Per block: one header line with atom pair indices,
                  followed by a 3x3 IFC matrix (3 lines of 3 values each).
     The RMS is computed per block as sqrt(mean(Phi_ij^2)) over all 9 elements.
@@ -245,13 +246,21 @@ def read_FORCE_CONSTANTS(filepath, total_atoms):
         rms            : list of float, RMS of each 3x3 IFC block in eV/Angstrom^2
     """
 
+    if not os.path.exists(filepath):
+        print(f"ERROR!\nFile: {filepath} does not exist.")
+        exit(1)
+
     with open(filepath, 'r') as f:
         force_lines = f.readlines()
 
-    total_symmetry, force_total_atoms = map(int, force_lines[0].split())
+    header = [int(x) for x in force_lines[0].split()]
+    if len(header) == 1:
+        header = header * 2
+    total_symmetry, force_total_atoms = header
 
     if force_total_atoms != total_atoms:
-        print("ERROR! Total atoms not match.")
+        print(f"ERROR! The number of atoms in POSCAR ({total_atoms}) "
+              f"and FORCE_CONSTANTS ({force_total_atoms}) do not match.")
         exit(1)
 
     pair_list = []
