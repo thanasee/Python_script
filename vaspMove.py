@@ -415,17 +415,16 @@ def write_POSCAR(filepath, lattice_matrix, elements, atom_counts, positions_cart
 
 def select_index(total_atoms, species, prompt=None, allow_all=True):
     """Prompt the user to select atoms by element symbol and/or atom index.
-    
+
     Accepts free-format input mixing element symbols (e.g. 'C'), single indexes
     (e.g. '3'), ranges (e.g. '1-4'), and the keyword 'all'. Repeats the prompt
-    on invalid input. The selected_atoms list is reset on each retry to prevent
-    duplicates accumulating across bad inputs.
+    on invalid or empty input. Duplicates are removed, keeping the input order.
 
     Parameters
     ----------
     total_atoms : int       — total number of atoms (used for bounds checking)
     species     : list[str] — per-atom element label (used for symbol selection)
-    prompt      : srt       — message printed before the input prompt
+    prompt      : str       — message printed before the input prompt
     allow_all   : bool      — whether the keyword 'all' is permitted (default True)
 
     Returns
@@ -443,7 +442,7 @@ Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
         selected_atoms = []
         input_select = input().split()
         valid = True
-        
+
         for select in input_select:
             if 'all' in select:
                 if not allow_all:
@@ -453,14 +452,19 @@ Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
                 selected_atoms.extend(range(total_atoms))
                 break
             if select.isnumeric() or '-' in select:
-                if '-' in select:
-                    start, end = map(int, select.split('-'))
-                    if start < end:
-                        selected_atoms.extend(range(start - 1, end))
+                try:
+                    if '-' in select:
+                        start, end = map(int, select.split('-'))
+                        if start < end:
+                            selected_atoms.extend(range(start - 1, end))
+                        else:
+                            selected_atoms.extend(range(end - 1, start))
                     else:
-                        selected_atoms.extend(range(end - 1, start))
-                else:
-                    selected_atoms.append(int(select) - 1)
+                        selected_atoms.append(int(select) - 1)
+                except ValueError:
+                    print(f"  '{select}' is not a valid index or range. TRY AGAIN!")
+                    valid = False
+                    break
             else:
                 if select not in species:
                     print(f"  '{select}' is not a species in this structure. TRY AGAIN!")
@@ -475,12 +479,39 @@ Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
         if not valid:
             continue
 
-        if len(selected_atoms) > total_atoms or not all(0 <= idx < total_atoms for idx in selected_atoms):
+        selected_atoms = list(dict.fromkeys(selected_atoms))
+        if len(selected_atoms) == 0:
+            print("No atoms selected! TRY AGAIN!")
+        elif not all(0 <= idx < total_atoms for idx in selected_atoms):
             print("Wrong input atom-indexes! TRY AGAIN!")
         else:
             break
 
     return selected_atoms
+
+
+def unwrap(positions_direct):
+    """Reconstruct a contiguous cluster by unwrapping periodic boundary conditions.
+
+    Shifts all atoms into the minimum-image frame relative to atom[0], so that
+    atoms split across a cell boundary are treated as geometrically contiguous.
+    Interatomic distances are preserved exactly.
+
+    Parameters
+    ----------
+    positions_direct : np.ndarray (N, 3) — fractional coordinates in [0, 1)
+
+    Returns
+    -------
+    reference : np.ndarray (3,)   — fractional coordinate of atom[0]
+    unwrapped : np.ndarray (N, 3) — unwrapped fractional coordinates
+    """
+
+    reference = np.copy(positions_direct[0])
+    delta = positions_direct - reference
+    delta -= np.round(delta)
+
+    return reference, reference + delta
 
 
 def move_atoms(lattice_matrix, total_atoms, positions_cartesian, species):
@@ -491,7 +522,7 @@ def move_atoms(lattice_matrix, total_atoms, positions_cartesian, species):
       2. Move mode:
            1) Displace by a (dx, dy, dz) vector — applied additively
            2) Move to absolute coordinates — centroid of selected atoms
-              is translated to the target point
+              (unwrapped across periodic boundaries) is translated to the target point
       3. Coordinate system: Cartesian (Å) or Direct (fractional)
       4. The displacement vector or target coordinates
 
@@ -561,7 +592,9 @@ Coordinate system
             except ValueError:
                 print("ERROR! Non-numeric input. Try again.")
         target = direct_to_cartesian(lattice_matrix, vec) if use_direct else vec
-        centroid = np.mean(positions_cartesian[selected_atoms], axis=0)
+        selected_positions_direct = cartesian_to_direct(lattice_matrix, positions_cartesian[selected_atoms])
+        _, selected_positions_unwrapped = unwrap(selected_positions_direct)
+        centroid = direct_to_cartesian(lattice_matrix, np.mean(selected_positions_unwrapped, axis=0))
         new_positions_cartesian = positions_cartesian.copy()
         new_positions_cartesian[selected_atoms] += target - centroid
 
