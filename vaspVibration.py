@@ -20,10 +20,31 @@ This script extracts vibrational modes and writes them in XSF format.
 Supports VASP (OUTCAR: Γ modes of the dynamical matrix or phonon dispersion with PHON_NWRITE = -3;
 vaspout.h5: phonon dispersion) and Phonopy (band.yaml/mesh.yaml/qpoints.yaml) outputs with write eigenvectors.
 For a phonon dispersion, <POSCAR input> is the supercell POSCAR of the VASP run.
+With vaspout.h5 the primitive cell is read from the file, so no POSCAR is needed.
 
 This script was developed by Thanasee Thanasarnsurapong.
 """)
     exit(0)
+
+
+def parse_scale(text):
+    """Convert the scaling-factor argument to float; print an error and the usage if invalid.
+
+    Parameters
+    ----------
+    text : str
+        Scaling-factor argument.
+
+    Returns
+    -------
+    float
+    """
+
+    try:
+        return float(text)
+    except ValueError:
+        print(f"ERROR! Scaling factor '{text}' is not a number.")
+        usage()
 
 
 def read_structure(poscar_file):
@@ -121,7 +142,7 @@ def real_modes(eigenvectors, masses):
         eigenvectors[b] *= np.exp(-1j * theta)
 
     if np.abs(eigenvectors.imag).max() > 1e-4:
-        print("Warning! Eigenvectors at this q-point are complex. Only the real part is written.")
+        print("WARNING! Eigenvectors at this q-point are complex. Only the real part is written.")
 
     return eigenvectors.real / np.sqrt(masses[None, :, None])
 
@@ -288,7 +309,7 @@ def read_modes_outcar(outcar_file, structure):
 
     use_dispersion = False
     if index_phonons is not None and len(eigenvectors) == 0:
-        print("Warning! Phonon dispersion in OUTCAR has no eigenvectors (needs PHON_NWRITE = -3 or vaspout.h5).")
+        print("WARNING! Phonon dispersion in OUTCAR has no eigenvectors (needs PHON_NWRITE = -3 or vaspout.h5).")
     elif index_phonons is not None:
         if index_start is None:
             use_dispersion = True
@@ -593,7 +614,7 @@ def main():
     if argv[1].endswith(".h5"):
         if len(argv) > 3:
             usage()
-        scale = float(argv[2]) if len(argv) == 3 else 1.0
+        scale = parse_scale(argv[2]) if len(argv) == 3 else 1.0
         structure, modes = read_modes_h5(argv[1])
         ascending = True
     else:
@@ -601,16 +622,18 @@ def main():
             usage()
         poscar_file = argv[1]
         input_file  = argv[2]
-        scale       = float(argv[3]) if len(argv) == 4 else 1.0
+        scale       = parse_scale(argv[3]) if len(argv) == 4 else 1.0
 
-        structure   = read_structure(poscar_file)
         if input_file.endswith(".h5"):
+            print(f"WARNING! {poscar_file} is not used: the primitive cell is read from {input_file}.")
             structure, modes = read_modes_h5(input_file)
             ascending = True
         elif input_file.endswith(".yaml"):
+            structure = read_structure(poscar_file)
             _, modes = read_modes_phonopy(input_file, structure)
             ascending = True
         else:
+            structure = read_structure(poscar_file)
             structure, modes, ascending = read_modes_outcar(input_file, structure)
 
     write_xsf_modes(structure, modes, scale, ascending)
