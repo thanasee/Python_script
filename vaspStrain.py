@@ -14,7 +14,7 @@ Usage: vaspStrain.py <input> <output>
 This script supports VASP5 Structure file format (i.e. POSCAR) 
 for applying strain to a structure file.
 
-The expansion matrix can be specified as:
+The strain matrix can be specified as:
   3 components  ->  \u03B5_xx \u03B5_yy \u03B5_zz  (diagonal)
   9 components  ->  \u03B5_xx \u03B5_xy \u03B5_xz  \u03B5_yx \u03B5_yy \u03B5_yz  \u03B5_zx \u03B5_zy \u03B5_zz  (full 3×3)
 
