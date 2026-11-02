@@ -675,15 +675,10 @@ def shift_special(total_atoms, positions_direct, species):
     np.ndarray (N, 3) — shifted fractional coordinates in [0, 1)
     """
 
-    while True:
-        adsorbent_atoms = select_index(total_atoms, species, prompt=f"""
+    adsorbent_atoms = select_index(total_atoms, species, prompt=f"""
 Input element-symbol and/or atom-indexes of adsorbent ({1:>3} to {total_atoms:>3})
 (Free-format input, e.g., 1 3 1-4 C H all)""")
-        if adsorbent_atoms:
-            break
-        print("ERROR! No atoms selected. Try again.")
-    _, unwrapped = unwrap(positions_direct)
-    # re-unwrap around adsorbate reference
+    # Unwrap around the first adsorbate atom
     ref_ads = np.copy(positions_direct[adsorbent_atoms[0]])
     delta = positions_direct - ref_ads
     delta -= np.round(delta)
