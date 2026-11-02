@@ -2,7 +2,7 @@
 
 A collection of Python scripts for VASP output analysis and related tasks, developed for computational materials science research on the LANTA HPC cluster.
 
-**Author:** [Thanasee Thanasarnsurapong](https://scholar.google.com/citations?user=4KHXv9gAAAAJ&hl=en)
+**Author:** [Thanasee Thanasarnsurapong](https://scholar.google.com/citations?user=4KHXv9gAAAAJ)
 
 ---
 
@@ -87,7 +87,7 @@ All distances are computed under periodic boundary conditions using the minimum-
 Compares interatomic force constants (IFCs) between DFT and MLFF calculations by reading Phono3py HDF5 files and writing the residual (MLFF − DFT) to `.dat` files. Auto-detects whether the file contains 2nd (`force_constants`) or 3rd (`fc3`) IFCs.
 
 ```
-Usage: compareIFCs.py <DFT's force constants HDF5 input> <MLFF's force constants HDF5 input>
+Usage: compareIFCs.py <DFT input> <MLFF input>
 ```
 
 Both files must contain the same IFC order with identical array shapes. Only one file is written per run; if a file contains both `force_constants` and `fc3`, the 2nd IFCs take precedence. The RMSE and maximum |residual| are printed to stdout.
@@ -143,12 +143,12 @@ Usage: convergePhono3py.py
 
 Automatically scans for all `kappa-m*.hdf5` files, sorts them by mesh number, and writes convergence data. Supports the Phono3py `--br` and `--lbte` calculation modes. The target temperature is prompted once and reused for every file with the same temperature grid.
 
-**2D renormalization:** Before the HDF5 files are read, the script interactively prompts for dimensionality (1 = 3D, 2 = 2D). For 2D materials, all κL values are multiplied by c_proj / t_eff, where c_proj is the projection of c onto the ab-plane normal and t_eff is the atomic span along that normal plus the Alvarez vdW radii of the outermost atoms. Reads `POSCAR` from the working directory, or asks for a path if it is missing (falls back to 3D if the path does not exist). Units remain W/(m·K) throughout.
+**2D renormalization:** Before the HDF5 files are read, the script interactively prompts for dimensionality (1 = 3D, 2 = 2D). For 2D materials, all κ<sub>L</sub> values are multiplied by c<sub>proj</sub> / t<sub>eff</sub>, where c<sub>proj</sub> is the projection of c onto the ab-plane normal and t<sub>eff</sub> is the atomic span along that normal plus the Alvarez vdW radii of the outermost atoms. Reads `POSCAR` from the working directory, or asks for a path if it is missing (falls back to 3D if the path does not exist). Units remain W/(m·K) throughout.
 
-**Output files** (columns: Q_x, Q_y, Q_z, xx, yy, zz, yz, xz, xy):
+**Output files** (columns: Q<sub>x</sub>, Q<sub>y</sub>, Q<sub>z</sub>, xx, yy, zz, yz, xz, xy):
 - `KappaVsMesh.dat` — κ<sub>L</sub> vs. q-mesh
 - `Kappa_RTAVsMesh.dat` — RTA κ<sub>L</sub> vs. q-mesh (--lbte only)
--  `Kappa_intraVsMesh.dat` / `Kappa_interVsMesh.dat` — intra-band and inter-band κ<sub>L</sub> vs. q-mesh (--br --tt njc23/ibdb19/smm19 only)
+- `Kappa_intraVsMesh.dat` / `Kappa_interVsMesh.dat` — intra-band and inter-band κ<sub>L</sub> vs. q-mesh (--br --tt njc23/ibdb19/smm19 only)
 - `Kappa_intra_exactVsMesh.dat` / `Kappa_intra_RTAVsMesh.dat` / `Kappa_interVsMesh.dat` — intra-band (exact and RTA) and inter-band κ<sub>L</sub> vs. q-mesh (--lbte --tt njc23/ibdb19/smm19 only); `KappaVsMesh.dat` holds the total (intra exact + inter) and `Kappa_RTAVsMesh.dat` is not written
 
 ---
@@ -165,10 +165,10 @@ Output filenames follow the pattern `<tag>-mXXXXXX.dat`, where the mesh token is
 
 **Grüneisen parameter:** If no Grüneisen file is given (or it does not exist), the script asks whether to run `phono3py --mesh <mesh> --gruneisen` in the current directory, using the mesh of the kappa file. The resulting `gruneisen.hdf5` is renamed to `gruneisen-m<mesh>.hdf5`. A Grüneisen file on a different mesh from the kappa file is skipped with a warning.
 
-**2D renormalization:** After loading the HDF5 file, the script interactively prompts for dimensionality (1 = 3D, 2 = 2D). For 2D materials, `POSCAR` is read from the working directory (a path is asked for if it is missing) and all κ<sub>L</sub> arrays are multiplied by c_proj / t_eff before any output is written, where c_proj is the projection of c onto the ab-plane normal and t_eff is the atomic span along that normal plus the Alvarez vdW radii of the two outermost atoms. Units remain W/(m·K) throughout. The factor is recorded in `Renorm2D_info.dat`.
+**2D renormalization:** After loading the HDF5 file, the script interactively prompts for dimensionality (1 = 3D, 2 = 2D). For 2D materials, `POSCAR` is read from the working directory (a path is asked for if it is missing) and all κ<sub>L</sub> arrays are multiplied by c<sub>proj</sub> / t<sub>eff</sub> before any output is written, where c<sub>proj</sub> is the projection of c onto the ab-plane normal and t<sub>eff</sub> is the atomic span along that normal plus the Alvarez vdW radii of the two outermost atoms. Units remain W/(m·K) throughout. The factor is recorded in `Renorm2D_info.dat`.
 
 **Temperature-dependent files** (one value per temperature row, written to the working directory):
-- `KappaVsT.dat` / `Kappa_bandVsT.dat` — total κL tensor and band decomposition (3 acoustic + 1 summed optical) vs. temperature
+- `KappaVsT.dat` / `Kappa_bandVsT.dat` — total κ<sub>L</sub> tensor and band decomposition (3 acoustic + 1 summed optical) vs. temperature
 - `ContributeKappaVsT.dat` — per-mode percentage contribution to total κ<sub>L</sub> vs. temperature
 - `CvVsT.dat` — heat capacity C<sub>v</sub> per unit cell (eV/K) vs. temperature
 - `Tau_CRTAVsT.dat` / `Tau_AvgVsT.dat` — CRTA lifetime tensor and mode-averaged phonon lifetime τ (ps) vs. temperature
@@ -180,11 +180,11 @@ Output filenames follow the pattern `<tag>-mXXXXXX.dat`, where the mesh token is
 - `GvVsFrequency.dat` / `Gv_amplitudeVsFrequency.dat` — group velocity vector (v<sub>x</sub>, v<sub>y</sub>, v<sub>z</sub>) and amplitude |v| in km/s vs. frequency (THz)
 - `GruneisenVsFrequency.dat` — Grüneisen parameter vs. frequency (THz) (if a Grüneisen file is given or calculated)
 - `Gamma_isotopeVsFrequency.dat` / `Tau_isotopeVsFrequency.dat` — isotope scattering rate and lifetime vs. frequency (--isotope)
-- `PqjVsFrequency.dat` — averaged phonon-phonon interaction strength (eV2) vs. frequency (--full-pp)
+- `PqjVsFrequency.dat` — averaged phonon-phonon interaction strength (eV<sup>2</sup>) vs. frequency (--full-pp)
 - `Renorm2D_info.dat` — 2D renormalization factor and thickness (2D only)
 
 **Per-temperature spectral files** (one file per temperature, written to subdirectories `T<value>K/`):
-- `GammaVsFrequency.dat` / `TauVsFrequency.dat` — scattering rate Γ (ps−1) and lifetime τ (ps) vs. frequency
+- `GammaVsFrequency.dat` / `TauVsFrequency.dat` — scattering rate Γ (ps<sup>–1</sup>) and lifetime τ (ps) vs. frequency
 - `KappaVsFrequency.dat` / `KappaVsMfp.dat` — mode κ<sub>L</sub> vs. phonon frequency (THz) and vs. mean free path (Å)
 - `cumulative_KappaVsFrequency.dat` / `cumulative_KappaVsMfp.dat` — cumulative κ<sub>L</sub> sorted by ascending frequency and MFP
 - `derivative_KappaVsFrequency.dat` / `derivative_KappaVsMfp.dat` — spectral κ<sub>L</sub> density d(κ<sub>L</sub>)/d(frequency) and d(κ<sub>L</sub>)/d(MFP)
@@ -203,10 +203,12 @@ Output filenames follow the pattern `<tag>-mXXXXXX.dat`, where the mesh token is
 
 Converts a VASP POSCAR file into a CONTROL input file for the [ShengBTE](https://www.shengbte.org/) lattice thermal conductivity code (Fortran BTE solver).
 
-    Usage: poscar2control.py <POSCAR>
+```
+Usage: poscar2control.py <POSCAR>
+```
 
 **Interactive prompts:**
-1. 2D material (Y/N). If yes: vacuum direction (a/b/c). The sheet is recentred at 0.5 along the vacuum direction (periodic directions shifted to origin), then the vacuum lattice vector is shrunk so its projection on the layer normal equals t_eff (atomic span along the normal plus the Alvarez vdW radii of the two outermost atoms), or a user-entered thickness (must be ≥ the atomic span).
+1. 2D material (Y/N). If yes: vacuum direction (a/b/c). The sheet is recentred at 0.5 along the vacuum direction (periodic directions shifted to origin), then the vacuum lattice vector is shrunk so its projection on the layer normal equals t<sub>eff</sub> (atomic span along the normal plus the Alvarez vdW radii of the two outermost atoms), or a user-entered thickness (must be ≥ the atomic span).
 2. q-point spacing (2π/Å) → `ngrid`: n_i = round(|b_i| / (2π × spacing)), minimum 1; the vacuum direction is set to 1.
 3. Supercell matrix (3 positive integers) → `scell`; must match the supercell used for the force constants.
 4. Phonon process order: 3 → `convergence=.true.`, `nthreads=-1`; 4 → CPU (`convergence` and `four_phonon_iteration` = `.true.`) or GPU (both `.false.`), with `four_phonon=.true.`.
@@ -227,7 +229,7 @@ Extracts thermal transport properties from [ShengBTE](https://www.shengbte.org/)
 Usage: analyzeShengBTE.py <3ph/4ph>
 ```
 
-Temperature subdirectories (`T<value>K/`) are detected automatically from the working directory. Only `BTE.omega` and the `T<value>K/` directories are required; any other missing input (e.g. `BTE.KappaTensorVsT_CONV` when `convergence = .false.`) is skipped with a warning. All κ<sub>L</sub> tensor components are written as the full 3×3 tensor (xx, xy, xz, yx, yy, yz, zx, zy, zz) in W/(m·K). All scattering rate and lifetime files are written per phonon branch. ShengBTE's scattering rate Γ is 1/τ (ps−1), so phonon lifetimes are computed as τ = 1/Γ (ps); modes with Γ ≤ 0 are assigned τ = 0.
+Temperature subdirectories (`T<value>K/`) are detected automatically from the working directory. Only `BTE.omega` and the `T<value>K/` directories are required; any other missing input (e.g. `BTE.KappaTensorVsT_CONV` when `convergence = .false.`) is skipped with a warning. All κ<sub>L</sub> tensor components are written as the full 3×3 tensor (xx, xy, xz, yx, yy, yz, zx, zy, zz) in W/(m·K). All scattering rate and lifetime files are written per phonon branch. ShengBTE's scattering rate Γ is 1/τ (ps<sup>–1</sup>), so phonon lifetimes are computed as τ = 1/Γ (ps); modes with Γ ≤ 0 are assigned τ = 0.
 
 **Temperature-dependent files** (one value per temperature row, written to the working directory):
 - `Kappa_*VsT.dat` — total κ<sub>L</sub> tensor vs. temperature, RTA and iterative (CONV) solutions
@@ -274,10 +276,11 @@ Usage: calDistance.py <POSCAR>
 - **Output:** `distance-atom-atom.dat`
 
 **Mode 3 — atom to molecule:** Distance from a selected atom to the geometric centroid of a user-defined group of atoms. The group is unwrapped across periodic boundaries before averaging, so molecules split across the cell edge are handled correctly.
+- **Output:** `distance-atom-molecule.dat`
 
 **Mode 4 — z-axis separation:** Separation along the z-axis between the highest atom in a substrate group and the lowest atom in an adsorbent group. Useful for measuring adsorption height or slab thickness. Output printed to stdout only.
 
-All modes support free-format atom selection by index, range (e.g., `1-4`), element symbol, or `all`.Modes 1 and 2, and the reference atom in mode 3, take a single atom index. The molecule group in mode 3 and the substrate/adsorbent groups in mode 4 use free-format selection by index, range (e.g., `1-4`), or element symbol; `all` is accepted in mode 3 but not in mode 4.
+Modes 1 and 2, and the reference atom in mode 3, take a single atom index. The molecule group in mode 3 and the substrate/adsorbent groups in mode 4 use free-format selection by index, range (e.g., `1-4`), or element symbol; `all` is accepted in mode 3 but not in mode 4.
 
 ---
 
@@ -343,8 +346,8 @@ Usage: ElasticTensor2D.py pre  <structure file>   # Generate strained POSCARs
 3. `both` — runs both methods and compares them
 
 **`pre` mode:** Detects the 2D lattice type (square, rectangular, hexagonal, oblique) and writes the reference structure to `unstrain/POSCAR` plus one POSCAR per strain set and strain value to `<strain set>/strain<±δ>/POSCAR` — 9 strains from −2% to +2% in 0.5% steps (`strain-0.020` ... `strain+0.020`). Strain is applied as F = I + ε to the lattice; fractional coordinates are kept.
-- Energy method: `C<sub>11</sub>`, `C<sub>22</sub>`, `C<sub>11</sub>×C<sub>22</sub>-2×C<sub>12</sub>`, `C<sub>66</sub>`; oblique cells add `C<sub>11</sub>×C<sub>66</sub>-2×C<sub>16</sub>` and `C<sub>22</sub>×C<sub>66</sub>-2×C<sub>26</sub>`
-- Stress method: `C<sub>11</sub>`, `C<sub>22</sub>`, `C<sub>66</sub>` for every lattice type
+- Energy method: `C11`, `C22`, `C11_C22_2C12`, `C66`; oblique cells add `C11_C66_2C16` and `C22_C66_2C26`
+- Stress method: `C11`, `C22`, `C66` for every lattice type
 - Both: the union of the two sets
 
 **`post` mode:** Reads the final energy and stress from each `OUTCAR`. A strain set is skipped if any of its OUTCARs is missing or has not reached required accuracy; a method left with an incomplete tensor is reported and skipped without stopping the other method. For each method, the elastic tensor (C<sub>11</sub>, C<sub>22</sub>, C<sub>12</sub>, C<sub>66</sub>, plus C<sub>16</sub>/C<sub>26</sub> for oblique) is written, mechanical stability is checked via eigenvalue positivity, and angle-dependent Young's modulus, Poisson's ratio, and shear modulus are computed for stable materials. In the stress method, the raw tensor is symmetrized (asymmetry printed) and C<sub>16</sub>/C<sub>26</sub> are set to zero for non-oblique cells.
@@ -385,7 +388,7 @@ Plots polar diagrams of angle-dependent mechanical properties (Young's modulus, 
 Usage: plotMechanics.py <file1> [file2 ... file6]
 ```
 
-Input files are the `.dat` output files from `vaspMechanics.py` or `ElasticTensor2D.py`. Auxetic materials (negative Poisson's ratio) are handled by plotting |ν| as a dashed envelope. Output is saved as a 300 dpi PNG.
+Input files are the `.dat` output files from `vaspMechanics.py` (2D mode) or `ElasticTensor2D.py`; the axis unit is fixed to N/m, so the script is for 2D materials. Auxetic materials (negative Poisson's ratio) are handled by plotting |ν| as a dashed envelope. Output is saved as a 300 dpi PNG.
 
 ---
 
@@ -452,7 +455,7 @@ All modes first unwrap atoms across periodic boundaries to compute a geometrical
 - **Mode 4 — Adsorbate:** selected adsorbate group centered in ab at (0.5, 0.5); c coordinates of all atoms left unchanged. Adsorbate selection supports free-format input (index, range, element symbol, `all`)
 
 ---
- 
+
 #### `vaspVacuum.py`
 
 Adds vacuum space to, or rebuilds it in, a VASP POSCAR along a chosen lattice direction (a, b, or c) — for adjusting the vacuum gap in slab or 2D-material cells.
@@ -466,7 +469,7 @@ Usage: vaspVacuum.py <POSCAR> <output POSCAR>
 - **Mode 2 — Rebuild vacuum:** Resets the total vacuum along the chosen direction to an entered thickness, discarding whatever vacuum already exists. Slab thickness and vacuum are measured along the normal of the plane spanned by the other two vectors, so the entered value is the perpendicular vacuum even for a tilted vector; the vector keeps its direction and is resized to (slab thickness + entered vacuum) along that normal.
 
 **Output:** One VASP5-format POSCAR with Direct coordinates.
- 
+
 ---
 
 #### `vaspMirror.py`
@@ -572,9 +575,9 @@ Providing one POSCAR builds a homobilayer (both layers identical); providing two
 
 **Candidate filtering:** `MAX_ATOMS = 500` (hard cap on total supercell atoms); `MAX_STRAIN = 0.05` (5%, heterobilayer only); search range `THETA_MIN`/`THETA_MAX = 0°`/`180°`.
 
-**`TWIST_LIST.dat` reuse:** After a search, results are written to `TWIST_LIST.dat` along with a structure snapshot (`original.vasp` for homobilayer; `bottom.vasp` + `top.vasp` for heterobilayer). On a later run with the same input file(s), the snapshot is compared against the provided POSCAR(s) (tolerance 10−6 Å); if they match, the saved candidate list is reused directly — skipping the search — and the script goes straight to candidate selection. If they don't match, a fresh search runs automatically with a warning.
+**`TWIST_LIST.dat` reuse:** After a search, results are written to `TWIST_LIST.dat` along with a structure snapshot (`original.vasp` for homobilayer; `bottom.vasp` + `top.vasp` for heterobilayer). On a later run with the same input file(s), the snapshot is compared against the provided POSCAR(s) (tolerance 10<sup>–6</sup> Å); if they match, the saved candidate list is reused directly — skipping the search — and the script goes straight to candidate selection. If they don't match, a fresh search runs automatically with a warning.
 
-**Candidate selection and generation:** The candidate table is displayed interactively; selection accepts individual indices, `'all'`, or `'none'`. For each selected candidate, one POSCAR is written per high-symmetry stacking configuration (lattice-type-dependent shift grid: hexagonal, square, rectangular, or oblique), to `<index>_<theta>_<atoms>/<shift_no>_<stacking_label>/POSCAR`, where `<index>` is the candidate number in the table and `TWIST_LIST.dat` (zero-padded).
+**Candidate selection and generation:** The candidate table is displayed interactively; selection accepts individual indices, `'all'`, or `'none'`. For each selected candidate, one POSCAR is written per high-symmetry stacking configuration (lattice-type-dependent shift grid: hexagonal, square, rectangular, or oblique), to `<index>_<theta>_<atoms>/<shift_no>_<stacking_label>/POSCAR`, where `<index>` is the candidate number in the table and in `TWIST_LIST.dat` (zero-padded).
 
 **Interlayer gap:** Computed from the sum of van der Waals radii of the two atoms facing each other across the interface (highest-z atom of the bottom layer, lowest-z atom of the top layer); falls back to 3.5 Å with a warning if either element's radius is unknown.
 
@@ -814,13 +817,15 @@ Scripts for preparing calculation-control tags for VASP and follow-on codes — 
 
 #### `vaspBorn.py`
 
-Extracts the ion-clamped (electronic) dielectric tensor and Born effective charge tensors from a VASP DFPT calculation (`LEPSILON=.TRUE.`) and writes them to `INCAR.LR`. Accepts either `OUTCAR` or `vasprun.xml`; file type is auto-detected by filename with content-based fallback.
+Extracts the ion-clamped (electronic) dielectric tensor and Born effective charge tensors from a VASP DFPT calculation (`LEPSILON=.TRUE.`) and writes them to `INCAR.LR` (VASP) and `BORN` (Phonopy/Phono3py). Accepts either `OUTCAR` or `vasprun.xml`; file type is auto-detected by filename with content-based fallback.
 
 ```
 Usage: vaspBorn.py <OUTCAR or vasprun.xml>
 ```
 
-**Output:** `INCAR.LR` — `PHON_DIELECTRIC` and `PHON_BORN_CHARGES` tags in backslash-continuation format.
+**Output:**
+- `INCAR.LR` — `PHON_DIELECTRIC` and `PHON_BORN_CHARGES` tags in backslash-continuation format
+- `BORN` — non-analytical term correction (NAC) parameters in Phonopy format: symmetrized ε and Z* of the symmetry-independent atoms, with the DFPT cell taken as the primitive cell. Written with Phonopy if installed, otherwise with spglib using the same symmetrization. If neither is installed, the raw ε and Z* of all atoms are written with a warning; delete the lines of equivalent atoms before use, since Phonopy reads only the independent atoms
 
 ---
 
@@ -849,7 +854,7 @@ All scripts follow the same conventions:
 - Single-responsibility functions with NumPy-style docstrings (`Parameters`, `Returns`, inline notes for unit conversions and formulas)
 - `main()` entry point with `if __name__ == '__main__'` guard
 - Interactive input loops with validation and retry on invalid input; `readline` (stdlib) is imported in all scripts that use `input()` to enable arrow-key navigation and line editing at prompts
-- Handles both VASP4 (no element line), VASP5, and VASP6 (with Hash code) POSCAR formats
+- Handles VASP4 (no element line), VASP5, and VASP6 (with Hash code) POSCAR formats
 - Handles Selective Dynamics, anisotropic scale factors, and non-orthogonal cells
 - Atom-label comments (e.g., `Mo001`, `S002`) in output POSCARs for VESTA/XCrySDen identification
 - Output files formatted for xmgrace (`.dat` with column headers) unless otherwise noted
