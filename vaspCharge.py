@@ -563,7 +563,7 @@ def task_slice(chgcar):
         Output of ``read_CHGCAR``.
     """
     axis_idx = prompt_axis("Enter the lattice axis normal to the slice plane (A/B/C): ")
-    frac = float(input("Enter the fractional coordinate along that axis (0-1): "))
+    frac = _prompt_number("Enter the fractional coordinate along that axis (0-1): ")
 
     volume = cell_volume(chgcar["lattice_matrix"])
     density = chgcar["density_tot"] / volume
@@ -688,9 +688,11 @@ def task_macroscopic_average(chgcar):
     axis_idx = prompt_axis("Enter the lattice axis to profile along (A/B/C): ")
     positions, profile = _planar_average_profile(chgcar, axis_idx)
 
-    window_length = float(input("Enter the macroscopic-averaging window "
-                                 "length in Angstrom (e.g. one interplanar "
-                                 "spacing): "))
+    window_length = _prompt_number("Enter the macroscopic-averaging window "
+                                   "length in Angstrom (e.g. one interplanar "
+                                   "spacing): ",
+                                   valid=lambda x: x > 0,
+                                   error="Invalid entry, enter a positive number.")
     dz = positions[1] - positions[0]
     window_points = max(1, round(window_length / dz))
 
@@ -767,6 +769,35 @@ def _prompt_fractional_point(prompt_text):
               "(fractional a b c coordinates).")
 
 
+def _prompt_number(prompt_text, cast=float, valid=None, error="Invalid entry, enter a number."):
+    """Prompt for one number, re-prompting on invalid input.
+
+    Parameters
+    ----------
+    prompt_text : str
+        Prompt shown to the user.
+    cast : type, optional
+        float (default) or int.
+    valid : callable, optional
+        Extra check on the value; re-prompts with ``error`` if it returns False.
+    error : str, optional
+        Message printed before re-prompting.
+
+    Returns
+    -------
+    float or int
+    """
+    while True:
+        try:
+            value = cast(input(prompt_text).strip())
+        except ValueError:
+            print(error)
+            continue
+        if valid is None or valid(value):
+            return value
+        print(error)
+
+
 def task_line_profile(chgcar):
     """8) Charge Density Along a Specified Path -- rho (e/A^3) along a line.
 
@@ -780,10 +811,9 @@ def task_line_profile(chgcar):
     """
     point1 = _prompt_fractional_point("Enter the starting point (fractional a b c): ")
     point2 = _prompt_fractional_point("Enter the ending point (fractional a b c): ")
-    n_points = int(input("Enter the number of sampling points along the path: "))
-    if n_points < 2:
-        print("ERROR! The number of sampling points must be at least 2.")
-        exit(1)
+    n_points = _prompt_number("Enter the number of sampling points along the path: ",
+                              cast=int, valid=lambda x: x >= 2,
+                              error="Invalid entry, enter an integer of at least 2.")
 
     volume = cell_volume(chgcar["lattice_matrix"])
     density = chgcar["density_tot"] / volume
@@ -826,12 +856,10 @@ def task_build_supercell(chgcar):
     """
     print("\nBuild Supercell of Charge Density: diagonal transformation only "
           "(n1 x n2 x n3 integer multiples).")
-    n1 = int(input("Enter the multiple along axis A: "))
-    n2 = int(input("Enter the multiple along axis B: "))
-    n3 = int(input("Enter the multiple along axis C: "))
-    if n1 < 1 or n2 < 1 or n3 < 1:
-        print("ERROR! Supercell multiples must be positive integers.")
-        exit(1)
+    n1, n2, n3 = (_prompt_number(f"Enter the multiple along axis {axis}: ",
+                                 cast=int, valid=lambda x: x >= 1,
+                                 error="Invalid entry, enter a positive integer.")
+                  for axis in "ABC")
 
     replication_factor = n1 * n2 * n3
     new_lattice = chgcar["lattice_matrix"] * np.array([[n1], [n2], [n3]])
@@ -899,24 +927,29 @@ STM Simulation modes:
     _write_grd("STM_Y.grd", Y)
 
     if mode == '1':
-        frac_c = float(input("Enter the fractional height along axis C (0-1): "))
+        frac_c = _prompt_number("Enter the fractional height along axis C (0-1): ")
         image = _slice_along_axis(density, 2, frac_c)
         out_path = "STM_DENSITY.grd"
         _write_grd(out_path, image)
     else:
-        threshold = float(input("Enter the target density threshold (e/A^3): "))
+        threshold = _prompt_number("Enter the target density threshold (e/A^3): ",
+                                   valid=lambda x: x > 0,
+                                   error="Invalid entry, enter a positive number.")
         nz = density.shape[2]
-        c_length = np.linalg.norm(chgcar["lattice_matrix"][2])
+        # Height along the surface normal: projection of c onto n = (a x b)/|a x b|
+        lattice_matrix = chgcar["lattice_matrix"]
+        normal = np.cross(lattice_matrix[0], lattice_matrix[1])
+        c_height = abs(lattice_matrix[2] @ normal) / np.linalg.norm(normal)
 
         height_map = np.full(density.shape[:2], np.nan)
         found = np.zeros(density.shape[:2], dtype=bool)
         for k in range(nz - 1, -1, -1):
             layer = density[:, :, k]
             newly_crossed = (~found) & (layer >= threshold)
-            height_map[newly_crossed] = (k / nz) * c_length
+            height_map[newly_crossed] = (k / nz) * c_height
             found |= newly_crossed
         if not found.all():
-            print("Warning: the density threshold was not reached (scanning "
+            print("WARNING! The density threshold was not reached (scanning "
                   "in from the vacuum side, +C) for some (x, y) points; "
                   "those entries are written as NaN.")
 
