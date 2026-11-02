@@ -143,7 +143,7 @@ def get_std_atomic_mass(symbol):
     """
     mass = _ATOMIC_MASS.get(symbol.strip().capitalize())
     if mass is None:
-        print("Warning: atomic mass not found for '{}', using 1.0".format(symbol))
+        print("WARNING! Atomic mass not found for '{}', using 1.0".format(symbol))
         return 1.0
     return mass
 
@@ -256,7 +256,7 @@ def build_global_meta(info_list, xml_paths):
     all_eq  = all(s == el_sets[0] for s in el_sets)
 
     if not all_eq:
-        print("Warning: element mismatch across files")
+        print("WARNING! Element mismatch across files")
         for path, info in zip(xml_paths, info_list):
             print("  {}   ->  {}".format(path, '  '.join(info['elements'])))
 
@@ -310,37 +310,43 @@ def prompt_skip_stride(xml_paths, step_counts):
     for i, (path, steps) in enumerate(zip(xml_paths, step_counts), 1):
         print("  [{}] {}   ->  {} ionic steps".format(i, path, steps))
 
-    print("\n--- Step selection ---")
-
     while True:
-        raw = input("Skip first N steps (equilibration)? [default 0]: ").strip()
-        if raw == '':
-            skip = 0
-            break
-        if raw.isdigit():
-            skip = int(raw)
-            break
-        print("  Enter a non-negative integer.")
+        print("\n--- Step selection ---")
 
-    while True:
-        raw = input("Use every Nth step (stride)?        [default 1]: ").strip()
-        if raw == '':
-            stride = 1
-            break
-        if raw.isdigit() and int(raw) >= 1:
-            stride = int(raw)
-            break
-        print("  Enter a positive integer.")
+        while True:
+            raw = input("Skip first N steps (equilibration)? [default 0]: ").strip()
+            if raw == '':
+                skip = 0
+                break
+            if raw.isdigit():
+                skip = int(raw)
+                break
+            print("  Enter a non-negative integer.")
 
-    print("\n--- Summary ---")
-    total = 0
-    for i, (path, steps) in enumerate(zip(xml_paths, step_counts), 1):
-        selected  = len(range(skip, steps, stride))
-        end_step  = steps - 1
-        print("  [{}] {}   ->  {} configs selected   (steps {}–{}, stride {})".format(
-            i, path, selected, skip, end_step, stride))
-        total += selected
-    print("  Total: {} configurations -> ML_AB".format(total))
+        while True:
+            raw = input("Use every Nth step (stride)?        [default 1]: ").strip()
+            if raw == '':
+                stride = 1
+                break
+            if raw.isdigit() and int(raw) >= 1:
+                stride = int(raw)
+                break
+            print("  Enter a positive integer.")
+
+        print("\n--- Summary ---")
+        total = 0
+        for i, (path, steps) in enumerate(zip(xml_paths, step_counts), 1):
+            selected  = len(range(skip, steps, stride))
+            end_step  = steps - 1
+            print("  [{}] {}   ->  {} configs selected   (steps {}–{}, stride {})".format(
+                i, path, selected, skip, end_step, stride))
+            total += selected
+        print("  Total: {} configurations -> ML_AB".format(total))
+
+        if total > 0:
+            break
+        print("ERROR! No configurations selected (skip must be smaller than the number "
+              "of ionic steps in at least one file). Try again.")
 
     while True:
         ans = input("\nProceed? [y/n]: ").strip().lower()
