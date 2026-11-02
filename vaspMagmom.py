@@ -423,8 +423,31 @@ def find_tag_line(lines, tag):
     return None
 
 
+def tag_line_count(lines, idx):
+    """Return the number of lines the tag at lines[idx] spans.
+
+    A line ending with a backslash continues on the next line, so the
+    continuation lines belong to the same tag.
+
+    Parameters
+    ----------
+    lines : list[str]
+    idx   : int — index of the tag line
+
+    Returns
+    -------
+    int
+    """
+    end = idx
+    while end < len(lines) - 1 and lines[end].rstrip().endswith('\\'):
+        end += 1
+    return end - idx + 1
+
+
 def set_tag(lines, tag, value):
     """Insert or replace a 'TAG = value' line in an INCAR line list, in place.
+
+    An existing tag is replaced together with its continuation lines.
 
     Parameters
     ----------
@@ -435,7 +458,7 @@ def set_tag(lines, tag, value):
     new_line = f"{tag} = {value}\n"
     idx = find_tag_line(lines, tag)
     if idx is not None:
-        lines[idx] = new_line
+        lines[idx:idx + tag_line_count(lines, idx)] = [new_line]
     else:
         if lines and not lines[-1].endswith('\n'):
             lines[-1] += '\n'
@@ -443,7 +466,7 @@ def set_tag(lines, tag, value):
 
 
 def remove_tag(lines, tag):
-    """Remove a tag's line from an INCAR line list, in place, if present.
+    """Remove a tag's line (and its continuation lines) from an INCAR line list, in place, if present.
 
     Used for NUPDOWN, which fixes the total spin difference and conflicts
     with a per-atom MAGMOM guess.
@@ -455,7 +478,7 @@ def remove_tag(lines, tag):
     """
     idx = find_tag_line(lines, tag)
     if idx is not None:
-        del lines[idx]
+        del lines[idx:idx + tag_line_count(lines, idx)]
 
 
 def ensure_ispin(lines):
