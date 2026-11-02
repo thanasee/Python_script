@@ -13,7 +13,8 @@ def usage():
     print("""
 Usage: convergePhono3py.py
 
-This script obtain lattice thermal conductivity depends on q-mesh from HDF5 files
+This script collects the lattice thermal conductivity vs q-mesh at one temperature
+from the phono3py kappa-m*.hdf5 files in the current directory.
 
 This script was developed by Thanasee Thanasarnsurapong.
 """)
@@ -170,9 +171,12 @@ def choose_temperature(temperature, filepath, last_temperature, current_temp):
             while True:
                 try:
                     target_temp = float(input("Select target temperature (K): "))
-                    break
                 except ValueError:
                     print("Invalid input! Please enter a number.")
+                    continue
+                if target_temp in temperature:
+                    break
+                print("Temperature is not in the list! Please choose one from the list.")
             return target_temp
     return current_temp
 
