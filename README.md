@@ -763,7 +763,7 @@ Usage: vaspCharge.py <CHGCAR>
 3. Spin Density — magnetization ρ<sub>up</sub> − ρ<sub>down</sub> (ISPIN = 2 only). Output: `CHGMAG.vasp`
 4. Spin-Up & Spin-Down Density — derived densities (tot ± mag) / 2 (ISPIN = 2 only). Output: `CHGUP.vasp`, `CHGDW.vasp`
 5. Linear-Average Charge Density — density averaged over one axis, leaving a 2D map. Output: `LAVG_X.grd`, `LAVG_Y.grd`, `CHGLAVG.grd` — ready for `plotGrid.py`
-6. Planar-Average Charge Density — 1D profile along a chosen axis. Output: `PLANAR_AVERAGE.dat`
+6. Planar-Average Charge Density — 1D profile along a chosen axis; positions are measured along the normal of the averaged planes (equal to the axis length for an orthogonal cell). Output: `PLANAR_AVERAGE.dat`
 7. Macroscopic-Average Charge Density — the planar-average profile further smoothed with a periodic moving-window average (FFT convolution), for work-function/band-alignment analysis; window length should normally equal one interplanar spacing. Output: `MACROSCOPIC_AVERAGE.dat`
 8. Charge Density Along a Specified Path — trilinear-interpolated density along a line between two fractional points. Output: `CHG_LINE.dat`
 9. Build Supercell of Charge Density — tiles the density grid and structure by integer (n<sub>1</sub>, n<sub>2</sub>, n<sub>3</sub>) multiples; tiled values are rescaled by n<sub>1</sub>×n<sub>2</sub>×n<sub>3</sub> since CHGCAR stores ρ(r)·V_cell. Output: `CHGCAR_SUPERCELL.vasp`
