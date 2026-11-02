@@ -11,7 +11,7 @@ def usage():
     print("""
 Usage: vaspShift.py <input> <output>
 
-This script support VASP5 Structure file format (i.e. POSCAR) 
+This script support VASP5 Structure file format (i.e. POSCAR)
 for shifting a structure file:
   molecule (0D)  ->  shift to center
   nanowire (1D)  ->  shift to origin in extend direction and center in other direction
@@ -435,13 +435,13 @@ def unwrap(positions_direct):
     reference : np.ndarray (3,)   — fractional coordinate of atom[0]
     unwrapped : np.ndarray (N, 3) — unwrapped fractional coordinates
     """
-    
+
     reference = np.copy(positions_direct[0])
     delta = positions_direct - reference
     delta -= np.round(delta)
-    
+
     return reference, reference + delta
-    
+
 
 def get_direction(prompt):
     """Prompt the user to select a lattice direction (a, b, or c).
@@ -454,7 +454,7 @@ def get_direction(prompt):
     -------
     idx : int — 0-based axis index (0=a, 1=b, 2=c)
     """
-    
+
     print(f"""
 Input the direction index of {prompt} direction (1 to 3):
 1) a direction
@@ -475,14 +475,13 @@ def select_index(total_atoms, species, prompt=None, allow_all=True):
 
     Accepts free-format input mixing element symbols (e.g. 'C'), single indexes
     (e.g. '3'), ranges (e.g. '1-4'), and the keyword 'all'. Repeats the prompt
-    on invalid input. The selected_atoms list is reset on each retry to prevent
-    duplicates accumulating across bad inputs.
+    on invalid or empty input. Duplicates are removed, keeping the input order.
 
     Parameters
     ----------
     total_atoms : int       — total number of atoms (used for bounds checking)
     species     : list[str] — per-atom element label (used for symbol selection)
-    prompt      : srt       — message printed before the input prompt
+    prompt      : str       — message printed before the input prompt
     allow_all   : bool      — whether the keyword 'all' is permitted (default True)
 
     Returns
@@ -510,14 +509,19 @@ Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
                 selected_atoms.extend(range(total_atoms))
                 break
             if select.isnumeric() or '-' in select:
-                if '-' in select:
-                    start, end = map(int, select.split('-'))
-                    if start < end:
-                        selected_atoms.extend(range(start - 1, end))
+                try:
+                    if '-' in select:
+                        start, end = map(int, select.split('-'))
+                        if start < end:
+                            selected_atoms.extend(range(start - 1, end))
+                        else:
+                            selected_atoms.extend(range(end - 1, start))
                     else:
-                        selected_atoms.extend(range(end - 1, start))
-                else:
-                    selected_atoms.append(int(select) - 1)
+                        selected_atoms.append(int(select) - 1)
+                except ValueError:
+                    print(f"  '{select}' is not a valid index or range. TRY AGAIN!")
+                    valid = False
+                    break
             else:
                 if select not in species:
                     print(f"  '{select}' is not a species in this structure. TRY AGAIN!")
@@ -532,7 +536,10 @@ Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
         if not valid:
             continue
 
-        if len(selected_atoms) > total_atoms or not all(0 <= idx < total_atoms for idx in selected_atoms):
+        selected_atoms = list(dict.fromkeys(selected_atoms))
+        if len(selected_atoms) == 0:
+            print("No atoms selected! TRY AGAIN!")
+        elif not all(0 <= idx < total_atoms for idx in selected_atoms):
             print("Wrong input atom-indexes! TRY AGAIN!")
         else:
             break
@@ -555,10 +562,10 @@ def shift_molecule(positions_direct):
     -------
     np.ndarray (N, 3) — shifted fractional coordinates in [0, 1)
     """
-    
+
     _, unwrapped = unwrap(positions_direct)
     center = np.mean(unwrapped, axis=0)
-    
+
     return (unwrapped - center + 0.5) % 1.0
 
 
@@ -578,7 +585,7 @@ def shift_wire(positions_direct):
     -------
     np.ndarray (N, 3) — shifted fractional coordinates in [0, 1)
     """
-    
+
     reference, unwrapped = unwrap(positions_direct)
     center = np.mean(unwrapped, axis=0)
     extend = get_direction("extend")
@@ -586,7 +593,7 @@ def shift_wire(positions_direct):
     new = np.copy(unwrapped)
     new[:, extend]   = unwrapped[:, extend] - reference[extend]
     new[:, periodic] = unwrapped[:, periodic] - center[periodic] + 0.5
-    
+
     return new % 1.0
 
 
@@ -606,7 +613,7 @@ def shift_sheet(positions_direct):
     -------
     np.ndarray (N, 3) — shifted fractional coordinates in [0, 1)
     """
-    
+
     reference, unwrapped = unwrap(positions_direct)
     center = np.mean(unwrapped, axis=0)
     vacuum = get_direction("vacuum")
@@ -614,7 +621,7 @@ def shift_sheet(positions_direct):
     new = np.copy(unwrapped)
     new[:, periodic] = unwrapped[:, periodic] - reference[periodic]
     new[:, vacuum]   = unwrapped[:, vacuum] - center[vacuum] + 0.5
-    
+
     return new % 1.0
 
 
@@ -667,7 +674,7 @@ def shift_special(total_atoms, positions_direct, species):
     -------
     np.ndarray (N, 3) — shifted fractional coordinates in [0, 1)
     """
-    
+
     while True:
         adsorbent_atoms = select_index(total_atoms, species, prompt=f"""
 Input element-symbol and/or atom-indexes of adsorbent ({1:>3} to {total_atoms:>3})
@@ -685,7 +692,7 @@ Input element-symbol and/or atom-indexes of adsorbent ({1:>3} to {total_atoms:>3
     new = np.copy(unwrapped)
     new[:, :2] = unwrapped[:, :2] - center[:2] + 0.5
     new[:, 2]  = unwrapped[:, 2]
-    
+
     return new % 1.0
 
 
@@ -714,7 +721,7 @@ def shift(total_atoms, positions_direct, species):
     -------
     np.ndarray (N, 3) — shifted fractional coordinates in [0, 1)
     """
-    
+
     print("""
 Choices of type of material
   0) 0D (molecule)   -> shift all atoms to center
@@ -743,10 +750,10 @@ Choices of type of material
 
 def main():
     """Parse arguments, shift atoms with selected method, and write output"""
-    
+
     if '-h' in argv or '--help' in argv or len(argv) != 3:
         usage()
-    
+
     unshift = read_POSCAR(argv[1])
     shift_positions_direct = shift(unshift["total_atoms"], unshift["positions_direct"],  unshift["species"])
     shift_positions_cartesian = direct_to_cartesian(unshift["lattice_matrix"], shift_positions_direct)
@@ -756,7 +763,7 @@ def main():
     write_POSCAR(argv[2], unshift["lattice_matrix"], mapping["elements"], mapping["atom_counts"],
                  mapping["positions_cartesian"], mapping["positions_direct"], unshift["selective_dynamics"],
                  mapping["flags"], labels)
-    
+
     print("")
 
 
