@@ -335,7 +335,7 @@ def validate_POSCARs(initial, final):
     # Check lattice matrices — warn but allow (dynamic cell)
     dynamic_cell = False
     if not np.allclose(initial["lattice_matrix"], final["lattice_matrix"], atol=1e-6):
-        print("WARNING: Lattice matrices differ between the two POSCARs.")
+        print("WARNING! Lattice matrices differ between the two POSCARs.")
         print("  Dynamic cell interpolation will be applied.")
         print("  Initial lattice (Å):")
         for row in initial["lattice_matrix"]:
@@ -443,7 +443,7 @@ def interpolate_idpp(initial, final, n_images, dynamic_cell):
     try:
         from scipy.optimize import minimize
     except ImportError:
-        print("WARNING: SciPy not found. Falling back to linear interpolation.")
+        print("WARNING! SciPy not found. Falling back to linear interpolation.")
         return interpolate_linear(initial, final, n_images, dynamic_cell)
 
     total_frames = n_images + 2
