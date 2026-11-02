@@ -640,7 +640,7 @@ def build_supercell(expansion_matrix, replicas, lattice_matrix, atom_counts, tot
     grid_points = all_points[mask]
 
     if len(grid_points) != replicas:
-        print(f"WARNING: Expected {replicas} grid points but found {len(grid_points)}. "
+        print(f"WARNING! Expected {replicas} grid points but found {len(grid_points)}. "
               "Check your expansion matrix.")
 
     # Generate new atomic positions
@@ -1641,10 +1641,10 @@ def get_shift_grid(lattice_type):
     The shifts correspond to the irreducible high-symmetry points of the
     stacking space for each 2D Bravais lattice:
 
-        hexagonal   : AA (0,0),  AB (1/3,2/3),  AB' (2/3,1/3)
-        square      : AA (0,0),  AB (1/2,0),    AC  (1/2,1/2)
-        rectangular : AA (0,0),  AB (1/2,0),    AB' (0,1/2),  AC (1/2,1/2)
-        oblique     : AA (0,0),  AB (1/2,0),    AB' (0,1/2),  AC (1/2,1/2)
+        hexagonal   : AA (0,0),  AB   (1/3,2/3),  AB_prime (2/3,1/3)
+        square      : AA (0,0),  AB   (1/2,0),    AC       (1/2,1/2)
+        rectangular : AA (0,0),  AB_x (1/2,0),    AB_y     (0,1/2),  AC (1/2,1/2)
+        oblique     : AA (0,0),  AB_x (1/2,0),    AB_y     (0,1/2),  AC (1/2,1/2)
 
     Parameters
     ----------
@@ -1674,7 +1674,10 @@ def get_shift_grid(lattice_type):
 
 
 def write_twist_list(filepath, candidates, bottom_file, top_file, homobilayer):
-    """Write all search candidates to TWIST_LIST.dat, sorted by strain.
+    """Write all search candidates to TWIST_LIST.dat, in search order.
+
+    Homobilayer (CSL) candidates are sorted by atom count, heterobilayer
+    candidates by strain.
 
     Format mirrors CellMatch's results.dat with an added Theta column.
     The header records the input filenames and the detected homobilayer/
@@ -1684,7 +1687,7 @@ def write_twist_list(filepath, candidates, bottom_file, top_file, homobilayer):
     Parameters
     ----------
     filepath     : str
-    candidates   : list[dict]  — sorted by strain (ascending)
+    candidates   : list[dict]  — as returned by the search (atom count or strain order)
     bottom_file  : str
     top_file     : str
     homobilayer  : bool — result of is_homobilayer(bottom, top) for this search
@@ -1826,7 +1829,7 @@ def read_twist_list(filepath, primitive_bottom_lattice_matrix, primitive_top_lat
 
     Returns
     -------
-    candidates : list[dict]  — in file order (sorted by strain)
+    candidates : list[dict]  — in file order (as written by write_twist_list)
     """
 
     a1 = primitive_bottom_lattice_matrix[0]
