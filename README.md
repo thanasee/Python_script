@@ -711,7 +711,7 @@ Usage: vaspNEB.py <initial POSCAR> <final POSCAR> <N_images> [-linear]
 
 `N_images` is the number of intermediate images excluding endpoints. The script validates that both POSCARs share the same element symbols and atom counts, and warns if lattice matrices differ (dynamic cell / SSNEB mode), in which case the lattice is also linearly interpolated. All interpolation uses the minimum-image convention so atoms always take the shortest path across periodic boundaries. Output directories are two-digit (`00`, `01`, ..., up to `99`), so `N_images` can be at most 98; each contains one `POSCAR`. Selective Dynamics flags are carried from the initial image.
 
-IDPP requires SciPy; if SciPy is not available the script falls back to linear interpolation automatically.
+Each intermediate image is optimized on the IDPP surface on its own, without spring forces between images (unlike the full IDPP-NEB of Smidstrup et al.), so the result is an initial path for the NEB run. IDPP requires SciPy; if SciPy is not available the script falls back to linear interpolation automatically.
 
 ---
 
