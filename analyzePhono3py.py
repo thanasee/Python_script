@@ -13,8 +13,8 @@ def usage():
     print("""
 Usage: analyzePhono3py.py <kappa input> <gruneisen input (optional)>
 
-This script obtain thermal properties from HDF5 files
-some kind of thermal properties obtain at specified temperature
+This script extracts thermal transport properties from a Phono3py kappa HDF5 file.
+Frequency-resolved properties are written for each temperature in T<temperature>K folders.
 
 When no Gruneisen file is given (or it does not exist), the script asks
 whether to run 'phono3py --mesh <mesh> --gruneisen' in the current directory.
@@ -1124,9 +1124,11 @@ def main():
             print("         Skipped: Kappa_RTA_bandVsT and in each T*K folder")
             print("         Kappa_RTAVs{Frequency,Mfp}, {cumulative,derivative}_Kappa_RTAVs{Frequency,Mfp}.")
 
-        if gv_by_gv is None:
-            print("WARNING! 'gv_by_gv' does not exist in the kappa file.")
-            print("         Skipped: Tau_CRTAVsT")
+        for key, value in (('gv_by_gv', gv_by_gv), ('kappa_unit_conversion', kappa_unit_conversion)):
+            if value is None:
+                print(f"WARNING! '{key}' does not exist in the kappa file.")
+                print("         Skipped: Tau_CRTAVsT")
+                break
 
     # ── Dimensionality: optional 2D renormalization ───────────────────────────
     renorm_factor, renorm_info = ask_dimensionality()
@@ -1291,7 +1293,7 @@ def main():
 
     # Constant RTA lifetime: tau_CRTA = kappa / sum_qj(C_qj * v_qj ⊗ v_qj)
     tau_CRTA = None
-    if gv_by_gv is not None:
+    if gv_by_gv is not None and kappa_unit_conversion is not None:
         kappa_per_tau = (
             kappa_unit_conversion * (2 * np.pi) *
             heat_capacity[:, :, :, np.newaxis] *
