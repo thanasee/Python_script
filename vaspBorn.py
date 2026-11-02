@@ -18,8 +18,10 @@ This script reads a VASP OUTCAR or vasprun.xml file and extracts:
 
 Output files:
   - INCAR.LR : PHON_DIELECTRIC and PHON_BORN_CHARGES tags for VASP
-  - BORN     : NAC parameters for phonopy/phono3py (requires phonopy),
-               symmetrized, with the DFPT cell taken as the primitive cell
+  - BORN     : NAC parameters for phonopy/phono3py, symmetrized,
+               with the DFPT cell taken as the primitive cell
+               (uses phonopy, or spglib if phonopy is not installed;
+               without both, raw tensors of all atoms are written)
 
 This script was developed by Thanasee Thanasarnsurapong.
 """)
@@ -321,19 +323,153 @@ def write_INCAR_LR(dielectric, born_charges, nions, output_file='INCAR.LR'):
         f.write('\n'.join(lines))
 
 
+def symmetrize_born(dielectric, born_charges, cell, symprec=1e-5):
+    """Symmetrize epsilon and Z* with spglib, following phonopy's get_BORN_lines.
+
+    The DFPT cell is taken as the primitive cell.  epsilon is averaged over
+    the point group; each Z* is averaged over the space-group operations
+    (R Z R^-1 carried onto the mapped atom), then the mean Z* is subtracted
+    so that the charges sum to zero (acoustic sum rule).
+
+    Parameters
+    ----------
+    dielectric : numpy.ndarray, shape (3, 3)
+        Dielectric tensor.
+    born_charges : numpy.ndarray, shape (NIONS, 3, 3)
+        Born effective charge tensors.
+    cell : tuple
+        (lattice, fractional positions, symbols) of the DFPT cell.
+    symprec : float, optional
+        Symmetry tolerance in Angstrom.  Default is 1e-5 (phonopy default).
+
+    Returns
+    -------
+    tuple or None
+        (epsilon, Z* of the independent atoms, indices of the independent
+        atoms), or None if spglib is not installed.
+    """
+
+    try:
+        import spglib
+    except ImportError:
+        return None
+
+    lattice = np.array(cell[0], dtype=float)
+    positions = np.array(cell[1], dtype=float)
+    symbols = cell[2]
+    numbers = np.array([sorted(set(symbols)).index(s) + 1 for s in symbols])
+    nions = len(symbols)
+
+    dataset = spglib.get_symmetry_dataset((lattice, positions, numbers), symprec=symprec)
+    if dataset is None:
+        # No symmetry found: identity only, every atom is independent
+        rotations = np.array([np.eye(3, dtype=int)])
+        translations = np.zeros((1, 3))
+        equivalent_atoms = np.arange(nions)
+    elif hasattr(dataset, 'rotations'):     # spglib >= 2.5 (dataset object)
+        rotations = np.array(dataset.rotations)
+        translations = np.array(dataset.translations)
+        equivalent_atoms = np.array(dataset.equivalent_atoms)
+    else:                                   # older spglib (dict)
+        rotations = np.array(dataset['rotations'])
+        translations = np.array(dataset['translations'])
+        equivalent_atoms = np.array(dataset['equivalent_atoms'])
+
+    # Fractional rotation R -> Cartesian S = L^T R (L^T)^-1 (lattice vectors as rows of L)
+    LT = lattice.T
+    LT_inv = np.linalg.inv(LT)
+
+    # ── Dielectric tensor: average over the point group ───────────────────────
+    point_group = np.unique(rotations, axis=0)
+    epsilon = np.zeros((3, 3))
+    for r in point_group:
+        S = LT @ r @ LT_inv
+        epsilon += S @ dielectric @ np.linalg.inv(S)
+    epsilon /= len(point_group)
+
+    # ── Born charges: average over the space group ────────────────────────────
+    borns = np.zeros_like(born_charges, dtype=float)
+    for r, t in zip(rotations, translations):
+        S = LT @ r @ LT_inv
+        new_positions = positions @ r.T + t
+        for i, p in enumerate(new_positions):
+            diff = positions - p
+            diff -= np.round(diff)
+            dist = np.linalg.norm(diff @ lattice, axis=1)
+            dist[numbers != numbers[i]] = np.inf
+            j = np.argmin(dist)
+            borns[j] += S @ born_charges[i] @ S.T
+    borns /= len(rotations)
+    borns -= borns.mean(axis=0)  # acoustic sum rule: sum of Z* = 0
+
+    if np.abs(born_charges - borns).max() > 0.1:
+        print("WARNING! Symmetry of the Born effective charges is largely broken "
+              "(change > 0.1 e after symmetrization).")
+
+    independent = [i for i, e in enumerate(equivalent_atoms) if i == e]
+
+    return epsilon, borns[independent], independent
+
+
+def format_BORN(epsilon, borns, indices, note=''):
+    """Return the lines of a phonopy BORN file.
+
+    Line 1 is a comment (phonopy then uses its default unit conversion
+    factor), line 2 holds the 9 components of epsilon, and each following
+    line holds the 9 components of Z* of one atom (row by row).
+
+    Parameters
+    ----------
+    epsilon : numpy.ndarray, shape (3, 3)
+        Dielectric tensor.
+    borns : numpy.ndarray, shape (N, 3, 3)
+        Born effective charge tensors of the listed atoms.
+    indices : list of int
+        0-based indices of the listed atoms.
+    note : str, optional
+        Text appended to the comment line.
+
+    Returns
+    -------
+    list of str
+    """
+
+    lines = ['# epsilon and Z* of atoms ' + ' '.join(str(i + 1) for i in indices) + note]
+    lines.append(('%13.8f ' * 9) % tuple(np.ravel(epsilon)))
+    for z in borns:
+        lines.append(('%13.8f ' * 9) % tuple(np.ravel(z)))
+
+    return lines
+
+
 def write_BORN(dielectric, born_charges, cell, output_file='BORN'):
-    """Write phonopy BORN: symmetrized epsilon and Z* of independent atoms (phonopy-vasp-born format)."""
+    """Write phonopy BORN: symmetrized epsilon and Z* of independent atoms (phonopy-vasp-born format).
+
+    Uses phonopy if installed, otherwise spglib with the same symmetrization.
+    Without either, the raw epsilon and Z* of all atoms are written and a
+    WARNING is printed, because phonopy reads only the independent atoms.
+    """
+
+    lattice, positions, symbols = cell
 
     try:
         from phonopy.structure.atoms import PhonopyAtoms
         from phonopy.file_IO import get_BORN_lines
     except ImportError:
-        print("ERROR!\nphonopy is required to write BORN.")
-        exit(1)
-
-    lattice, positions, symbols = cell
-    unitcell = PhonopyAtoms(symbols=symbols, cell=lattice, scaled_positions=positions)
-    lines = get_BORN_lines(unitcell, born_charges, dielectric)
+        result = symmetrize_born(dielectric, born_charges, cell)
+        if result is not None:
+            print("phonopy is not installed. BORN is symmetrized with spglib.")
+            lines = format_BORN(*result)
+        else:
+            print("WARNING! phonopy and spglib are not installed.\n"
+                  "BORN lists the raw (not symmetrized) epsilon and Z* of ALL atoms.\n"
+                  "phonopy reads only the symmetry-independent atoms: "
+                  "delete the lines of equivalent atoms before use.")
+            lines = format_BORN(dielectric, born_charges, range(len(born_charges)),
+                                ' (raw, not symmetrized)')
+    else:
+        unitcell = PhonopyAtoms(symbols=symbols, cell=lattice, scaled_positions=positions)
+        lines = get_BORN_lines(unitcell, born_charges, dielectric)
 
     with open(output_file, 'w') as f:
         f.write('\n'.join(lines) + '\n')
