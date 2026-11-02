@@ -163,6 +163,27 @@ def write_phonopy_fc2(force_constants, fc_file, fc_format="text"):
     force_constants.write_to_phonopy(fc_file, format=fc_format)
 
 
+def run_command(command):
+    """
+    Run an external command (phonopy-init / phonopy).
+
+    Prints an ERROR! message and exits if the program is not found or fails.
+
+    Parameters
+    ----------
+    command : list of str
+        Command and its arguments.
+    """
+    try:
+        subprocess.run(command, check=True)
+    except FileNotFoundError:
+        print(f"ERROR! '{command[0]}' was not found. Check that phonopy is installed.")
+        exit(1)
+    except subprocess.CalledProcessError as err:
+        print(f"ERROR! '{' '.join(command)}' failed (exit code {err.returncode}).")
+        exit(1)
+
+
 def main():
     """Parse arguments, read structures and force constants, apply sum rules, and write modified force constants."""
     if '-h' in argv or '--help' in argv or len(argv) > 3:
@@ -194,9 +215,9 @@ def main():
                 if not vaspout_files:
                     print("ERROR! No displacement 'vaspout-*.h5' files found; cannot generate 'phonopy_params.yaml'.")
                     exit(1)
-                subprocess.run(["phonopy-init", "--fz", "vaspout-sposcar.h5", *vaspout_files, "--sp"], check=True)
+                run_command(["phonopy-init", "--fz", "vaspout-sposcar.h5", *vaspout_files, "--sp"])
 
-            subprocess.run(["phonopy", "phonopy_params.yaml", "--writefc", "--full-fc"], check=True)
+            run_command(["phonopy", "phonopy_params.yaml", "--writefc", "--full-fc"])
             if not os.path.isfile(input_fc_file):
                 print(f"ERROR! Phonopy did not write '{input_fc_file}'.")
                 exit(1)
