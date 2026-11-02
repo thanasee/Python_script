@@ -412,17 +412,16 @@ def write_POSCAR(filepath, lattice_matrix, elements, atom_counts, positions_cart
 
 def select_index(total_atoms, species, prompt=None, allow_all=True):
     """Prompt the user to select atoms by element symbol and/or atom index.
-    
+
     Accepts free-format input mixing element symbols (e.g. 'C'), single indexes
     (e.g. '3'), ranges (e.g. '1-4'), and the keyword 'all'. Repeats the prompt
-    on invalid input. The selected_atoms list is reset on each retry to prevent
-    duplicates accumulating across bad inputs.
+    on invalid or empty input. Duplicates are removed, keeping the input order.
 
     Parameters
     ----------
     total_atoms : int       — total number of atoms (used for bounds checking)
     species     : list[str] — per-atom element label (used for symbol selection)
-    prompt      : srt       — message printed before the input prompt
+    prompt      : str       — message printed before the input prompt
     allow_all   : bool      — whether the keyword 'all' is permitted (default True)
 
     Returns
@@ -440,7 +439,7 @@ Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
         selected_atoms = []
         input_select = input().split()
         valid = True
-        
+
         for select in input_select:
             if 'all' in select:
                 if not allow_all:
@@ -450,14 +449,19 @@ Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
                 selected_atoms.extend(range(total_atoms))
                 break
             if select.isnumeric() or '-' in select:
-                if '-' in select:
-                    start, end = map(int, select.split('-'))
-                    if start < end:
-                        selected_atoms.extend(range(start - 1, end))
+                try:
+                    if '-' in select:
+                        start, end = map(int, select.split('-'))
+                        if start < end:
+                            selected_atoms.extend(range(start - 1, end))
+                        else:
+                            selected_atoms.extend(range(end - 1, start))
                     else:
-                        selected_atoms.extend(range(end - 1, start))
-                else:
-                    selected_atoms.append(int(select) - 1)
+                        selected_atoms.append(int(select) - 1)
+                except ValueError:
+                    print(f"  '{select}' is not a valid index or range. TRY AGAIN!")
+                    valid = False
+                    break
             else:
                 if select not in species:
                     print(f"  '{select}' is not a species in this structure. TRY AGAIN!")
@@ -472,7 +476,10 @@ Input element-symbol and/or atom-indexes to choose ({1:>3} to {total_atoms:>3})
         if not valid:
             continue
 
-        if len(selected_atoms) > total_atoms or not all(0 <= idx < total_atoms for idx in selected_atoms):
+        selected_atoms = list(dict.fromkeys(selected_atoms))
+        if len(selected_atoms) == 0:
+            print("No atoms selected! TRY AGAIN!")
+        elif not all(0 <= idx < total_atoms for idx in selected_atoms):
             print("Wrong input atom-indexes! TRY AGAIN!")
         else:
             break
@@ -637,7 +644,7 @@ Interstitial site definition:
                 except ValueError:
                     print("ERROR! Non-numeric input. Try again.")
             break
-        
+
         else:
             print("ERROR! Choose again.")
 
@@ -684,7 +691,7 @@ Interstitial site definition:
 def apply_displacement(lattice_matrix, positions_cartesian, positions_direct,
                        species, selective_dynamics, flags):
     """Displace selected atoms in XY while preserving their fractional c coordinate.
- 
+
     Atoms eligible for displacement are detected by Cartesian Z > threshold,
     where threshold is the midpoint of the largest gap in sorted Cartesian Z values.
     The user selects which detected atoms to displace. The target XY position
@@ -692,9 +699,9 @@ def apply_displacement(lattice_matrix, positions_cartesian, positions_direct,
       1) Centroid of selected reference atoms (unwrapped for PBC);
          1 atom = ontop, 2+ atoms = center point
       2) Manual fractional coordinate input (only a, b components are used)
- 
+
     Each displaced atom retains its original fractional c component.
- 
+
     Parameters
     ----------
     lattice_matrix      : np.ndarray (3, 3)  — lattice vectors in Å
@@ -703,7 +710,7 @@ def apply_displacement(lattice_matrix, positions_cartesian, positions_direct,
     species             : list[str]          — per-atom element labels
     selective_dynamics  : bool
     flags               : np.ndarray or None — per-atom T/F flags
- 
+
     Returns
     -------
     dict with keys:
@@ -714,7 +721,7 @@ def apply_displacement(lattice_matrix, positions_cartesian, positions_direct,
     """
     total_atoms = len(species)
     z_cartesian = positions_cartesian[:, 2]
- 
+
     # Auto-detect threshold via largest gap in sorted Cartesian Z values
     z_sorted = np.sort(z_cartesian)
     gaps = np.diff(z_sorted)
@@ -723,9 +730,9 @@ def apply_displacement(lattice_matrix, positions_cartesian, positions_direct,
     print(f"\nAuto threshold: Z = {threshold:.5f} Å  "
           f"(largest gap {gaps[gap_idx]:.5f} Å between "
           f"{z_sorted[gap_idx]:.5f} and {z_sorted[gap_idx+1]:.5f} Å)")
- 
+
     detected = [i for i in range(total_atoms) if z_cartesian[i] > threshold]
- 
+
     if len(detected) == 0:
         print(f"No atoms detected above Z = {threshold:.5f} Å.")
         print("Returning unchanged structure.")
@@ -733,12 +740,12 @@ def apply_displacement(lattice_matrix, positions_cartesian, positions_direct,
                 "positions_direct":    positions_direct.copy(),
                 "species":             species.copy(),
                 "flags":               flags.copy() if selective_dynamics and flags is not None else None}
- 
+
     print(f"\nDetected {len(detected)} atom(s) above Z = {threshold:.5f} Å:")
     print(f"  {'Index':>6}  {'Species':>8}")
     for i in detected:
         print(f"  {i+1:>6}  {species[i]:>8}")
- 
+
     # Let user select which detected atoms to displace
     print("\nSelect atom(s) to displace from the detected list")
     while True:
@@ -746,14 +753,14 @@ def apply_displacement(lattice_matrix, positions_cartesian, positions_direct,
         if len(selected_atoms) >= 1 and all(i in detected for i in selected_atoms):
             break
         print("ERROR! All selected atoms must be from the detected list above.")
- 
+
     print("""
 Choices of define final adsorption site
 1) Choose atoms surround the positioning point
    If 1 atom means ontop that atom
    If 2 or more atoms mean on top of center point of these atoms
 2) Custom position in Direct coordinate""")
- 
+
     while True:
         option_position = input("Enter choice: ")
         if option_position == '1':
@@ -778,7 +785,7 @@ Choices of define final adsorption site
             break
         else:
             print("ERROR! Choose again.")
- 
+
     new_positions_cartesian = positions_cartesian.copy()
     if len(selected_atoms) == 1:
         # Single atom: move directly to target XY
@@ -788,24 +795,23 @@ Choices of define final adsorption site
     else:
         # Multiple atoms: compute centroid XY (unwrapped), apply rigid XY shift
         _, unwrapped = unwrap(positions_direct[selected_atoms])
-        unwrapped_cartesian = direct_to_cartesian(lattice_matrix, unwrapped)
-        centroid_xy = np.mean(unwrapped_cartesian, axis=0)[:2]
+        centroid_xy = direct_to_cartesian(lattice_matrix, np.mean(unwrapped, axis=0))[:2]
         delta_xy = target_xy - centroid_xy
         for atom_idx in selected_atoms:
             new_positions_cartesian[atom_idx, 0] = positions_cartesian[atom_idx, 0] + delta_xy[0]
             new_positions_cartesian[atom_idx, 1] = positions_cartesian[atom_idx, 1] + delta_xy[1]
     new_positions_direct = cartesian_to_direct(lattice_matrix, new_positions_cartesian)
- 
+
     return {"positions_cartesian": new_positions_cartesian,
             "positions_direct":    new_positions_direct,
             "species":             species.copy(),
             "flags":               flags.copy() if selective_dynamics and flags is not None else None}
- 
- 
+
+
 def apply_defect(lattice_matrix, positions_cartesian, positions_direct,
                  species, selective_dynamics, flags):
     """Dispatch to the appropriate defect routine based on user selection.
- 
+
     Parameters
     ----------
     lattice_matrix      : np.ndarray (3, 3)  — lattice vectors in Å
@@ -814,7 +820,7 @@ def apply_defect(lattice_matrix, positions_cartesian, positions_direct,
     species             : list[str]          — per-atom element labels
     selective_dynamics  : bool
     flags               : np.ndarray or None — per-atom T/F flags
- 
+
     Returns
     -------
     dict with keys:
@@ -824,7 +830,7 @@ def apply_defect(lattice_matrix, positions_cartesian, positions_direct,
         flags               : np.ndarray or None
     """
     total_atoms = len(species)
- 
+
     print("""
 Choices of defect types:
 1) Vacancy
@@ -838,25 +844,25 @@ Choices of defect types:
             selected_atoms = select_index(total_atoms, species)
             result = apply_vacancy(positions_cartesian, positions_direct, species, selective_dynamics, flags, selected_atoms)
             break
-    
+
         elif defect_type == '2':
             print("\nSubstitution: select atom(s) to replace")
             selected_atoms = select_index(total_atoms, species)
             result = apply_substitution(positions_cartesian, positions_direct, species, selective_dynamics, flags, selected_atoms)
             break
-    
+
         elif defect_type == '3':
             print("\nInterstitial: define insertion site")
             result = apply_interstitial(lattice_matrix, positions_cartesian, positions_direct, species, selective_dynamics, flags)
             break
-    
+
         elif defect_type == '4':
             print("\nDisplacement: select atom(s) to move")
             result = apply_displacement(lattice_matrix, positions_cartesian, positions_direct, species, selective_dynamics, flags)
             break
         else:
             print("ERROR! Choose again.")
- 
+
     return result
 
 
