@@ -48,9 +48,11 @@ def read_piezo_stress(outcar_file):
     """Read the piezoelectric stress tensor from a VASP OUTCAR file.
 
     Reads the electronic part 'PIEZOELECTRIC TENSOR (including local field
-    effects)'. When the ionic part 'PIEZOELECTRIC TENSOR IONIC CONTR' is
-    present, the user chooses whether to add it (relaxed-ion) or not
-    (clamped-ion). Columns are reordered from
+    effects)'; older VASP versions (e.g. 5.3) label it 'PIEZOELECTRIC TENSOR
+    for field in x, y, z', which is used as a fallback. VASP prints each block
+    in (e Angst) and in (C/m^2); only the (C/m^2) blocks are read. When the
+    ionic part 'PIEZOELECTRIC TENSOR IONIC CONTR' is present, the user
+    chooses whether to add it (relaxed-ion) or not (clamped-ion). Columns are reordered from
     VASP convention (xx, yy, zz, xy, yz, xz) to Voigt notation (1, 2, 3, 4, 5, 6).
 
     Parameters
@@ -76,20 +78,33 @@ def read_piezo_stress(outcar_file):
     with open(outcar_file, 'r') as f:
         outcar_lines = f.readlines()
 
+    electronic_name  = 'PIEZOELECTRIC TENSOR (including local field effects)'
     electronic_index = None
+    plain_index      = None
     ionic_index      = None
     for i, line in enumerate(outcar_lines):
-        if 'PIEZOELECTRIC TENSOR (including local field effects)' in line and electronic_index is None:
+        header = ' '.join(line.split())
+        if '(C/m^2)' not in header:  # skip the same blocks printed in (e Angst)
+            continue
+        if 'PIEZOELECTRIC TENSOR (including local field effects)' in header and electronic_index is None:
             electronic_index = i
-        elif 'PIEZOELECTRIC TENSOR IONIC CONTR' in line:
+        elif 'PIEZOELECTRIC TENSOR IONIC CONTR' in header:
             ionic_index = i
+        elif 'PIEZOELECTRIC TENSOR for field in x, y, z' in header and plain_index is None:
+            plain_index = i
+
+    if electronic_index is None and plain_index is not None:
+        electronic_name  = 'PIEZOELECTRIC TENSOR for field in x, y, z'
+        electronic_index = plain_index
+        print("WARNING! 'PIEZOELECTRIC TENSOR (including local field effects)' (C/m^2) was not found.\n"
+              "         Using 'PIEZOELECTRIC TENSOR for field in x, y, z' (C/m^2) as the electronic part (older VASP label).")
 
     if electronic_index is None:
-        print("ERROR!\nThe 'PIEZOELECTRIC TENSOR (including local field effects)' section was not found in the OUTCAR file.")
+        print("ERROR!\nThe 'PIEZOELECTRIC TENSOR (including local field effects)' section in C/m^2 was not found in the OUTCAR file.")
         exit(1)
 
     piezostress_vasp = np.zeros((3, 6))
-    for name, index in (('PIEZOELECTRIC TENSOR (including local field effects)', electronic_index),
+    for name, index in ((electronic_name, electronic_index),
                         ('PIEZOELECTRIC TENSOR IONIC CONTR', ionic_index)):
         if index is None:
             continue
