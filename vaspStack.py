@@ -513,10 +513,10 @@ def build_second_layer(species, positions_cartesian):
 
     shift = thickness + interlayer_gap
 
-    second_positions_cartesion = positions_cartesian.copy()
-    second_positions_cartesion[:, 2] += shift
+    second_positions_cartesian = positions_cartesian.copy()
+    second_positions_cartesian[:, 2] += shift
 
-    return thickness, second_positions_cartesion
+    return thickness, second_positions_cartesian
 
 
 def flip_sheet(positions_cartesian, flip_mode):
@@ -524,15 +524,15 @@ def flip_sheet(positions_cartesian, flip_mode):
 
     For the z-axis, reflection is performed through the layer midplane to
     preserve the interlayer geometry (top layer flipped to bottom orientation).
-    For x and y axes, reflection is through the origin — atoms are wrapped
-    back into [0, 1) by cartesian_to_direct after this function returns.
+    For x and y axes, reflection is through the layer centroid — atoms are
+    wrapped back into [0, 1) by cartesian_to_direct after this function returns.
 
         'none' : no reflection
         'z'    : reflect through XY plane at layer midplane (z → 2*mid_z - z)
                  physically flips the layer upside down without displacing it
-        'x'    : negate x  (x → -x), wrapped by cartesian_to_direct
-        'y'    : negate y  (y → -y), wrapped by cartesian_to_direct
-        'xy'   : negate x and y, wrapped by cartesian_to_direct
+        'x'    : reflect x through the centroid (x → 2*c_x - x)
+        'y'    : reflect y through the centroid (y → 2*c_y - y)
+        'xy'   : reflect x and y through the centroid
 
     Parameters
     ----------
@@ -573,8 +573,8 @@ def rotate_sheet(positions_cartesian, degree):
     """Rotate a 2D sheet in-plane around the z-axis passing through its centroid.
 
     The rotation is applied in Cartesian space around the geometric center of
-    the sheet, keeping all atoms within the original cell by wrapping back to
-    fractional coordinates afterwards. The cell itself is not modified.
+    the sheet. The cell itself is not modified; the caller wraps the result
+    back into the cell with cartesian_to_direct.
 
     Note: meaningful only for angles that preserve the lattice periodicity
     (e.g. 60°, 120°, 180° for hexagonal; 90°, 180° for square). For arbitrary
@@ -583,11 +583,11 @@ def rotate_sheet(positions_cartesian, degree):
     Parameters
     ----------
     positions_cartesian : np.ndarray, shape (N, 3) — Cartesian coordinates in Å
-    angle_deg           : float — rotation angle in degrees (counterclockwise)
+    degree              : float — rotation angle in degrees (counterclockwise)
 
     Returns
     -------
-    positions_direct : np.ndarray, shape (N, 3) — rotated fractional coordinates in [0, 1)
+    rotated : np.ndarray, shape (N, 3) — rotated Cartesian coordinates in Å
     """
 
     radian = np.radians(degree)
@@ -634,8 +634,7 @@ def center_sheet(positions_direct):
     periodic directions start at origin.
 
     Intended for 2D periodic systems (monolayers, slabs) where the structure
-    is periodic in two directions and has vacuum in one direction.
-    The user is prompted to select the vacuum direction.
+    is periodic in a and b. The vacuum direction is fixed to c.
 
     Parameters
     ----------
@@ -697,10 +696,10 @@ def get_shift_grid(lattice_type):
     The shifts correspond to the irreducible high-symmetry points of the
     stacking space for each 2D Bravais lattice:
 
-        square      : AA (0,0),  AB (1/2,0),    AC  (1/2,1/2)
-        rectangular : AA (0,0),  AB (1/2,0),    AB' (0,1/2),  AC   (1/2,1/2)
-        hexagonal   : AA (0,0),  AB (1/3,2/3),  AB' (2/3,1/3)
-        oblique     : AA (0,0),  AB (1/2,0),    AB' (0,1/2),  AC   (1/2,1/2)
+        square      : AA (0,0),  AB   (1/2,0),    AC       (1/2,1/2)
+        rectangular : AA (0,0),  AB_x (1/2,0),    AB_y     (0,1/2),  AC (1/2,1/2)
+        hexagonal   : AA (0,0),  AB   (1/3,2/3),  AB_prime (2/3,1/3)
+        oblique     : AA (0,0),  AB_x (1/2,0),    AB_y     (0,1/2),  AC (1/2,1/2)
 
     Parameters
     ----------
@@ -920,7 +919,7 @@ def main():
 
     working_dir = os.getcwd()
     monolayer = read_POSCAR(argv[1])
-    _, second_positions_cartesion = build_second_layer(monolayer["species"], monolayer["positions_cartesian"])
+    _, second_positions_cartesian = build_second_layer(monolayer["species"], monolayer["positions_cartesian"])
 
     bilayer_elements = monolayer["elements"] + monolayer["elements"]
     sort_elements = check_elements(bilayer_elements)
@@ -935,7 +934,7 @@ def main():
 
     i = 1
     for flip_mode, flip_label in flips:
-        flipped_positions_cartesian = flip_sheet(second_positions_cartesion, flip_mode)
+        flipped_positions_cartesian = flip_sheet(second_positions_cartesian, flip_mode)
 
         for degree, rot_label in rotations:
             if np.abs(degree) > 1e-8:
