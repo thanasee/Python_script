@@ -62,7 +62,7 @@ def _exists(filepath):
     """
     if os.path.exists(filepath):
         return True
-    print(f"Warning: {os.path.relpath(filepath)} not found. Skipped.")
+    print(f"WARNING! {os.path.relpath(filepath)} not found. Skipped.")
     return False
 
 
@@ -776,10 +776,9 @@ def detect_temp_dirs(dirpath):
             dirs[int(temp_str)] = full_path
 
     if not dirs:
-        raise RuntimeError(
-            f"No T<temp>K subdirectories found in '{dirpath}'. "
-            "Check that this is a valid ShengBTE output directory."
-        )
+        print(f"ERROR!\nNo T<temp>K subdirectories found in '{dirpath}'.\n"
+              "Check that this is a valid ShengBTE output directory.")
+        exit(1)
 
     sorted_dirs = sorted(dirs.items())
     temperatures = [temp for temp, _ in sorted_dirs]
@@ -815,8 +814,8 @@ def main():
     if _exists(qpoints_path):
         n_qpoints_check = read_qpoints(qpoints_path)
         if n_qpoints != n_qpoints_check:
-            print(f"Warning: The number of q-points from BTE.omega ({n_qpoints}) does not match the number of q-points from BTE.qpoints ({n_qpoints_check}).")
-            print(f" Using {n_qpoints} from BTE.omega.")
+            print(f"WARNING! The number of q-points from BTE.omega ({n_qpoints}) does not match the number of q-points from BTE.qpoints ({n_qpoints_check}).")
+            print(f"         Using {n_qpoints} from BTE.omega.")
     print(f"  BTE.omega  →  {n_qpoints} q-points, {n_bands} branches")
 
     gv_path = os.path.join(work_dir, "BTE.v")
@@ -827,95 +826,111 @@ def main():
 
     grun_path = os.path.join(work_dir, "BTE.gruneisen")
     if _exists(grun_path):
-        gruneisen, _, gr_n_bands = read_gruneisen(grun_path)
-        if gr_n_bands != n_bands:
-            print(f"Warning: The number of bands from BTE.gruneisen ({gr_n_bands}) does not match the number of bands from BTE.omega ({n_bands}).")
-            print(f"Using {gr_n_bands} from BTE.gruneisen.")
-        write_gruneisen_vs_frequency("GruneisenVsFrequency.dat", frequency, gr_n_bands, gruneisen)
+        gruneisen, gr_n_qpoints, gr_n_bands = read_gruneisen(grun_path)
+        if (gr_n_qpoints, gr_n_bands) != (n_qpoints, n_bands):
+            print(f"WARNING! BTE.gruneisen has {gr_n_qpoints} q-points and {gr_n_bands} bands, "
+                  f"but BTE.omega has {n_qpoints} q-points and {n_bands} bands.")
+            print("         GruneisenVsFrequency.dat is skipped.")
+        else:
+            write_gruneisen_vs_frequency("GruneisenVsFrequency.dat", frequency, n_bands, gruneisen)
 
     cv_path = os.path.join(work_dir, "BTE.cvVsT")
     if _exists(cv_path):
         cv_temperature, heat_capacity = read_heat_capacity(cv_path)
         if not np.array_equal(temperatures, cv_temperature):
-            print(f"Warning: The temperature points from BTE.cvVsT do not match the temperature points from the T<temp>K directories.")
-            print(f" Using temperature points from BTE.cvVsT.")
+            print(f"WARNING! The temperature points from BTE.cvVsT do not match the temperature points from the T<temp>K directories.")
+            print(f"         Using temperature points from BTE.cvVsT.")
         write_heat_capacity_vs_temperature("HeatCapacityVsT.dat", cv_temperature, heat_capacity)
 
     kappa_rta_path  = os.path.join(work_dir, "BTE.KappaTensorVsT_RTA")
     if _exists(kappa_rta_path):
         T_rta,  kappa_rta  = read_kappa_vs_temperature(kappa_rta_path)
         if not np.array_equal(temperatures, T_rta):
-            print(f"Warning: The temperature points from BTE.KappaTensorVsT_RTA do not match the temperature points from the T<temp>K directories.")
-            print(f" Using temperature points from BTE.KappaTensorVsT_RTA.")
+            print(f"WARNING! The temperature points from BTE.KappaTensorVsT_RTA do not match the temperature points from the T<temp>K directories.")
+            print(f"         Using temperature points from BTE.KappaTensorVsT_RTA.")
         write_kappa_vs_temperature("Kappa_RTAVsT.dat", T_rta, kappa_rta)
 
     kappa_conv_path = os.path.join(work_dir, "BTE.KappaTensorVsT_CONV")
     if _exists(kappa_conv_path):
         T_conv, kappa_conv = read_kappa_vs_temperature(kappa_conv_path)
         if not np.array_equal(temperatures, T_conv):
-            print(f"Warning: The temperature points from BTE.KappaTensorVsT_CONV do not match the temperature points from the T<temp>K directories.")
-            print(f" Using temperature points from BTE.KappaTensorVsT_CONV.")
+            print(f"WARNING! The temperature points from BTE.KappaTensorVsT_CONV do not match the temperature points from the T<temp>K directories.")
+            print(f"         Using temperature points from BTE.KappaTensorVsT_CONV.")
         write_kappa_vs_temperature("Kappa_CONVVsT.dat", T_conv, kappa_conv)
 
     p3_path = os.path.join(work_dir, "BTE.P3")
     if _exists(p3_path):
-        p3, total_p3, _, p3_n_bands = read_phase_space(p3_path)
-        if p3_n_bands != n_bands:
-            print(f"Warning: The number of bands from BTE.P3 ({p3_n_bands}) does not match the number of bands from BTE.omega ({n_bands}).")
-            print(f"Using {p3_n_bands} from BTE.P3.")
-        write_phase_space_vs_frequency("P3VsFrequency.dat", frequency, p3_n_bands, p3, total_p3)
+        p3, total_p3, p3_n_qpoints, p3_n_bands = read_phase_space(p3_path)
+        if (p3_n_qpoints, p3_n_bands) != (n_qpoints, n_bands):
+            print(f"WARNING! BTE.P3 has {p3_n_qpoints} q-points and {p3_n_bands} bands, "
+                  f"but BTE.omega has {n_qpoints} q-points and {n_bands} bands.")
+            print("         P3VsFrequency.dat is skipped.")
+        else:
+            write_phase_space_vs_frequency("P3VsFrequency.dat", frequency, n_bands, p3, total_p3)
 
     p3_plus_path = os.path.join(work_dir, "BTE.P3_plus")
     if _exists(p3_plus_path):
-        p3_plus, total_p3_plus, _, p3_plus_n_bands = read_phase_space(p3_plus_path)
-        if p3_plus_n_bands != n_bands:
-            print(f"Warning: The number of bands from BTE.P3_plus ({p3_plus_n_bands}) does not match the number of bands from BTE.omega ({n_bands}).")
-            print(f"Using {p3_plus_n_bands} from BTE.P3_plus.")
-        write_phase_space_vs_frequency("P3_AbsorptionVsFrequency.dat", frequency, p3_plus_n_bands, p3_plus, total_p3_plus)
+        p3_plus, total_p3_plus, p3_plus_n_qpoints, p3_plus_n_bands = read_phase_space(p3_plus_path)
+        if (p3_plus_n_qpoints, p3_plus_n_bands) != (n_qpoints, n_bands):
+            print(f"WARNING! BTE.P3_plus has {p3_plus_n_qpoints} q-points and {p3_plus_n_bands} bands, "
+                  f"but BTE.omega has {n_qpoints} q-points and {n_bands} bands.")
+            print("         P3_AbsorptionVsFrequency.dat is skipped.")
+        else:
+            write_phase_space_vs_frequency("P3_AbsorptionVsFrequency.dat", frequency, n_bands, p3_plus, total_p3_plus)
 
     p3_minus_path = os.path.join(work_dir, "BTE.P3_minus")
     if _exists(p3_minus_path):
-        p3_minus, total_p3_minus, _, p3_minus_n_bands = read_phase_space(p3_minus_path)
-        if p3_minus_n_bands != n_bands:
-            print(f"Warning: The number of bands from BTE.P3_minus ({p3_minus_n_bands}) does not match the number of bands from BTE.omega ({n_bands}).")
-            print(f"Using {p3_minus_n_bands} from BTE.P3_minus.")
-        write_phase_space_vs_frequency("P3_EmissionVsFrequency.dat", frequency, p3_minus_n_bands, p3_minus, total_p3_minus)
+        p3_minus, total_p3_minus, p3_minus_n_qpoints, p3_minus_n_bands = read_phase_space(p3_minus_path)
+        if (p3_minus_n_qpoints, p3_minus_n_bands) != (n_qpoints, n_bands):
+            print(f"WARNING! BTE.P3_minus has {p3_minus_n_qpoints} q-points and {p3_minus_n_bands} bands, "
+                  f"but BTE.omega has {n_qpoints} q-points and {n_bands} bands.")
+            print("         P3_EmissionVsFrequency.dat is skipped.")
+        else:
+            write_phase_space_vs_frequency("P3_EmissionVsFrequency.dat", frequency, n_bands, p3_minus, total_p3_minus)
 
     if fourphonon:
         p4_path = os.path.join(work_dir, "BTE.P4")
         if _exists(p4_path):
-            p4, total_p4, _, p4_n_bands = read_phase_space(p4_path)
-            if p4_n_bands != n_bands:
-                print(f"Warning: The number of bands from BTE.P4 ({p4_n_bands}) does not match the number of bands from BTE.omega ({n_bands}).")
-                print(f"Using {p4_n_bands} from BTE.P4.")
-            write_phase_space_vs_frequency("P4VsFrequency.dat", frequency, p4_n_bands, p4, total_p4)
+            p4, total_p4, p4_n_qpoints, p4_n_bands = read_phase_space(p4_path)
+            if (p4_n_qpoints, p4_n_bands) != (n_qpoints, n_bands):
+                print(f"WARNING! BTE.P4 has {p4_n_qpoints} q-points and {p4_n_bands} bands, "
+                      f"but BTE.omega has {n_qpoints} q-points and {n_bands} bands.")
+                print("         P4VsFrequency.dat is skipped.")
+            else:
+                write_phase_space_vs_frequency("P4VsFrequency.dat", frequency, n_bands, p4, total_p4)
 
         p4_plusplus_path = os.path.join(work_dir, "BTE.P4_plusplus")
         if _exists(p4_plusplus_path):
-            p4_plusplus, total_p4_plusplus, _, p4_plusplus_n_bands = read_phase_space(p4_plusplus_path)
-            if p4_plusplus_n_bands != n_bands:
-                print(f"Warning: The number of bands from BTE.P4_plusplus ({p4_plusplus_n_bands}) does not match the number of bands from BTE.omega ({n_bands}).")
-                print(f"Using {p4_plusplus_n_bands} from BTE.P4_plusplus.")
-            write_phase_space_vs_frequency("P4_RecombinationVsFrequency.dat", frequency, p4_plusplus_n_bands, p4_plusplus, total_p4_plusplus)
+            p4_plusplus, total_p4_plusplus, p4_plusplus_n_qpoints, p4_plusplus_n_bands = read_phase_space(p4_plusplus_path)
+            if (p4_plusplus_n_qpoints, p4_plusplus_n_bands) != (n_qpoints, n_bands):
+                print(f"WARNING! BTE.P4_plusplus has {p4_plusplus_n_qpoints} q-points and {p4_plusplus_n_bands} bands, "
+                      f"but BTE.omega has {n_qpoints} q-points and {n_bands} bands.")
+                print("         P4_RecombinationVsFrequency.dat is skipped.")
+            else:
+                write_phase_space_vs_frequency("P4_RecombinationVsFrequency.dat", frequency, n_bands, p4_plusplus, total_p4_plusplus)
 
         # FourPhonon writes the per-mode file as BTE.P4_plusmius (sic) but its total as BTE.P4_plusminus_total
         p4_plusminus_path = os.path.join(work_dir, "BTE.P4_plusminus")
         if not os.path.exists(p4_plusminus_path):
             p4_plusminus_path = os.path.join(work_dir, "BTE.P4_plusmius")
         if _exists(p4_plusminus_path):
-            p4_plusminus, total_p4_plusminus, _, p4_plusminus_n_bands = read_phase_space(p4_plusminus_path, os.path.join(work_dir, "BTE.P4_plusminus_total"))
-            if p4_plusminus_n_bands != n_bands:
-                print(f"Warning: The number of bands from BTE.P4_plusminus ({p4_plusminus_n_bands}) does not match the number of bands from BTE.omega ({n_bands}).")
-                print(f"Using {p4_plusminus_n_bands} from BTE.P4_plusminus.")
-            write_phase_space_vs_frequency("P4_RedistributionVsFrequency.dat", frequency, p4_plusminus_n_bands, p4_plusminus, total_p4_plusminus)
+            p4_plusminus, total_p4_plusminus, p4_plusminus_n_qpoints, p4_plusminus_n_bands = read_phase_space(p4_plusminus_path, os.path.join(work_dir, "BTE.P4_plusminus_total"))
+            if (p4_plusminus_n_qpoints, p4_plusminus_n_bands) != (n_qpoints, n_bands):
+                print(f"WARNING! BTE.P4_plusminus has {p4_plusminus_n_qpoints} q-points and {p4_plusminus_n_bands} bands, "
+                      f"but BTE.omega has {n_qpoints} q-points and {n_bands} bands.")
+                print("         P4_RedistributionVsFrequency.dat is skipped.")
+            else:
+                write_phase_space_vs_frequency("P4_RedistributionVsFrequency.dat", frequency, n_bands, p4_plusminus, total_p4_plusminus)
 
         p4_minusminus_path = os.path.join(work_dir, "BTE.P4_minusminus")
         if _exists(p4_minusminus_path):
-            p4_minusminus, total_p4_minusminus, _, p4_minusminus_n_bands = read_phase_space(p4_minusminus_path)
-            if p4_minusminus_n_bands != n_bands:
-                print(f"Warning: The number of bands from BTE.P4_minusminus ({p4_minusminus_n_bands}) does not match the number of bands from BTE.omega ({n_bands}).")
-                print(f"Using {p4_minusminus_n_bands} from BTE.P4_minusminus.")
-            write_phase_space_vs_frequency("P4_SplittingVsFrequency.dat", frequency, p4_minusminus_n_bands, p4_minusminus, total_p4_minusminus)
+            p4_minusminus, total_p4_minusminus, p4_minusminus_n_qpoints, p4_minusminus_n_bands = read_phase_space(p4_minusminus_path)
+            if (p4_minusminus_n_qpoints, p4_minusminus_n_bands) != (n_qpoints, n_bands):
+                print(f"WARNING! BTE.P4_minusminus has {p4_minusminus_n_qpoints} q-points and {p4_minusminus_n_bands} bands, "
+                      f"but BTE.omega has {n_qpoints} q-points and {n_bands} bands.")
+                print("         P4_SplittingVsFrequency.dat is skipped.")
+            else:
+                write_phase_space_vs_frequency("P4_SplittingVsFrequency.dat", frequency, n_bands, p4_minusminus, total_p4_minusminus)
 
     w_isotopic_path = os.path.join(work_dir, "BTE.w_isotopic")
     if _exists(w_isotopic_path):
