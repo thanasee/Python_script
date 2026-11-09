@@ -225,7 +225,7 @@ def check_stability_2d(elastic_2d, factor_2d):
         print("This material is mechanically stable.")
     else:
         print("This material is mechanically unstable!!")
-        exit(0)
+        exit(1)
 
 
 def compute_directional_properties_2d(elastic_2d):
@@ -523,7 +523,7 @@ def check_stability_3d(elastic_3d):
         print("This material is mechanically stable.")
     else:
         print("This material is mechanically unstable!!")
-        exit(0)
+        exit(1)
 
 
 def compute_mechanical_properties_3d(elastic_3d, structure):
