@@ -24,6 +24,25 @@ This script was developed by Thanasee Thanasarnsurapong.
     exit(0)
 
 
+_ELEMENT_SYMBOLS = [
+    "H",  "He", "Li", "Be", "B",  "C",  "N",  "O",
+    "F",  "Ne", "Na", "Mg", "Al", "Si", "P",  "S",
+    "Cl", "Ar", "K",  "Ca", "Sc", "Ti", "V",  "Cr",
+    "Mn", "Fe", "Co", "Ni", "Cu", "Zn", "Ga", "Ge",
+    "As", "Se", "Br", "Kr", "Rb", "Sr", "Y",  "Zr",
+    "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", "Cd",
+    "In", "Sn", "Sb", "Te", "I",  "Xe", "Cs", "Ba",
+    "La", "Ce", "Pr", "Nd", "Pm", "Sm", "Eu", "Gd",
+    "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu", "Hf",
+    "Ta", "W",  "Re", "Os", "Ir", "Pt", "Au", "Hg",
+    "Tl", "Pb", "Bi", "Po", "At", "Rn", "Fr", "Ra",
+    "Ac", "Th", "Pa", "U",  "Np", "Pu", "Am", "Cm",
+    "Bk", "Cf", "Es", "Fm", "Md", "No", "Lr", "Rf",
+    "Db", "Sg", "Bh", "Hs", "Mt", "Ds", "Rg", "Cn",
+    "Nh", "Fl", "Mc", "Lv", "Ts", "Og"
+]
+
+
 def read_kappa(file, key, threshold=None, abs_value=False):
     """Read a dataset from an open HDF5 file and optionally suppress numerical noise.
 
@@ -234,7 +253,7 @@ def write_contribution_vs_temperature(filepath, contribute, temperature):
         Temperature values in K.
     """
     with open(filepath, 'w') as o:
-        o.write("# Thermal conductivity(W/m-K) vs Temperature\n")
+        o.write("# Contributed thermal conductivity(%) vs Temperature\n")
         for band_index in range(contribute.shape[1]):
             o.write(f"\n# Band-Index: {band_index + 1}\n")
             o.write(TENSOR_HEADER + "\n")
@@ -742,28 +761,30 @@ def read_POSCAR(filepath):
         exit(1)
 
     # Detect VASP4 vs VASP5 format by checking whether line 6 starts with a number.
-    # VASP4 has no element-symbol line, so the user is prompted for species names.
-    elements = []
+    # VASP4 has no element-symbol line: species are read from POTCAR, else prompted.
     is_number = lines[5].split()[0].isdecimal()
     if is_number:
-        # VASP4 format: no element line -> prompt user
-        for i in range(len(lines[5].split())):
-            while True:
-                name = input(f"Enter the name of species No. {i + 1:>3}: ").strip()
-                if name.isalpha():
-                    break
-                else:
-                    print("The name of species must be alphabetic characters only.")
-            elements.append(name)
+        # VASP4 format: no element line -> try POTCAR, else prompt user
         atom_counts = [int(x) for x in lines[5].split()]
+        potcar_path = os.path.join(os.path.dirname(os.path.abspath(filepath)), "POTCAR")
+        elements = read_POTCAR(potcar_path)
+        if elements is None or len(elements) != len(atom_counts):
+            elements = [None] * len(atom_counts)
+            while None in elements:
+                missing = [i for i, e in enumerate(elements) if e is None]
+                names = input(f"Enter the name of species No. {missing[0] + 1:>3}: ").strip().split()
+                for name, idx in zip(names, missing):
+                    if name in _ELEMENT_SYMBOLS:
+                        elements[idx] = name
+                    else:
+                        print("The name of species must be a valid element symbol.")
         selective_dynamics = lines[6].lower().startswith('s')
         position_start = 8 if selective_dynamics else 7
     else:
         # VASP5 format: element symbols present.
         # Strip potential PAW/GGA suffixes such as '_pv' or '/GGA'.
-        raw_elements = lines[5].split()
-        for name in raw_elements:
-            elements.append(name.split('/')[0].split('_')[0])
+        names = lines[5].split()
+        elements = [name.split('/')[0].split('_')[0] for name in names]
         atom_counts = [int(x) for x in lines[6].split()]
         selective_dynamics = lines[7].lower().startswith('s')
         position_start = 9 if selective_dynamics else 8
@@ -846,6 +867,30 @@ def cartesian_to_direct(lattice_matrix, positions_cartesian):
     return positions_direct
 
 
+def read_POTCAR(filepath):
+    """Read element symbols from a POTCAR file's TITEL lines.
+
+    Parameters
+    ----------
+    filepath : str
+        Path to the POTCAR file.
+
+    Returns
+    -------
+    elements : list[str] or None
+        Element symbols in POTCAR order (PAW suffixes stripped), or None
+        if the POTCAR file does not exist.
+    """
+    if not os.path.exists(filepath):
+        elements = None
+        return elements
+
+    with open(filepath, 'r') as f:
+        names = [line.split()[3] for line in f if line.strip().startswith('TITEL')]
+    elements = [name.split('/')[0].split('_')[0] for name in names]
+    return elements
+
+
 VDW_RADIUS = {
     'H':  1.20, 'He': 1.43, 'Li': 2.12, 'Be': 1.98, 'B':  1.91, 'C':  1.77,
     'N':  1.66, 'O':  1.50, 'F':  1.46, 'Ne': 1.58, 'Na': 2.50, 'Mg': 2.51,
@@ -917,6 +962,9 @@ def compute_2d_thickness(poscar):
     z_range = projected[idx_top] - projected[idx_bot]
 
     # vdW radii; fall back to 2.00 Å if element not in table
+    for element in dict.fromkeys((species[idx_top], species[idx_bot])):
+        if element not in VDW_RADIUS:
+            print(f"REMIND! No Alvarez vdW radius for {element}. Using 2.00 Angstrom.")
     r_top = VDW_RADIUS.get(species[idx_top], 2.00)
     r_bot = VDW_RADIUS.get(species[idx_bot], 2.00)
 
