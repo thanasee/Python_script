@@ -32,6 +32,7 @@ All scripts are standalone Python tools operated via command-line arguments and 
 - matplotlib
 - ASE — Atomic Simulation Environment
 - SciPy
+- spglib
 - hiPhive
 - Phonopy/Phono3py
 
@@ -143,13 +144,13 @@ Usage: convergePhono3py.py
 
 Automatically scans for all `kappa-m*.hdf5` files, sorts them by mesh number, and writes convergence data. Supports the Phono3py `--br` and `--lbte` calculation modes. The target temperature is prompted once and reused for every file with the same temperature grid.
 
-**2D renormalization:** Before the HDF5 files are read, the script interactively prompts for dimensionality (1 = 3D, 2 = 2D). For 2D materials, all κ<sub>L</sub> values are multiplied by c<sub>proj</sub> / t<sub>eff</sub>, where c<sub>proj</sub> is the projection of c onto the ab-plane normal and t<sub>eff</sub> is the atomic span along that normal plus the Alvarez vdW radii of the outermost atoms. Reads `POSCAR` from the working directory, or asks for a path if it is missing (falls back to 3D if the path does not exist). Units remain W/(m·K) throughout.
+**2D renormalization:** Before the HDF5 files are read, the script interactively prompts for dimensionality (1 = 3D, 2 = 2D). For 2D materials, all κ<sub>L</sub> values are multiplied by c<sub>proj</sub> / t<sub>eff</sub>, where c<sub>proj</sub> is the projection of c onto the ab-plane normal and t<sub>eff</sub> is the atomic span along that normal plus the Alvarez vdW radii of the outermost atoms. Reads `POSCAR` from the working directory, or asks for a path if it is missing (falls back to 3D if the path does not exist). Units remain W/(m·K) throughout. The factor and thickness are written as a `#` comment line in the header of every `*VsMesh.dat` file.
 
 **Output files** (columns: Q<sub>x</sub>, Q<sub>y</sub>, Q<sub>z</sub>, xx, yy, zz, yz, xz, xy):
 - `KappaVsMesh.dat` — κ<sub>L</sub> vs. q-mesh
 - `Kappa_RTAVsMesh.dat` — RTA κ<sub>L</sub> vs. q-mesh (--lbte only)
 - `Kappa_intraVsMesh.dat` / `Kappa_interVsMesh.dat` — intra-band and inter-band κ<sub>L</sub> vs. q-mesh (--br --tt njc23/ibdb19/smm19 only)
-- `Kappa_intra_exactVsMesh.dat` / `Kappa_intra_RTAVsMesh.dat` / `Kappa_interVsMesh.dat` — intra-band (exact and RTA) and inter-band κ<sub>L</sub> vs. q-mesh (--lbte --tt njc23/ibdb19/smm19 only); `KappaVsMesh.dat` holds the total (intra exact + inter) and `Kappa_RTAVsMesh.dat` is not written
+- `Kappa_intra_exactVsMesh.dat` / `Kappa_intra_RTAVsMesh.dat` / `Kappa_interVsMesh.dat` — intra-band (exact and RTA) and inter-band κ<sub>L</sub> vs. q-mesh (--lbte --tt njc23/ibdb19/smm19 only). As in `analyzePhono3py.py`, every dataset is written as stored: phono3py fills `kappa` and `kappa_RTA` with the intra-band terms only, so `KappaVsMesh.dat` / `Kappa_RTAVsMesh.dat` hold those, with no derived total
 
 ---
 
@@ -183,7 +184,7 @@ Output filenames follow the pattern `<tag>-mXXXXXX.dat`, where the mesh token is
 - `PqjVsFrequency.dat` — averaged phonon-phonon interaction strength (eV<sup>2</sup>) vs. frequency (--full-pp)
 - `Renorm2D_info.dat` — 2D renormalization factor and thickness (2D only)
 
-**Per-temperature spectral files** (one file per temperature, written to subdirectories `T<value>K/`):
+**Per-temperature spectral files** (one file per temperature, written to subdirectories `T<value>K/`, where `<value>` keeps phono3py's float temperature, e.g. `T300.0K`):
 - `GammaVsFrequency.dat` / `TauVsFrequency.dat` — scattering rate Γ (ps<sup>–1</sup>) and lifetime τ (ps) vs. frequency
 - `KappaVsFrequency.dat` / `KappaVsMfp.dat` — mode κ<sub>L</sub> vs. phonon frequency (THz) and vs. mean free path (Å)
 - `cumulative_KappaVsFrequency.dat` / `cumulative_KappaVsMfp.dat` — cumulative κ<sub>L</sub> sorted by ascending frequency and MFP
@@ -223,7 +224,7 @@ Repeated element blocks in the POSCAR (e.g. S Mo S) are merged into unique eleme
 
 #### `analyzeShengBTE.py`
 
-Extracts thermal transport properties from [ShengBTE](https://www.shengbte.org/) output files and writes output files suitable for plotting in xmgrace or matplotlib. If `4ph` is specified, all [FourPhonon](https://github.com/FourPhonon/FourPhonon) four-phonon scattering quantities are also extracted. Run from the ShengBTE output directory.
+Extracts thermal transport properties from [ShengBTE](https://www.shengbte.org/) output files and writes output files suitable for plotting in xmgrace or matplotlib. If `4ph` is specified, all [FourPhonon](https://github.com/FourPhonon/FourPhonon) four-phonon scattering quantities are also extracted. Run from the ShengBTE output directory. Any argument whose first character is not `4` (e.g. `3ph`, `3`) runs in 3-phonon mode.
 
 ```
 Usage: analyzeShengBTE.py <3ph/4ph>
@@ -282,6 +283,8 @@ Usage: calDistance.py <POSCAR>
 
 Modes 1 and 2, and the reference atom in mode 3, take a single atom index. The molecule group in mode 3 and the substrate/adsorbent groups in mode 4 use free-format selection by index, range (e.g., `1-4`), or element symbol; `all` is accepted in mode 3 but not in mode 4.
 
+**Repeated element blocks:** If the POSCAR repeats an element block (e.g. `Mo S Mo S`), the element order is prompted and atoms are regrouped by element before any selection. Atom indexes and labels in all modes then follow the regrouped order, not the input file. A `REMIND!` is printed and the regrouped structure is written to `MAPPED.vasp` (same coordinate mode and Selective Dynamics as the input), so the indexes can be looked up.
+
 ---
 
 #### `vaspVibration.py`
@@ -297,6 +300,8 @@ Usage: vaspVibration.py <structure file> <OUTCAR or phonopy YAML> [scaling facto
 - VASP OUTCAR (Γ block): modes written in descending frequency order (VASP convention); NWRITE = 3 output is supported
 - VASP phonon dispersion (LPHON_DISPERSION): read from OUTCAR (PHON_NWRITE = -3; the structure file is the supercell POSCAR of the run) or from vaspout.h5 (any PHON_NWRITE; the primitive cell is read from the file). If the OUTCAR has both the Γ block and the dispersion, the user is prompted to choose. Modes written in ascending frequency order
 - Phonopy YAML: modes written in ascending frequency order (Phonopy convention); the file must contain eigenvectors (`--eigenvectors`)
+
+**Output:** one `mode_<N>.xsf` file per mode (`<N>` zero-padded).
 
 **q-point selection (YAML and VASP dispersion):** Candidates are the high-symmetry q-points of the path (segment ends for band.yaml; path ends, segment ends and kinks for VASP, labeled from QPOINTS if present), or every q-point for mesh.yaml/qpoints.yaml. Duplicates are removed, and if more than one remains, the script prompts for one. Phonopy eigenvectors get the Bloch phase exp(2πi q·r); VASP eigenvectors already refer to each ion's stored cell, so ions outside the cell are wrapped with the matching phase. Eigenvectors are divided by √m, and a warning is printed if they are still complex (e.g. K or general q-points).
 
@@ -316,13 +321,15 @@ Reads a VASP `POSCAR` and `OUTCAR` to compute mechanical properties for either 2
 Usage: vaspMechanics.py <POSCAR> <OUTCAR>
 ```
 
+**Stability check:** Both modes check mechanical stability (all eigenvalues of the elastic tensor positive). An unstable structure stops the script with exit status 1 right after `Elastic.dat` is written, so the remaining files are not produced (2D: `Young.dat`, `Poisson.dat`, `Shear.dat`, `Extreme.dat`; 3D: `Mechanics.dat`, `Anisotropy.dat`).
+
 **2D mode** (N/m units):
 - Detects lattice type: hexagonal, square, rectangular, or oblique
 - Computes angle-dependent Young's modulus E(θ), Poisson's ratio ν(θ), and shear modulus G(θ) using compliance tensor rotation
 - **Output:** `Elastic.dat`, `Young.dat`, `Poisson.dat`, `Shear.dat`, `Extreme.dat` (max/min E, ν, G and their angles)
 
 **3D mode** (GPa units):
-- Identifies crystal system from spacegroup number via ASE
+- Identifies crystal system from spacegroup number via ASE (requires spglib)
 - Computes Voigt, Reuss, and Hill (VRH) averages for bulk and shear moduli
 - Derives Young's modulus, Poisson's ratio, P-wave modulus, Lamé parameter, Pugh's ratio
 - Computes sound velocities (transverse, longitudinal, mean) and Debye temperature
@@ -369,7 +376,7 @@ Extracts the piezoelectric stress tensor (e, C/m<sup>2</sup>) and elastic stiffn
 Usage: vaspPiezoelectric.py <POSCAR> <OUTCAR>
 ```
 
-Supports both 2D materials (with vacuum-layer thickness correction) and 3D bulk materials.
+Supports both 2D materials (with vacuum-layer thickness correction) and 3D bulk materials. Mechanical stability of C is checked (eigenvalue positivity); an unstable tensor stops the script with exit status 1.
 
 **Piezoelectric stress tensor:** The electronic part (`PIEZOELECTRIC TENSOR (including local field effects)`) is always read. If the ionic part (`PIEZOELECTRIC TENSOR IONIC CONTR`) is also present, the script asks whether to include it: electronic + ionic (relaxed-ion) or electronic only (clamped-ion). Without the ionic part, e is clamped-ion. The choice is written in the output file headers.
 
@@ -388,7 +395,7 @@ Plots polar diagrams of angle-dependent mechanical properties (Young's modulus, 
 Usage: plotMechanics.py <file1> [file2 ... file6]
 ```
 
-Input files are the `.dat` output files from `vaspMechanics.py` (2D mode) or `ElasticTensor2D.py`; the axis unit is fixed to N/m, so the script is for 2D materials. Auxetic materials (negative Poisson's ratio) are handled by plotting |ν| as a dashed envelope. Output is saved as a 300 dpi PNG.
+Input files are the `.dat` output files from `vaspMechanics.py` (2D mode) or `ElasticTensor2D.py`; the axis unit is fixed to N/m, so the script is for 2D materials. Auxetic materials (negative Poisson's ratio) are handled by plotting |ν| as a dashed envelope. Output is saved as a 300 dpi PNG named after the chosen property: `Young.png`, `Poisson.png`, or `Shear.png`. All input files are checked first; a missing file stops the script with an `ERROR!` before any prompt.
 
 ---
 
@@ -434,7 +441,7 @@ Usage: vaspDefect.py <input POSCAR> <output POSCAR>
 
 **Defect type 3 — Interstitial:** Inserts one new atom at a user-defined site. Two site modes: (1) mean fractional coordinate of ≥2 selected atoms with PBC unwrapping; (2) manual fractional (a, b, c) input. The new atom is inserted after the last atom of matching species, or appended if the element is new. Default Selective Dynamics flag: T T T.
 
-**Defect type 4 — Displacement:** Moves selected atoms to a new XY position while preserving their fractional c coordinate. Atoms eligible for displacement are auto-detected as those above a threshold Z, where the threshold is the midpoint of the largest gap in sorted Cartesian Z values. The target XY is defined by: (1) centroid of selected reference atoms with PBC unwrapping (1 atom = on-top, 2+ atoms = center); or (2) manual fractional (a, b) input. A single displaced atom is moved directly to the target XY; multiple atoms receive a rigid XY shift so their centroid lands at the target.
+**Defect type 4 — Displacement:** Moves selected atoms to a new XY position while keeping their Z coordinate (the same as keeping fractional c only when a and b lie in the xy-plane). Atoms eligible for displacement are auto-detected as those above a threshold Z, where the threshold is the midpoint of the largest gap in sorted Cartesian Z values. The target XY is defined by: (1) centroid of selected reference atoms with PBC unwrapping (1 atom = on-top, 2+ atoms = center); or (2) manual fractional (a, b) input. A single displaced atom is moved directly to the target XY; multiple atoms receive a rigid XY shift so their centroid lands at the target.
 
 ---
 
@@ -501,13 +508,13 @@ The rotated atoms are unwrapped across periodic boundaries (minimum-image conven
 
 #### `vaspFix.py`
 
-Applies Selective Dynamics constraints to a VASP POSCAR, fixing atoms in specified Cartesian directions.
+Applies Selective Dynamics constraints to a VASP POSCAR, fixing selected atoms along chosen directions.
 
 ```
 Usage: vaspFix.py <POSCAR> <output POSCAR>
 ```
 
-Three atom-selection modes: by index/label; by cutoff radius, which fixes the atoms outside the radius from the PBC-unwrapped centroid of selected reference atoms (minimum-image distances); or from an existing `FIXED_ATOMS_LIST` file. Writes a `FIXED_ATOMS_LIST` log (atoms in output POSCAR order) for reference and reuse.
+Three atom-selection modes: by index/label; by cutoff radius, which fixes the atoms outside the radius from the PBC-unwrapped centroid of selected reference atoms (minimum-image distances); or from an existing `FIXED_ATOMS_LIST` file. Writes a `FIXED_ATOMS_LIST` log (atoms in output POSCAR order) for reference and reuse. The direction prompt follows the input: lattice directions a/b/c for a Direct POSCAR, Cartesian x/y/z for a Cartesian POSCAR; 1/2/3 always set the 1st/2nd/3rd flag. VASP applies the flags along the lattice vectors, so x/y/z equal a/b/c only when the lattice vectors lie along the Cartesian axes (e.g. c ∥ z in a slab).
 
 ---
 
@@ -552,7 +559,7 @@ The script detects the 2D Bravais lattice type (hexagonal, square, rectangular, 
 - **Rotations** (in-plane, about the layer centroid): hexagonal R<sub>0</sub>/R<sub>60</sub>/R<sub>120</sub>/R<sub>180</sub>; square R<sub>0</sub>/R<sub>90</sub>/R<sub>180</sub>; rectangular and oblique R<sub>0</sub>/R<sub>180</sub>
 - **Flips:** hexagonal and oblique F<sub>0</sub>/F<sub>z</sub>; square F<sub>0</sub>/F<sub>z</sub>/F<sub>x</sub>/F<sub>xy</sub>; rectangular F<sub>0</sub>/F<sub>z</sub>/F<sub>x</sub>/F<sub>y</sub>/F<sub>xy</sub>
 
-**Interlayer gap:** Computed from the sum of van der Waals radii of the two atoms facing each other across the interface (highest-z atom of the bottom layer, lowest-z atom of the top layer). The bilayer is centered at 0.5 along c. The element order of the combined bilayer is prompted once (empty input keeps the input order).
+**Interlayer gap:** Computed from the sum of the Alvarez van der Waals radii of the two atoms facing each other across the interface (highest-z atom of the bottom layer, lowest-z atom of the top layer). It is recomputed after each flip, so a z-flipped Janus layer (e.g. MoSSe) gets the gap of its new facing pair. The bilayer is centered at 0.5 along c. The element order of the combined bilayer is prompted once (empty input keeps the input order).
 
 **Output:** One POSCAR per configuration in `<i>_<flip>_<rot>_<stack>/POSCAR` (index zero-padded, e.g. `01_F0_R0_AA`), plus `STACK_LIST.dat` listing each configuration's index, flip, rotation, stacking label, fractional shift, and directory path.
 
@@ -579,7 +586,7 @@ Providing one POSCAR builds a homobilayer (both layers identical); providing two
 
 **Candidate selection and generation:** The candidate table is displayed interactively; selection accepts individual indices, `'all'`, or `'none'`. For each selected candidate, one POSCAR is written per high-symmetry stacking configuration (lattice-type-dependent shift grid: hexagonal, square, rectangular, or oblique), to `<index>_<theta>_<atoms>/<shift_no>_<stacking_label>/POSCAR`, where `<index>` is the candidate number in the table and in `TWIST_LIST.dat` (zero-padded).
 
-**Interlayer gap:** Computed from the sum of van der Waals radii of the two atoms facing each other across the interface (highest-z atom of the bottom layer, lowest-z atom of the top layer); falls back to 3.5 Å with a warning if either element's radius is unknown.
+**Interlayer gap:** Computed from the sum of the Alvarez van der Waals radii of the two atoms facing each other across the interface (highest-z atom of the bottom layer, lowest-z atom of the top layer).
 
 **Strain metric:** Lagrangian finite strain computed via metric-tensor Cholesky decomposition, used as a hard filter for heterobilayer candidates and a zero-sanity-check for homobilayer (CSL) candidates.
 
@@ -598,7 +605,7 @@ Usage: vaspAdsorb.py <substrate POSCAR> <adsorbent POSCAR> <output POSCAR>
 
 **Mode 2 — ring around a target atom:** Places N copies evenly distributed at angular intervals of 2π/N around each chosen substrate atom (e.g. a decorating ion) using Rodrigues z-axis rotation. Supports multiple target atoms; the user specifies the number of targets and selects each one sequentially. The placement side (top or bottom) is auto-detected from the target atom z position relative to the substrate mean z; if the target lies within 0.01 Å of the mean (e.g. a flat monolayer), the user is prompted to choose the side. For each target, the user selects the initial adsorption direction (by atom selection or custom fractional coordinates). The adsorbent's lowest atom (top) or highest atom (bottom) is aligned with the target atom's height, and the radial distance from the target atom is set by the distance input.
 
-**Automatic distance:** A negative distance switches to an automatic distance equal to the sum of the van der Waals radii of the two facing atoms (3.0 Å for an element without a tabulated radius). In mode 1 these are the outermost substrate atom on the chosen side and the adsorbent atom facing it, and the result is used as the vertical distance. In mode 2 they are the target atom and the adsorbent atom facing it, and the result is used as the radial distance. The value is computed per copy (mode 1) or per target (mode 2) and printed.
+**Automatic distance:** A negative distance switches to an automatic distance equal to the sum of the van der Waals radii of the two facing atoms (Alvarez radii; see Design Conventions). In mode 1 these are the outermost substrate atom on the chosen side and the adsorbent atom facing it, and the result is used as the vertical distance. In mode 2 they are the target atom and the adsorbent atom facing it, and the result is used as the radial distance. The value is computed per copy (mode 1) or per target (mode 2) and printed.
 
 If either POSCAR has Selective Dynamics, flags are merged, and the other structure defaults to all-T. If neither has Selective Dynamics, the user is prompted after placement to optionally add constraints, with free-format atom and direction selection. A summary table of atom counts per element (substrate/adsorbent/total) is printed at the end.
 
@@ -661,7 +668,7 @@ Converts VASP's `ML_AB` binary training data file to extended XYZ (`.extxyz`) fo
 Usage: mlab2extxyz.py <ML_AB input> <output.extxyz>
 ```
 
-Each configuration block is mapped to one extxyz frame with lattice, positions, energy, forces, and stress. Stress is converted from kbar to eV/Å<sup>3</sup> and sign-flipped, since VASP reports compressive stress as positive while the extxyz (ASE) convention reports it as negative.
+Each configuration block is mapped to one extxyz frame with lattice, positions, energy, forces, and stress. Stress is converted from kbar to eV/Å<sup>3</sup> and sign-flipped, since VASP reports compressive stress as positive while the extxyz (ASE) convention reports it as negative. Each configuration is read only from its own block; a section missing from a configuration stops the script with an `ERROR!` naming that configuration.
 
 ---
 
@@ -690,7 +697,7 @@ Merges multiple VASP `ML_AB` training data files into a single unified file, uni
 Usage: mergeMLAB.py <ML_AB 1> <ML_AB 2> [ML_AB 3 ...] <output ML_AB>
 ```
 
-Resolves header metadata conflicts (reference energies, atomic masses) by first-file-wins with a warning for mismatches.
+Resolves header metadata conflicts (reference energies, atomic masses) by first-file-wins with a warning for mismatches. If only some input configurations carry CTIFOR, CTIFOR is dropped from all of them. If the basis sets of the inputs do not match, a warning recommends `ML_MODE = select` to rebuild them.
 
 ---
 
@@ -718,7 +725,7 @@ Each intermediate image is optimized on the IDPP surface on its own, without spr
 #### `analyzeNEB.py`
 **Inspired by:** [VTST scripts](https://theory.cm.utexas.edu/vtsttools/scripts.html)
 
-Analyzes a completed VASP NEB run from the current directory. Automatically detects image directories matching the two-digit pattern (`00`, `01`, ...) and auto-detects SSNEB mode (LNEBCELL = .TRUE. in `01/OUTCAR`).
+Analyzes a completed VASP NEB run from the current directory. Automatically detects image directories matching the two-digit pattern (`00`, `01`, ...) and auto-detects SSNEB mode (LNEBCELL = .TRUE. in `01/OUTCAR`). The endpoint folders (`00` and the last image) must contain `OUTCAR`; the script exits if either is missing
 
 ```
 Usage: analyzeNEB.py [nj]
@@ -837,7 +844,7 @@ Builds an initial `MAGMOM` tag from a POSCAR/CONTCAR's element composition and w
 Usage: vaspMagmom.py <POSCAR>
 ```
 
-Reads the structure via the toolkit's shared VASP4/5 POSCAR parser. For a VASP4-format file without the element-symbol line, element names are read from `POTCAR` in the same directory as the POSCAR; the user is prompted only if `POTCAR` is missing or its species count does not match. Per-atom moments are expanded in POSCAR atom order and run-length-encoded into VASP's `count*value` shorthand, grouped by (element, value) so different elements are never merged (e.g. `3*5.0 2*0.6`).
+Reads the structure with the toolkit's standard VASP4/5 POSCAR parser (copied into each script). For a VASP4-format file without the element-symbol line, element names are read from `POTCAR` in the same directory as the POSCAR; the user is prompted only if `POTCAR` is missing or its species count does not match. Per-atom moments are expanded in POSCAR atom order and run-length-encoded into VASP's `count*value` shorthand, grouped by (element, value) so different elements are never merged (e.g. `3*5.0 2*0.6`).
 
 **Single-atom override:** If an element's bulk default is 0.6 and the structure contains only one atom of it (e.g. a single adsorbate or dopant), its free-atom unpaired-electron count (Hund's rule) is used instead.
 
@@ -855,6 +862,9 @@ All scripts follow the same conventions:
 - `main()` entry point with `if __name__ == '__main__'` guard
 - Interactive input loops with validation and retry on invalid input; `readline` (stdlib) is imported in all scripts that use `input()` to enable arrow-key navigation and line editing at prompts
 - Handles VASP4 (no element line), VASP5, and VASP6 (with Hash code) POSCAR formats
+- VASP4 input: element names are read from `POTCAR` in the POSCAR's directory; the user is prompted only if `POTCAR` is missing or its species count does not match
+- van der Waals radii — 2D thickness (`convergePhono3py.py`, `analyzePhono3py.py`, `poscar2control.py`) and interlayer/adsorption distances (`vaspStack.py`, `vaspTwist.py`, `vaspAdsorb.py`) — all come from one table: S. Alvarez, *Dalton Trans.* **42**, 8617 (2013), H–Rn. Elements beyond Rn use 2.00 Å with a `REMIND!` message
+- Messages: `ERROR!` stops the script with exit status 1 (as does a mechanically unstable structure); `WARNING!` reports a problem and continues; `REMIND!` notes a default or assumption the user should know about
 - Handles Selective Dynamics, anisotropic scale factors, and non-orthogonal cells
 - Atom-label comments (e.g., `Mo001`, `S002`) in output POSCARs for VESTA/XCrySDen identification
 - Output files formatted for xmgrace (`.dat` with column headers) unless otherwise noted
