@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from sys import argv, exit
+import os
 import readline
 import numpy as np
 import matplotlib
@@ -385,6 +386,10 @@ def main():
         usage()
 
     input_files = argv[1:]
+    for filepath in input_files:
+        if not os.path.exists(filepath):
+            print(f"ERROR!\nFile: {filepath} does not exist.")
+            exit(1)
     meta = ask_property()
 
     data_type = meta["data_type"]
