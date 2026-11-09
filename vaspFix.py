@@ -677,18 +677,33 @@ def select_file(total_atoms, labels, order):
         select_file = input("Enter your FIXED_ATOMS_LIST path: ")
 
 
-def select_direction():
-    """Prompt the user to choose which Cartesian directions to fix.
+def select_direction(is_direct=True):
+    """Prompt the user to choose which directions to fix.
 
+    The prompt labels follow the input POSCAR: lattice directions (a, b, c)
+    for Direct input, Cartesian directions (x, y, z) for Cartesian input.
+    Either way, index 1/2/3 sets the 1st/2nd/3rd Selective Dynamics flag.
     Accepts free-format input: single indexes (e.g. '1'), ranges (e.g. '1-3'),
     and the keyword 'all'. Repeats the prompt on empty or out-of-range input.
 
+    Parameters
+    ----------
+    is_direct : bool — whether the input POSCAR uses Direct coordinates
+
     Returns
     -------
-    fix_coordinates : list[int] — 0-based direction indexes (0=x, 1=y, 2=z)
+    fix_coordinates : list[int] — 0-based flag column indexes (0, 1, 2)
     """
-    print("""
-Input the direction index to fix (1 to 3):
+    if is_direct:
+        print("""
+Input the lattice direction index to fix (1 to 3):
+1) a direction
+2) b direction
+3) c direction
+(Free-format input, e.g., 1 3 1-3 all)""")
+    else:
+        print("""
+Input the Cartesian direction index to fix (1 to 3):
 1) x direction
 2) y direction
 3) z direction
@@ -718,7 +733,7 @@ Input the direction index to fix (1 to 3):
             print("ERROR! Directions must be between 1 and 3. Try again.")
 
 
-def fix_mode(lattice_matrix, total_atoms, positions_cartesian, species, flags, labels, order):
+def fix_mode(lattice_matrix, total_atoms, positions_cartesian, species, flags, labels, order, is_direct=True):
     """Prompt the user to choose a fixing method and return the updated flags array.
 
     Three selection methods are available:
@@ -726,7 +741,7 @@ def fix_mode(lattice_matrix, total_atoms, positions_cartesian, species, flags, l
       2 — by cutoff radius from a centroid (calls select_radius)
       3 — read flags directly from file    (calls select_file, returns immediately)
 
-    For modes 1 and 2, the user is also asked which Cartesian directions to fix
+    For modes 1 and 2, the user is also asked which directions to fix
     via select_direction(), and the chosen atoms are set to 'F' accordingly.
 
     Parameters
@@ -738,6 +753,7 @@ def fix_mode(lattice_matrix, total_atoms, positions_cartesian, species, flags, l
     flags               : np.ndarray (N, 3) — current T/F flags to be modified
     labels              : list[str]         — per-atom labels in output order (mode 3)
     order               : list[int]         — input-POSCAR index of each atom in output order (mode 3)
+    is_direct           : bool              — whether the input POSCAR uses Direct coordinates (prompt labels)
 
     Returns
     -------
@@ -764,7 +780,7 @@ Choices of fixing atoms method
         else:
             print("ERROR!! Must choose fixing atoms method")
 
-    fix_coordinates = select_direction()
+    fix_coordinates = select_direction(is_direct)
 
     for atom in selected_atoms:
         for direction in fix_coordinates:
@@ -812,7 +828,7 @@ def main():
     flags, skip = refix(poscar["total_atoms"], poscar["selective_dynamics"], poscar["flags"])
     if not skip:
         flags = fix_mode(poscar["lattice_matrix"], poscar["total_atoms"], poscar["positions_cartesian"],
-                         poscar["species"], flags, labels, order)
+                         poscar["species"], flags, labels, order, poscar["is_direct"])
     mapping = mapping_elements(poscar["elements"], poscar["atom_counts"], poscar["positions_cartesian"],
                                poscar["positions_direct"], poscar["species"], True, flags, sort_elements)
     write_POSCAR(argv[2], poscar["lattice_matrix"], mapping["elements"], mapping["atom_counts"],
