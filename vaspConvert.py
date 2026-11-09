@@ -11,7 +11,9 @@ def usage():
     print("""
 Usage: vaspConvert.py <input> <output>
 
-This script converts VASP's input structure file to VASP5 Structure file format.
+This script toggles the coordinate mode of a VASP structure file:
+Direct input is written as Cartesian, and Cartesian input is written as Direct.
+The output is in VASP5 format.
 
 This script was developed by Thanasee Thanasarnsurapong.
 """)
@@ -375,7 +377,7 @@ def define_labels(elements, atom_counts):
 
 def write_POSCAR(filepath, lattice_matrix, elements, atom_counts, positions_cartesian,
                  positions_direct, selective_dynamics, flags, labels, direct=True):
-    """Write a VASP5-format POSCAR file with Direct coordinates.
+    """Write a VASP5-format POSCAR file, in either Direct or Cartesian coordinates.
 
     The scale factor is always written as 1.0 because lattice vectors are
     already stored in absolute Å units. Atom labels are appended as inline
