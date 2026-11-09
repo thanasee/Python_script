@@ -438,13 +438,18 @@ def convert(input_file, output_file):
 
     with open(output_file, 'w') as o:
         for config_count, start in enumerate(config_indices, start=1):
-            system_name = read_system_name(lines, start, config_count)
-            species_per_atom, n_atoms = read_species(lines, start, config_count)
-            lattice = read_lattice(lines, start, config_count)
-            positions = read_positions(lines, start, n_atoms, config_count)
-            energy = read_energy(lines, start, config_count)
-            forces = read_forces(lines, start, n_atoms, config_count)
-            stress_matrix = read_stress(lines, start, config_count)
+            # Search only inside this configuration's block, so a missing section
+            # gives an ERROR instead of silently reading the next configuration
+            stop = config_indices[config_count] if config_count < len(config_indices) else len(lines)
+            block = lines[start:stop]
+
+            system_name = read_system_name(block, 0, config_count)
+            species_per_atom, n_atoms = read_species(block, 0, config_count)
+            lattice = read_lattice(block, 0, config_count)
+            positions = read_positions(block, 0, n_atoms, config_count)
+            energy = read_energy(block, 0, config_count)
+            forces = read_forces(block, 0, n_atoms, config_count)
+            stress_matrix = read_stress(block, 0, config_count)
 
             write_config(o, config_count, system_name, n_atoms,
                          lattice, positions, forces, energy, stress_matrix,
