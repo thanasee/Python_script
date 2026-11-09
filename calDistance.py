@@ -864,7 +864,7 @@ def main():
     if '-h' in argv or '--help' in argv or len(argv) != 2:
         usage()
 
-        poscar = read_POSCAR(argv[1])
+    poscar = read_POSCAR(argv[1])
 
     # Regroup repeated element blocks (prompts for the order only if duplicates exist)
     sort_elements = check_elements(poscar["elements"])
