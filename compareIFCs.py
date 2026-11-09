@@ -108,7 +108,7 @@ def compute_residual(dft_arr, mlff_arr):
     return mlff_arr - dft_arr
 
 
-def print_summary(label, units, dft_arr, residual):
+def print_summary(label, units, residual):
     """
     Print RMSE and maximum absolute residual to stdout.
 
@@ -116,7 +116,6 @@ def print_summary(label, units, dft_arr, residual):
     ----------
     label    : str        Human-readable label for the IFC order.
     units    : str        Unit string for display (e.g. 'eV/Ang**2').
-    dft_arr  : np.ndarray DFT IFC array (unused in calculation, kept for signature consistency).
     residual : np.ndarray Residual array (MLFF - DFT).
     """
     rmse    = np.sqrt(np.mean(residual ** 2))
@@ -168,7 +167,7 @@ def process_ifc(order, dft_data, mlff_data):
     mlff_arr = mlff_data[order]
     residual = compute_residual(dft_arr, mlff_arr)
     label, units, output_file = ORDER_META[order]
-    print_summary(label, units, dft_arr, residual)
+    print_summary(label, units, residual)
     write_dat_file(output_file, label, units, dft_arr, residual)
 
 
