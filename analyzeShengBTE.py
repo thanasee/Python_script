@@ -648,6 +648,7 @@ def write_kappa_band_vs_temperature(filepath, temperature, mode_kappa_sum):
                 o.write(f"{temp:>7.1f}   {k[0]:>10.3f}  {k[1]:>10.3f}  {k[2]:>10.3f}"
                         f"  {k[3]:>10.3f}  {k[4]:>10.3f}  {k[5]:>10.3f}"
                         f"  {k[6]:>10.3f}  {k[7]:>10.3f}  {k[8]:>10.3f}\n")
+        o.write("\n")
 
 
 def read_cumulative_kappa_vs_mfp(filepath):
