@@ -372,6 +372,9 @@ def compute_2d_thickness(lattice_matrix, species, positions_cartesian, vac_idx):
     z_range = projected[idx_top] - projected[idx_bot]
  
     # vdW radii; fall back to 2.00 Å if element not in table
+    for element in dict.fromkeys((species[idx_top], species[idx_bot])):
+        if element not in VDW_RADIUS:
+            print(f"REMIND! No Alvarez vdW radius for {element}. Using 2.00 Angstrom.")
     r_top = VDW_RADIUS.get(species[idx_top], 2.00)
     r_bot = VDW_RADIUS.get(species[idx_bot], 2.00)
  
