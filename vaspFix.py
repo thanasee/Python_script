@@ -789,22 +789,27 @@ Choices of fixing atoms method
     return flags
 
 
-def write_selected(flags, labels):
+def write_selected(flags, labels, is_direct=True):
     """Write the FIXED_ATOMS_LIST file summarising the current fix status.
 
-    The file lists every atom's 1-based index, label, and T/F flags for x, y, z,
-    in output POSCAR order. It can be used as input to Mode 3 of fix_mode() in
-    a future run.
+    The file lists every atom's 1-based index, label, and its three
+    Selective Dynamics flags, in output POSCAR order. The column header
+    follows the input POSCAR: a b c for Direct input, x y z for Cartesian
+    input (the same labels as the direction prompt). It can be used as
+    input to Mode 3 of fix_mode() in a future run; the header is skipped
+    when it is read back, so either label set is accepted.
 
     Parameters
     ----------
-    flags  : np.ndarray (N, 3) — T/F flag strings per atom
-    labels : list[str]         — per-atom labels (e.g. 'Mo01', 'S003')
+    flags     : np.ndarray (N, 3) — T/F flag strings per atom
+    labels    : list[str]         — per-atom labels (e.g. 'Mo01', 'S003')
+    is_direct : bool              — whether the input POSCAR uses Direct coordinates (header labels)
     """
+    axes = "a  b  c" if is_direct else "x  y  z"
     select_file = "FIXED_ATOMS_LIST"
     with open(select_file, 'w') as o:
         o.write("#                Fix Status\n")
-        o.write("#Index   LABEL   x  y  z\n")
+        o.write(f"#Index   LABEL   {axes}\n")
         o.write("#--------------------------\n")
         for i in range(len(flags)):
             o.write(f"{i + 1:5}   {labels[i]}    {flags[i, 0]}  {flags[i, 1]}  {flags[i, 2]}\n")
@@ -834,7 +839,7 @@ def main():
     write_POSCAR(argv[2], poscar["lattice_matrix"], mapping["elements"], mapping["atom_counts"],
                  mapping["positions_cartesian"], mapping["positions_direct"], True,
                  mapping["flags"], labels)
-    write_selected(mapping["flags"], labels)
+    write_selected(mapping["flags"], labels, poscar["is_direct"])
 
 
 if __name__ == "__main__":
