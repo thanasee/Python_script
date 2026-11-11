@@ -144,7 +144,7 @@ Usage: convergePhono3py.py
 
 Automatically scans for all `kappa-m*.hdf5` files, sorts them by mesh number, and writes convergence data. Supports the Phono3py `--br` and `--lbte` calculation modes. The target temperature is prompted once and reused for every file with the same temperature grid.
 
-**2D renormalization:** Before the HDF5 files are read, the script interactively prompts for dimensionality (1 = 3D, 2 = 2D). For 2D materials, all κ<sub>L</sub> values are multiplied by c<sub>proj</sub> / t<sub>eff</sub>, where c<sub>proj</sub> is the projection of c onto the ab-plane normal and t<sub>eff</sub> is the atomic span along that normal plus the Alvarez vdW radii of the outermost atoms. Reads `POSCAR` from the working directory, or asks for a path if it is missing (falls back to 3D if the path does not exist). Units remain W/(m·K) throughout. The factor and thickness are written as a `#` comment line in the header of every `*VsMesh.dat` file.
+**2D renormalization:** Before the HDF5 files are read, the script interactively prompts for dimensionality (1 = 3D, 2 = 2D). For 2D materials, `POSCAR` is read from the working directory, or a path is asked for if it is missing (falls back to 3D if the path does not exist). The vacuum direction (a/b/c) is then prompted, and the user either accepts t<sub>eff</sub> (atomic span along the layer normal plus the Alvarez vdW radii of the two outermost atoms) or enters a thickness t (≥ the atomic span, ≤ the cell height along the normal). All κ<sub>L</sub> values are multiplied by L<sub>proj</sub> / t, where L<sub>proj</sub> is the projection of the vacuum lattice vector onto the layer normal. A layer split across the periodic boundary is handled. Units remain W/(m·K) throughout. The vacuum direction, thickness and factor are written as a `#` comment line in the header of every `*VsMesh.dat` file.
 
 **Output files** (columns: Q<sub>x</sub>, Q<sub>y</sub>, Q<sub>z</sub>, xx, yy, zz, yz, xz, xy):
 - `KappaVsMesh.dat` — κ<sub>L</sub> vs. q-mesh
@@ -166,7 +166,7 @@ Output filenames follow the pattern `<tag>-mXXXXXX.dat`, where the mesh token is
 
 **Grüneisen parameter:** If no Grüneisen file is given (or it does not exist), the script asks whether to run `phono3py --mesh <mesh> --gruneisen` in the current directory, using the mesh of the kappa file. The resulting `gruneisen.hdf5` is renamed to `gruneisen-m<mesh>.hdf5`. A Grüneisen file on a different mesh from the kappa file is skipped with a warning.
 
-**2D renormalization:** After loading the HDF5 file, the script interactively prompts for dimensionality (1 = 3D, 2 = 2D). For 2D materials, `POSCAR` is read from the working directory (a path is asked for if it is missing) and all κ<sub>L</sub> arrays are multiplied by c<sub>proj</sub> / t<sub>eff</sub> before any output is written, where c<sub>proj</sub> is the projection of c onto the ab-plane normal and t<sub>eff</sub> is the atomic span along that normal plus the Alvarez vdW radii of the two outermost atoms. Units remain W/(m·K) throughout. The factor is recorded in `Renorm2D_info.dat`.
+**2D renormalization:** After loading the HDF5 file, the script interactively prompts for dimensionality (1 = 3D, 2 = 2D). For 2D materials, `POSCAR` is read from the working directory (a path is asked for if it is missing). The vacuum direction (a/b/c) is then prompted, and the user either accepts t<sub>eff</sub> (atomic span along the layer normal plus the Alvarez vdW radii of the two outermost atoms) or enters a thickness t (≥ the atomic span, ≤ the cell height along the normal). All κ<sub>L</sub> arrays are multiplied by L<sub>proj</sub> / t before any output is written, where L<sub>proj</sub> is the projection of the vacuum lattice vector onto the layer normal. A layer split across the periodic boundary is handled. Units remain W/(m·K) throughout. The vacuum direction, thickness and factor are recorded in `Renorm2D_info.dat`.
 
 **Temperature-dependent files** (one value per temperature row, written to the working directory):
 - `KappaVsT.dat` / `Kappa_bandVsT.dat` — total κ<sub>L</sub> tensor and band decomposition (3 acoustic + 1 summed optical) vs. temperature
@@ -182,7 +182,7 @@ Output filenames follow the pattern `<tag>-mXXXXXX.dat`, where the mesh token is
 - `GruneisenVsFrequency.dat` — Grüneisen parameter vs. frequency (THz) (if a Grüneisen file is given or calculated)
 - `Gamma_isotopeVsFrequency.dat` / `Tau_isotopeVsFrequency.dat` — isotope scattering rate and lifetime vs. frequency (--isotope)
 - `PqjVsFrequency.dat` — averaged phonon-phonon interaction strength (eV<sup>2</sup>) vs. frequency (--full-pp)
-- `Renorm2D_info.dat` — 2D renormalization factor and thickness (2D only)
+- `Renorm2D_info.dat` — 2D renormalization vacuum direction, thickness and factor (2D only)
 
 **Per-temperature spectral files** (one file per temperature, written to subdirectories `T<value>K/`, where `<value>` keeps phono3py's float temperature, e.g. `T300.0K`):
 - `GammaVsFrequency.dat` / `TauVsFrequency.dat` — scattering rate Γ (ps<sup>–1</sup>) and lifetime τ (ps) vs. frequency
@@ -725,7 +725,7 @@ Each intermediate image is optimized on the IDPP surface on its own, without spr
 #### `analyzeNEB.py`
 **Inspired by:** [VTST scripts](https://theory.cm.utexas.edu/vtsttools/scripts.html)
 
-Analyzes a completed VASP NEB run from the current directory. Automatically detects image directories matching the two-digit pattern (`00`, `01`, ...) and auto-detects SSNEB mode (LNEBCELL = .TRUE. in `01/OUTCAR`). The endpoint folders (`00` and the last image) must contain `OUTCAR`; the script exits if either is missing
+Analyzes a completed VASP NEB run from the current directory. Automatically detects image directories matching the two-digit pattern (`00`, `01`, ...) and auto-detects SSNEB mode (LNEBCELL = .TRUE. in `01/OUTCAR`). The endpoint folders (`00` and the last image) must contain `OUTCAR`; the script exits if either is missing.
 
 ```
 Usage: analyzeNEB.py [nj]
@@ -864,7 +864,7 @@ All scripts follow the same conventions:
 - Handles VASP4 (no element line), VASP5, and VASP6 (with Hash code) POSCAR formats
 - VASP4 input: element names are read from `POTCAR` in the POSCAR's directory; the user is prompted only if `POTCAR` is missing or its species count does not match
 - van der Waals radii — 2D thickness (`convergePhono3py.py`, `analyzePhono3py.py`, `poscar2control.py`) and interlayer/adsorption distances (`vaspStack.py`, `vaspTwist.py`, `vaspAdsorb.py`) — all come from one table: S. Alvarez, *Dalton Trans.* **42**, 8617 (2013), H–Rn. Elements beyond Rn use 2.00 Å with a `REMIND!` message
-- Messages: `ERROR!` stops the script with exit status 1 (as does a mechanically unstable structure); `WARNING!` reports a problem and continues; `REMIND!` notes a default or assumption the user should know about
+- Messages: `ERROR!` on a fatal problem stops the script with exit status 1 (as does a mechanically unstable structure), and at an interactive prompt it asks again; `WARNING!` reports a problem and continues; `REMIND!` notes a default or assumption the user should know about
 - Handles Selective Dynamics, anisotropic scale factors, and non-orthogonal cells
 - Atom-label comments (e.g., `Mo001`, `S002`) in output POSCARs for VESTA/XCrySDen identification
 - Output files formatted for xmgrace (`.dat` with column headers) unless otherwise noted
