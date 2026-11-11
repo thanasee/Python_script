@@ -910,51 +910,80 @@ VDW_RADIUS = {
 }
 
 
-def compute_2d_thickness(poscar):
+def get_direction(prompt):
+    """Prompt the user to select a lattice direction (a, b, or c).
+
+    Parameters
+    ----------
+    prompt : str — label describing the direction role (e.g. 'vacuum')
+
+    Returns
+    -------
+    idx : int — 0-based axis index (0=a, 1=b, 2=c)
+    """
+
+    print(f"""
+Input the direction index of {prompt} direction (1 to 3):
+1) a direction
+2) b direction
+3) c direction""")
+    while True:
+        try:
+            idx = int(input()) - 1
+            if 0 <= idx < 3:
+                return idx
+            print("ERROR! Directions must be between 1 and 3. Try again.")
+        except ValueError:
+            print("ERROR! Must enter a number. Try again.")
+
+
+def compute_2d_thickness(poscar, vac_idx):
     """Compute the effective 2D layer thickness using Alvarez vdW radii.
 
-    Atomic positions are projected onto the unit normal of the ab-plane to
-    correctly handle non-orthogonal cells where the c vector is tilted.
-    The renormalization factor accounts for this tilt.
+    Heights are measured along the unit normal of the plane spanned by the two
+    periodic lattice vectors, so a tilted vacuum vector is handled. The largest
+    gap between atoms along vac_idx is taken as the vacuum, so a layer split
+    across the periodic boundary is measured correctly.
 
     Thickness formula:
         t_eff = z_range + r_vdW_top + r_vdW_bottom
 
     Renormalization factor:
-        factor_2d = (c · n̂) / t_eff
-        where n̂ = (a × b) / |a × b|  (unit normal to the ab-plane)
+        factor_2d = L_proj / t_eff
+        where L_proj = |L_vac · n̂| and n̂ is the unit normal to the periodic plane.
 
     Parameters
     ----------
-    poscar : dict
-        Dictionary returned by read_POSCAR().
+    poscar  : dict — dictionary returned by read_POSCAR()
+    vac_idx : int  — axis index of the vacuum direction (0=a, 1=b, 2=c)
 
     Returns
     -------
-    factor_2d   : float
-        Renormalization factor: kappa_2D = kappa_phono3py * factor_2d.
-    t_eff       : float
-        Effective layer thickness in Å (z_range + r_vdW_top + r_vdW_bottom).
-    c_proj      : float
-        Projection of the c vector onto the ab-plane normal in Å.
-    z_range     : float
-        Distance between outermost atomic planes along the normal in Å.
-    projected   : ndarray, shape (nAtom,)
-        Projected position of each atom along the ab-plane normal.
+    factor_2d : float             — L_proj / t_eff
+    t_eff     : float             — effective layer thickness in Å
+    c_proj    : float             — L_proj, projection of the vacuum lattice vector onto the normal in Å
+    z_range   : float             — atomic span along the normal in Å
+    projected : ndarray (nAtom,)  — atomic heights along the normal in Å, from the bottom atom
     """
-    lattice_matrix      = poscar["lattice_matrix"]
-    species             = poscar["species"]
-    positions_cartesian = poscar["positions_cartesian"]
+    lattice_matrix   = poscar["lattice_matrix"]
+    species          = poscar["species"]
+    positions_direct = poscar["positions_direct"]
 
-    # Unit normal to the ab-plane
-    area_vector = np.cross(lattice_matrix[0], lattice_matrix[1])
+    # Unit normal to the periodic plane
+    in_plane    = [i for i in range(3) if i != vac_idx]
+    area_vector = np.cross(lattice_matrix[in_plane[0]], lattice_matrix[in_plane[1]])
     vector_n    = area_vector / np.linalg.norm(area_vector)
 
-    # Projection of c onto the normal (scalar thickness of the periodic cell)
-    c_proj = np.abs(lattice_matrix[2] @ vector_n)
+    # Projection of the vacuum lattice vector onto the normal (height of the periodic cell)
+    c_proj = np.abs(lattice_matrix[vac_idx] @ vector_n)
 
-    # Project all atomic positions onto the normal
-    projected = positions_cartesian @ vector_n
+    # Heights along the normal: only the vacuum vector has a normal component.
+    # Start from the atom above the largest gap (the vacuum) to unwrap the layer.
+    frac   = positions_direct[:, vac_idx] % 1.0
+    order  = np.sort(frac)
+    gaps   = np.diff(np.append(order, order[0] + 1.0))
+    bottom = order[(np.argmax(gaps) + 1) % len(order)]
+    projected = ((frac - bottom) % 1.0) * c_proj
 
     # Identify outermost atoms
     idx_top = np.argmax(projected)
@@ -977,22 +1006,24 @@ def compute_2d_thickness(poscar):
 def ask_dimensionality():
     """Interactively ask the user for the material dimensionality.
 
-    For 2D materials, reads POSCAR, computes the effective layer thickness,
-    and returns the renormalization factor kappa_2D = kappa_phono3py * factor_2d
-    where factor_2d = (c · n̂) / t_eff.
+    For 2D materials, reads POSCAR, asks for the vacuum direction, and asks
+    whether to use the vdW effective thickness or a manual thickness t.
+    The renormalization factor is kappa_2D = kappa_phono3py * L_proj / t.
 
     Returns
     -------
     renorm_factor : float
         Renormalization factor to multiply all kappa values by.
-        1.0 for 3D; (c · n̂) / t_eff for 2D.
+        1.0 for 3D; L_proj / t for 2D.
     renorm_info   : str or None
         Human-readable description of the renormalization written to summary file.
         None for 3D.
+    direction     : str or None
+        Vacuum direction ('a', 'b' or 'c'). None for 3D.
     """
     print("\nMaterial dimensionality:")
     print("  [1] 3D — no renormalization")
-    print("  [2] 2D — renormalize kappa by effective layer thickness")
+    print("  [2] 2D — renormalize kappa by layer thickness")
 
     while True:
         choice = input("Select (1 or 2): ").strip()
@@ -1001,7 +1032,7 @@ def ask_dimensionality():
         print("  Please enter 1 or 2.")
 
     if choice == '1':
-        return 1.0, None
+        return 1.0, None, None
 
     # 2D: locate POSCAR
     poscar_path = 'POSCAR'
@@ -1009,23 +1040,52 @@ def ask_dimensionality():
         poscar_path = input("POSCAR not found in current directory. Enter path to POSCAR: ").strip()
         if not os.path.exists(poscar_path):
             print(f"ERROR! POSCAR file '{poscar_path}' does not exist. Using 3D (no renormalization).")
-            return 1.0, None
+            return 1.0, None, None
 
-    poscar                              = read_POSCAR(poscar_path)
-    factor_2d, t_eff, c_proj, z_range, _ = compute_2d_thickness(poscar)
+    poscar    = read_POSCAR(poscar_path)
+    vac_idx   = get_direction("vacuum")
+    direction = "abc"[vac_idx]
+    _, t_eff, c_proj, z_range, _ = compute_2d_thickness(poscar, vac_idx)
+
+    print(f"\nCell height along normal : {c_proj:.4f} Å")
+    print(f"Atomic span (z_range)    : {z_range:.4f} Å")
+    print(f"Effective thickness      : {t_eff:.4f} Å  (z_range + r_vdW_top + r_vdW_bottom)")
+
+    while True:
+        choice = input("Use effective thickness? (Y/N): ").strip().lower()
+        if choice.startswith('y'):
+            thickness, source = t_eff, "vdW"
+            break
+        if choice.startswith('n'):
+            while True:
+                try:
+                    thickness = float(input("Enter thickness in Angstrom: "))
+                except ValueError:
+                    print("ERROR! Enter a numeric value.")
+                    continue
+                if thickness > 0 and z_range <= thickness <= c_proj:
+                    break
+                print(f"ERROR! Thickness must be positive, at least the atomic span ({z_range:.4f} Å) "
+                      f"and at most the cell height ({c_proj:.4f} Å).")
+            source = "manual"
+            break
+        print("Input must be Y or N!")
+
+    factor_2d = c_proj / thickness
 
     print("\n  2D renormalization summary:")
-    print(f"    c projection onto ab-normal : {c_proj:.4f} Å")
+    print(f"    Vacuum direction            : {direction}")
+    print(f"    Cell height along normal    : {c_proj:.4f} Å")
     print(f"    z range (atom-atom)         : {z_range:.4f} Å")
-    print(f"    Effective thickness         : {t_eff:.4f} Å  (z_range + r_vdW_top + r_vdW_bottom)")
+    print(f"    Thickness                   : {thickness:.4f} Å  ({source})")
     print(f"    Renormalization factor      : {factor_2d:.6f}")
     print(f"    kappa_2D = kappa_phono3py × {factor_2d:.6f}")
 
-    renorm_info = (f"2D renormalization: c_proj = {c_proj:.4f} A, "
-                   f"t_eff = {t_eff:.4f} A (z_range = {z_range:.4f} A), "
+    renorm_info = (f"2D renormalization: vacuum = {direction}, L_proj = {c_proj:.4f} A, "
+                   f"t = {thickness:.4f} A ({source}, z_range = {z_range:.4f} A), "
                    f"factor = {factor_2d:.6f}")
 
-    return factor_2d, renorm_info
+    return factor_2d, renorm_info, direction
 
 
 def ask_gruneisen_run(mesh):
@@ -1055,7 +1115,7 @@ def ask_gruneisen_run(mesh):
     return choice in ('y', 'yes')
 
 
-def write_renorm_info(filepath, renorm_info):
+def write_renorm_info(filepath, renorm_info, direction):
     """Write the 2D renormalization summary.
 
     Parameters
@@ -1064,14 +1124,17 @@ def write_renorm_info(filepath, renorm_info):
         Output file path.
     renorm_info : str
         Description of the renormalization from ask_dimensionality().
+    direction   : str
+        Vacuum direction ('a', 'b' or 'c').
     """
     with open(filepath, 'w') as o:
         o.write("# 2D thermal conductivity renormalization\n")
+        o.write(f"# Vacuum direction: {direction}\n")
         o.write(f"# {renorm_info}\n")
-        o.write("# All kappa values in this run have been multiplied by (c_proj / t_eff).\n")
-        o.write("# Formula: k_2D = k_phono3py * c_proj / t_eff\n")
-        o.write("#   c_proj   = projection of c onto the ab-plane normal (Angstrom)\n")
-        o.write("#   t_eff    = z_range + r_vdW_top + r_vdW_bottom (Angstrom)\n")
+        o.write("# All kappa values in this run have been multiplied by (L_proj / t).\n")
+        o.write("# Formula: k_2D = k_phono3py * L_proj / t\n")
+        o.write("#   L_proj   = projection of the vacuum lattice vector onto the layer normal (Angstrom)\n")
+        o.write("#   t        = layer thickness (Angstrom): vdW = z_range + r_vdW_top + r_vdW_bottom, or manual\n")
         o.write("#   r_vdW    = Alvarez (2013) van der Waals radii\n")
 
 
@@ -1120,17 +1183,6 @@ def main():
         gamma_U        = read_kappa(f, "gamma_U")
         # --full-pp
         ave_pp         = read_kappa(f, "ave_pp")
-        # --wigner --br or --wigner --lbte
-        # kappa_C        = read_kappa(f, "kappa_C",        threshold=1e-12)
-        # mode_kappa_C   = read_kappa(f, "mode_kappa_C",   threshold=1e-12, abs_value=True)
-        # --wigner --br
-        # kappa_P_RTA      = read_kappa(f, "kappa_P_RTA",      threshold=1e-12)
-        # mode_kappa_P_RTA = read_kappa(f, "mode_kappa_P_RTA", threshold=1e-12, abs_value=True)
-        # kappa_TOT_RTA    = read_kappa(f, "kappa_TOT_RTA",    threshold=1e-12)
-        # --wigner --lbte
-        # kappa_P_exact      = read_kappa(f, "kappa_P_exact",      threshold=1e-12)
-        # mode_kappa_P_exact = read_kappa(f, "mode_kappa_P_exact", threshold=1e-12, abs_value=True)
-        # kappa_TOT_exact    = read_kappa(f, "kappa_TOT_exact",    threshold=1e-12)
 
     # ── Check which datasets are available ───────────────────────────────────
     # Datasets depend on the run mode (e.g. --lbte files may have no mode_kappa
@@ -1179,13 +1231,13 @@ def main():
                 break
 
     # ── Dimensionality: optional 2D renormalization ───────────────────────────
-    renorm_factor, renorm_info = ask_dimensionality()
+    renorm_factor, renorm_info, vacuum_direction = ask_dimensionality()
 
     if renorm_factor != 1.0:
-        # Renormalize all kappa arrays: k_2D = k_phono3py * (c / t_eff)
-        # Only in-plane components (xx=0, yy=1, xy=5) are physically meaningful
-        # for 2D, but we scale all components uniformly for consistency with
-        # phono3py output convention.
+        # Renormalize all kappa arrays: k_2D = k_phono3py * (L_proj / t)
+        # Only in-plane components are physically meaningful for 2D, but we
+        # scale all components uniformly for consistency with phono3py output
+        # convention.
         def _renorm(arr):
             return arr * renorm_factor if arr is not None else None
 
@@ -1197,15 +1249,6 @@ def main():
         kappa_inter        = _renorm(kappa_inter)
         kappa_intra_RTA    = _renorm(kappa_intra_RTA)
         kappa_intra_exact  = _renorm(kappa_intra_exact)
-        # kappa_C            = _renorm(kappa_C)
-        # mode_kappa_C       = _renorm(mode_kappa_C)
-        # kappa_P_RTA        = _renorm(kappa_P_RTA)
-        # mode_kappa_P_RTA   = _renorm(mode_kappa_P_RTA)
-        # kappa_TOT_RTA      = _renorm(kappa_TOT_RTA)
-        # kappa_P_exact      = _renorm(kappa_P_exact)
-        # mode_kappa_P_exact = _renorm(mode_kappa_P_exact)
-        # kappa_TOT_exact    = _renorm(kappa_TOT_exact)
-
 
     # --tt kappa components, written as stored in the kappa file
     kappa_tt = (('Kappa_intraVsT',       kappa_intra),
@@ -1216,7 +1259,7 @@ def main():
     # ── Reducible collision matrix: kappa tensors only ────────────────────────
     if is_reducible:
         if renorm_info is not None:
-            write_renorm_info(outpath(kappa_input_file, 'Renorm2D_info'), renorm_info)
+            write_renorm_info(outpath(kappa_input_file, 'Renorm2D_info'), renorm_info, vacuum_direction)
         write_tensor_vs_temperature(
             outpath(kappa_input_file, 'KappaVsT'),
             kappa, temperature)
@@ -1315,30 +1358,6 @@ def main():
          _, _) = compute_kappa_variant(
             mode_kappa_RTA, weight, temperature, frequency, mean_freepath, kappa_RTA_ref)
 
-    # --wigner coherence term
-    # if kappa_C is not None and mode_kappa_C is not None:
-    #     (mode_kappa_C_weight, kappa_C_branch,
-    #      cumulative_kappa_C_frequency, derivative_kappa_C_frequency,
-    #      cumulative_kappa_C_mfp, derivative_kappa_C_mfp,
-    #      _, _) = compute_kappa_variant(
-    #         mode_kappa_C, weight, temperature, frequency, mean_freepath, kappa_C)
-
-    # --wigner --br particle term
-    # if kappa_P_RTA is not None and mode_kappa_P_RTA is not None:
-    #     (mode_kappa_P_RTA_weight, kappa_P_RTA_branch,
-    #      cumulative_kappa_P_RTA_frequency, derivative_kappa_P_RTA_frequency,
-    #      cumulative_kappa_P_RTA_mfp, derivative_kappa_P_RTA_mfp,
-    #      _, _) = compute_kappa_variant(
-    #         mode_kappa_P_RTA, weight, temperature, frequency, mean_freepath, kappa_P_RTA)
-
-    # --wigner --lbte particle term
-    # if kappa_P_exact is not None and mode_kappa_P_exact is not None:
-    #     (mode_kappa_P_exact_weight, kappa_P_exact_branch,
-    #      cumulative_kappa_P_exact_frequency, derivative_kappa_P_exact_frequency,
-    #      cumulative_kappa_P_exact_mfp, derivative_kappa_P_exact_mfp,
-    #      _, _) = compute_kappa_variant(
-    #         mode_kappa_P_exact, weight, temperature, frequency, mean_freepath, kappa_P_exact)
-
     # Constant RTA lifetime: tau_CRTA = kappa / sum_qj(C_qj * v_qj ⊗ v_qj)
     tau_CRTA = None
     if gv_by_gv is not None and kappa_unit_conversion is not None:
@@ -1388,7 +1407,7 @@ def main():
 
     # Write renormalization summary if 2D
     if renorm_info is not None:
-        write_renorm_info(outpath(kappa_input_file, 'Renorm2D_info'), renorm_info)
+        write_renorm_info(outpath(kappa_input_file, 'Renorm2D_info'), renorm_info, vacuum_direction)
 
     write_tensor_vs_temperature(
         outpath(kappa_input_file, 'KappaVsT'),
@@ -1444,40 +1463,6 @@ def main():
         if arr is not None:
             write_tensor_vs_temperature(outpath(kappa_input_file, tag), arr, temperature)
 
-    # ── Optional variant: --wigner kappa_C ───────────────────────────────────
-    # if kappa_C is not None and mode_kappa_C is not None:
-    #     write_tensor_vs_temperature(
-    #         outpath(kappa_input_file, 'Kappa_CVsT'),
-    #         kappa_C, temperature)
-    #     write_band_tensor_vs_temperature(
-    #         outpath(kappa_input_file, 'Kappa_C_bandVsT'),
-    #         kappa_C_branch, temperature)
-
-    # ── Optional variant: --wigner --br kappa_P_RTA ──────────────────────────
-    # if kappa_P_RTA is not None and mode_kappa_P_RTA is not None:
-    #     write_tensor_vs_temperature(
-    #         outpath(kappa_input_file, 'Kappa_P_RTAVsT'),
-    #         kappa_P_RTA, temperature)
-    #     write_band_tensor_vs_temperature(
-    #         outpath(kappa_input_file, 'Kappa_P_RTA_bandVsT'),
-    #         kappa_P_RTA_branch, temperature)
-    # if kappa_TOT_RTA is not None:
-    #     write_tensor_vs_temperature(
-    #         outpath(kappa_input_file, 'Kappa_TOT_RTAVsT'),
-    #         kappa_TOT_RTA, temperature)
-
-    # ── Optional variant: --wigner --lbte kappa_P_exact ──────────────────────
-    # if kappa_P_exact is not None and mode_kappa_P_exact is not None:
-    #     write_tensor_vs_temperature(
-    #         outpath(kappa_input_file, 'Kappa_P_exactVsT'),
-    #         kappa_P_exact, temperature)
-    #     write_band_tensor_vs_temperature(
-    #         outpath(kappa_input_file, 'Kappa_P_exact_bandVsT'),
-    #         kappa_P_exact_branch, temperature)
-    # if kappa_TOT_exact is not None:
-    #     write_tensor_vs_temperature(
-    #         outpath(kappa_input_file, 'Kappa_TOT_exactVsT'),
-    #         kappa_TOT_exact, temperature)
 
     # ── isotope scattering ───────────────────────────────────────────────────
     if gamma_isotope is not None:
@@ -1525,30 +1510,6 @@ def main():
                 'derivative_Kappa_RTAVsFrequency', 'cumulative_Kappa_RTAVsMfp', 'derivative_Kappa_RTAVsMfp',frequency,
                 mean_freepath, mode_kappa_RTA_weight, cumulative_kappa_RTA_frequency, derivative_kappa_RTA_frequency,
                 cumulative_kappa_RTA_mfp, derivative_kappa_RTA_mfp, sorted_frequency, sorted_mean_freepath, temp_index)
-
-        # ── kappa_C ──────────────────────────────────────────────────────────
-        # if kappa_C is not None and mode_kappa_C is not None:
-        #     write_variant_per_temperature(
-        #         temp_dir, kappa_input_file, 'Kappa_CVsFrequency', 'Kappa_CVsMfp', 'cumulative_Kappa_CVsFrequency',
-        #         'derivative_Kappa_CVsFrequency', 'cumulative_Kappa_CVsMfp', 'derivative_Kappa_CVsMfp',frequency,
-        #         mean_freepath, mode_kappa_C_weight, cumulative_kappa_C_frequency, derivative_kappa_C_frequency,
-        #         cumulative_kappa_C_mfp, derivative_kappa_C_mfp, sorted_frequency, sorted_mean_freepath, temp_index)
-
-        # ── kappa_P_RTA ──────────────────────────────────────────────────────
-        # if kappa_P_RTA is not None and mode_kappa_P_RTA is not None:
-        #     write_variant_per_temperature(
-        #         temp_dir, kappa_input_file, 'Kappa_P_RTAVsFrequency', 'Kappa_P_RTAVsMfp', 'cumulative_Kappa_P_RTAVsFrequency',
-        #         'derivative_Kappa_P_RTAVsFrequency', 'cumulative_Kappa_P_RTAVsMfp', 'derivative_Kappa_P_RTAVsMfp',frequency,
-        #         mean_freepath, mode_kappa_P_RTA_weight, cumulative_kappa_P_RTA_frequency, derivative_kappa_P_RTA_frequency,
-        #         cumulative_kappa_P_RTA_mfp, derivative_kappa_P_RTA_mfp, sorted_frequency, sorted_mean_freepath, temp_index)
-
-        # ── kappa_P_exact ────────────────────────────────────────────────────
-        # if kappa_P_exact is not None and mode_kappa_P_exact is not None:
-        #     write_variant_per_temperature(
-        #         temp_dir, kappa_input_file, 'Kappa_P_exactVsFrequency', 'Kappa_P_exactVsMfp', 'cumulative_Kappa_P_exactVsFrequency',
-        #         'derivative_Kappa_P_exactVsFrequency', 'cumulative_Kappa_P_exactVsMfp', 'derivative_Kappa_P_exactVsMfp',frequency,
-        #         mean_freepath, mode_kappa_P_exact_weight, cumulative_kappa_P_exact_frequency, derivative_kappa_P_exact_frequency,
-        #         cumulative_kappa_P_exact_mfp, derivative_kappa_P_exact_mfp, sorted_frequency, sorted_mean_freepath, temp_index)
 
         # ── Normal / Umklapp processes ───────────────────────────────────────
         if gamma_N is not None and gamma_U is not None:
